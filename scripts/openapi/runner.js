@@ -88,9 +88,20 @@ function main() {
   try {
     run('node', ['scripts/openapi/generate.js', mode]);
   } catch (e) {
-    progress.endpoints[next.path] = { status: 'error', error: String(e.message || e) };
+    const message = String(e.message || e);
+    if (process.env.CI === 'true') {
+      progress.endpoints[next.path] = { status: 'error', error: message };
+    } else {
+      // Local failure: keep endpoint pending so CI can pick it up cleanly
+      progress.endpoints[next.path] = { status: 'pending', lastError: message };
+    }
     writeJSON(progressPath, progress);
-    throw e;
+    if (process.env.CI === 'true') {
+      throw e;
+    } else {
+      process.stderr.write(`Local run failed, endpoint reverted to pending: ${message}\n`);
+      return;
+    }
   }
 
   // Diff

@@ -1,7 +1,7 @@
 {
   "mode": "store",
   "lastProcessed": null,
-  "endpoints": {}
+  "endpoints": {
+    "/store-api/context": { "status": "pending" }
+  }
 }
-
-
