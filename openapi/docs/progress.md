@@ -4,6 +4,7 @@
 - Scripts relocated under `openapi/scripts/`:
   - `collect-endpoints.js` – discovers routes (Store/Admin), with safe fallback
   - `generate.js` – runs `@shopware/api-gen` load/generate, Symfony validator, Redocly lint
+  - `diff-endpoint.js` – compares code-defined path JSON vs loaded `api-types/*Schema.json`
   - `runner.js` – processes one endpoint, updates `openapi/progress.json`, creates/pushes a branch
 - Local tooling in `openapi/`:
   - `package.json` with scripts: `bootstrap:env`, `collect:*`, `generate:*`, `run:*`, `lint`, `format`
@@ -24,6 +25,9 @@
   - Branch pushed to fork: `feat/openapi-store/store-api-context`
   - Review and upstream PR can be created in the fork: https://github.com/BrocksiNet/shopware
 
+ Comparison findings (so far)
+- `/cms/{id}` (Store): GET parameters differ between code (`src/.../StoreApi/paths/cms.json`) and loaded schema (`api-types/storeApiSchema.json`). Comparator normalizes param names and ignores `/store-api` prefix; difference is real and needs alignment.
+
 ## How to run locally
 1) Install tools and prepare env
 - `npm --prefix openapi i`
@@ -32,6 +36,9 @@
 - `node openapi/scripts/runner.js store brocksinet`
 3) Lint scripts
 - `npm --prefix openapi run lint`
+4) Compare a single endpoint
+- Store: `npm --prefix openapi run diff:endpoint:store -- "/cms/{id}"`
+- Admin: `npm --prefix openapi run diff:endpoint:admin -- "/_info/config"`
 
 ## How to run in fork CI
 - Workflow: Actions → “OpenAPI runner (per-endpoint)”
@@ -48,6 +55,7 @@
 - Improve route discovery robustness and remove fallback once CI router JSON is guaranteed
 - Add simple file lock to prevent concurrent writes when multiple runners are used
 - Auto-open PRs in fork after branch push (e.g., via `gh` CLI) – optional
+ - Enhance comparator output with a structured diff of params/requestBody/responses for easier fixes
 
 ## Nice-to-haves (later)
 - Missing endpoint detector and generator report (human-friendly diff summary for PR body)
