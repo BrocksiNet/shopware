@@ -1,0 +1,10 @@
+{
+  "defaultMode": "store",
+  "remote": "brocksinet",
+  "schemaPaths": {
+    "store": "./api-types/storeApiSchema.json",
+    "admin": "./api-types/adminApiSchema.json"
+  }
+}
+
+

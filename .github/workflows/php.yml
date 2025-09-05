@@ -169,14 +169,21 @@ jobs:
         run: |
           api-gen generate --apiType=store
 
+      - name: Validate OpenApi StoreAPI schema
+        run: |
+          bin/console open-api:validate --api-type=store-api -vvv
+
       - name: Lint OpenApi StoreAPI schema
         run: |
           redocly lint --skip-rule operation-4xx-response --skip-rule no-server-example.com --skip-rule no-unused-components ./api-types/storeApiSchema.json
 
-      - name: Generate & Lint OpenApi API schema
+      - name: Generate OpenApi AdminAPI schema
         run: |
           api-gen loadSchema --apiType=admin && api-gen generate --apiType=admin
-          redocly lint --skip-rule operation-4xx-response --skip-rule no-server-example.com --skip-rule no-unused-components ./api-types/adminApiSchema.json
+
+      - name: Validate OpenApi AdminAPI schema
+        run: |
+          bin/console open-api:validate --api-type=admin-api -vvv
 
       - name: Upload OpenApi AdminAPI schema
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # 4.6.2
