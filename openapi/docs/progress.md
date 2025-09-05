@@ -25,8 +25,8 @@
   - Branch pushed to fork: `feat/openapi-store/store-api-context`
   - Review and upstream PR can be created in the fork: https://github.com/BrocksiNet/shopware
 
- Comparison findings (so far)
-- `/cms/{id}` (Store): GET parameters differ between code (`src/.../StoreApi/paths/cms.json`) and loaded schema (`api-types/storeApiSchema.json`). Comparator normalizes param names and ignores `/store-api` prefix; difference is real and needs alignment.
+Comparison findings (so far)
+- `/cms/{id}` (Store): initially flagged due to params expanded by `x-parameter-group`. Comparator now accounts for `productListingCriteria`; no diff remains.
 
 ## How to run locally
 1) Install tools and prepare env
@@ -39,6 +39,10 @@
 4) Compare a single endpoint
 - Store: `npm --prefix openapi run diff:endpoint:store -- "/cms/{id}"`
 - Admin: `npm --prefix openapi run diff:endpoint:admin -- "/_info/config"`
+
+Endpoint collection
+- Store: router-first, fallback to code-defined `StoreApi/paths/*.json`
+- Admin: scans PHP controllers (`#[Route]`) to collect `/api/**`, fallback to router/code paths
 
 ## How to run in fork CI
 - Workflow: Actions → “OpenAPI runner (per-endpoint)”
@@ -55,7 +59,7 @@
 - Improve route discovery robustness and remove fallback once CI router JSON is guaranteed
 - Add simple file lock to prevent concurrent writes when multiple runners are used
 - Auto-open PRs in fork after branch push (e.g., via `gh` CLI) – optional
- - Enhance comparator output with a structured diff of params/requestBody/responses for easier fixes
+- Enhance comparator output with a structured diff of params/requestBody/responses for easier fixes
 
 ## Nice-to-haves (later)
 - Missing endpoint detector and generator report (human-friendly diff summary for PR body)

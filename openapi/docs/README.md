@@ -24,17 +24,23 @@ CI
 - Workflow openapi-runner.yml can run per-endpoint in fork (REMOTE=origin)
 - .github/workflows/php.yml validates schemas (Symfony + Redocly)
 
- Schema locations
+Schema locations
 - Code-defined path files:
   - Store API: src/Core/Framework/Api/ApiDefinition/Generator/Schema/StoreApi/paths/*.json (e.g. cms.json)
   - Admin API: src/Core/Framework/Api/ApiDefinition/Generator/Schema/AdminApi/paths/*.json
+- Controller-discovered paths (Admin): PHP controllers under `src/**` with `#[Route(...)]` for `/api/**`
 - Generated (loaded) schemas by api-gen:
   - api-types/storeApiSchema.json
   - api-types/adminApiSchema.json
 
- Comparator behavior
+Comparator behavior
 - Normalizes path template names (treats /cms/{id} same as /cms/{pageId})
 - Accepts Store paths with or without leading /store-api prefix
+- Treats `x-parameter-group: productListingCriteria` as providing expanded query params
 - Exits non-zero when differences are detected (parameters, requestBody, responses)
+
+Endpoint collection
+- Store: uses Symfony router (`bin/console debug:router`), falls back to code-defined `StoreApi/paths/*.json`
+- Admin: scans PHP `#[Route]` attributes under `src/**` to collect `/api/**` endpoints, falls back to router/code paths
 
 
