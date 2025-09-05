@@ -32,11 +32,19 @@ function generateAndValidate(mode) {
 	const rootEnvPath = path.resolve(".env");
 	const envVars = { ...process.env, ...parseDotEnv(rootEnvPath) };
 
-	const apiGenBin = path.resolve("openapi/node_modules/.bin/api-gen");
-	const redoclyBin = path.resolve("openapi/node_modules/.bin/redocly");
+	const openapiDir = path.resolve("openapi");
+	const apiGenBin = path.join(openapiDir, "node_modules/.bin/api-gen");
+	const redoclyBin = path.join(openapiDir, "node_modules/.bin/redocly");
 
-	run(apiGenBin, ["loadSchema", `--apiType=${apiType}`], { env: envVars });
-	run(apiGenBin, ["generate", `--apiType=${apiType}`], { env: envVars });
+	// Generate into openapi/api-types by running cwd=openapi
+	run(apiGenBin, ["loadSchema", `--apiType=${apiType}`], {
+		env: envVars,
+		cwd: openapiDir,
+	});
+	run(apiGenBin, ["generate", `--apiType=${apiType}`], {
+		env: envVars,
+		cwd: openapiDir,
+	});
 
 	const consoleApiType = mode === "admin" ? "admin-api" : "store-api";
 	run(
@@ -45,10 +53,12 @@ function generateAndValidate(mode) {
 		{ env: envVars },
 	);
 
-	const schemaPath =
+	const schemaPath = path.join(
+		openapiDir,
 		mode === "admin"
-			? "./api-types/adminApiSchema.json"
-			: "./api-types/storeApiSchema.json";
+			? "api-types/adminApiSchema.json"
+			: "api-types/storeApiSchema.json",
+	);
 	run(
 		redoclyBin,
 		[
@@ -61,7 +71,7 @@ function generateAndValidate(mode) {
 			"no-unused-components",
 			schemaPath,
 		],
-		{ env: envVars },
+		{ env: envVars, cwd: openapiDir },
 	);
 }
 

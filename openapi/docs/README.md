@@ -16,6 +16,9 @@ Commands
 - Compare code vs loaded schema (Store): npm --prefix openapi run diff:endpoint:store -- "/cms/{id}"
 - Compare code vs loaded schema (Admin): npm --prefix openapi run diff:endpoint:admin -- "/_info/config"
 
+Artifact locations
+- All generated API artifacts are written under `openapi/api-types/` (schemas and types). We intentionally do not write to the repository root.
+
 Branch/PR conventions
 - Branch: feat/openapi-{store|admin}/<endpoint-slug>
 - Commit: OpenAPI({Store|Admin}): refine <endpoint>
