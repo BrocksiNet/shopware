@@ -12,7 +12,9 @@
     "generate:store": "node ./scripts/generate.js store",
     "generate:admin": "node ./scripts/generate.js admin",
     "run:store": "node ./scripts/runner.js store brocksinet",
-    "run:admin": "node ./scripts/runner.js admin brocksinet"
+    "run:admin": "node ./scripts/runner.js admin brocksinet",
+    "diff:endpoint:store": "node ./scripts/diff-endpoint.js store",
+    "diff:endpoint:admin": "node ./scripts/diff-endpoint.js admin"
   },
   "devDependencies": {
     "@redocly/cli": "1.32.1",

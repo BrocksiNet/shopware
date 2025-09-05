@@ -1,4 +1,3 @@
-openapi/node_modules/
 # OS generated files
 .DS_Store
 .DS_Store?
@@ -163,3 +162,8 @@ danger.phar
 
 # Vite deps
 **/.tmp/vite/*
+
+# OpenAPI tooling/POC
+openapi/node_modules/
+openapi/progress.json
+openapi/api-types/

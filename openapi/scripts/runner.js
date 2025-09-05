@@ -116,7 +116,9 @@ function main() {
 	if (compare.status === 0) {
 		progress.endpoints[next.path] = { status: "done" };
 		writeJSON(progressPath, progress);
-		process.stdout.write(`Comparator: no differences for ${next.path}. Marking done.\n`);
+		process.stdout.write(
+			`Comparator: no differences for ${next.path}. Marking done.\n`,
+		);
 		return;
 	}
 
@@ -124,13 +126,21 @@ function main() {
 	fs.mkdirSync(diffsDir, { recursive: true });
 	const slug = slugify(next.path.replace(/^\/+/, ""));
 	const diffFile = path.join(diffsDir, `${slug}.txt`);
-	fs.writeFileSync(diffFile, compareOut || `Differences detected for ${next.path}`, "utf8");
+	fs.writeFileSync(
+		diffFile,
+		compareOut || `Differences detected for ${next.path}`,
+		"utf8",
+	);
 
 	const branch = `feat/openapi-${mode}/${slug}`;
 	const message = `OpenAPI(${mode === "admin" ? "Admin" : "Store"}): refine ${next.path}`;
 	branchAndPush(config.remote || remote, branch, message);
 
-	progress.endpoints[next.path] = { status: "done", branch, diff: path.relative(".", diffFile) };
+	progress.endpoints[next.path] = {
+		status: "done",
+		branch,
+		diff: path.relative(".", diffFile),
+	};
 	writeJSON(progressPath, progress);
 }
 
