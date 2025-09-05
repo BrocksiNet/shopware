@@ -49,6 +49,6 @@ jobs:
           MODE: ${{ inputs.mode }}
           REMOTE: origin
         run: |
-          node scripts/openapi/runner.js "$MODE" "$REMOTE"
+          node openapi/scripts/runner.js "$MODE" "$REMOTE"
 
 

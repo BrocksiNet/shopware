@@ -1,0 +1,19 @@
+{
+  "$schema": "https://biomejs.dev/schemas/1.8.3/schema.json",
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "style": {
+        "useConst": "warn",
+        "noVar": "error"
+      },
+      "suspicious": {
+        "noConsole": "off"
+      }
+    }
+  },
+  "formatter": { "enabled": true },
+  "javascript": { "globals": ["process", "__dirname"] }
+}
+
+

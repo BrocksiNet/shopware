@@ -1,0 +1,24 @@
+{
+  "name": "shopware-openapi-tools",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Local OpenAPI tooling for Shopware schema generation and validation",
+  "scripts": {
+    "bootstrap:env": "bash ./bootstrap-env.sh",
+    "lint": "biome check ./scripts --diagnostic-level=warn",
+    "format": "biome format ./scripts --write",
+    "collect:store": "node ./scripts/collect-endpoints.js store",
+    "collect:admin": "node ./scripts/collect-endpoints.js admin",
+    "generate:store": "node ./scripts/generate.js store",
+    "generate:admin": "node ./scripts/generate.js admin",
+    "run:store": "node ./scripts/runner.js store brocksinet",
+    "run:admin": "node ./scripts/runner.js admin brocksinet"
+  },
+  "devDependencies": {
+    "@redocly/cli": "1.32.1",
+    "@shopware/api-gen": "*",
+    "@biomejs/biome": "^1.8.3"
+  }
+}
+
+

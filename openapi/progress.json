@@ -1,7 +1,10 @@
 {
   "mode": "store",
-  "lastProcessed": null,
+  "lastProcessed": "/store-api/context",
   "endpoints": {
-    "/store-api/context": { "status": "pending" }
+    "/store-api/context": {
+      "status": "done",
+      "branch": "feat/openapi-store/store-api-context"
+    }
   }
 }
