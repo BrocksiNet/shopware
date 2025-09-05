@@ -74,6 +74,106 @@ function deepEqual(a, b) {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
+function indexParameters(params = []) {
+  const map = new Map();
+  for (const p of params) {
+    const key = `${p.in}:${p.name}`;
+    map.set(key, p);
+  }
+  return map;
+}
+
+function diffParameters(codeParams = [], loadParams = [], options = {}) {
+  const { codeHasListingGroup = false } = options;
+  const diffs = { missingInLoaded: [], missingInCode: [], changed: [], providedByGroup: [] };
+  const codeMap = indexParameters(codeParams);
+  const loadMap = indexParameters(loadParams);
+  const allKeys = new Set([...codeMap.keys(), ...loadMap.keys()]);
+  for (const key of allKeys) {
+    const c = codeMap.get(key);
+    const l = loadMap.get(key);
+    if (c && !l) {
+      diffs.missingInLoaded.push(key);
+      continue;
+    }
+    if (!c && l) {
+      diffs.missingInCode.push(key);
+      continue;
+    }
+    // Both exist - shallow compare important fields
+    const fields = ["required", "description", "schema", "deprecated", "allowEmptyValue"];
+    const changedFields = [];
+    for (const f of fields) {
+      if (!deepEqual(c[f], l[f])) {
+        changedFields.push({ field: f, code: c[f], loaded: l[f] });
+      }
+    }
+    if (changedFields.length) {
+      diffs.changed.push({ key, changes: changedFields });
+    }
+  }
+  // If the code uses productListingCriteria group, treat missing query params as provided by the group
+  if (codeHasListingGroup && diffs.missingInCode.length) {
+    const stillMissing = [];
+    for (const key of diffs.missingInCode) {
+      if (key.startsWith('query:')) {
+        diffs.providedByGroup.push(key);
+      } else {
+        stillMissing.push(key);
+      }
+    }
+    diffs.missingInCode = stillMissing;
+  }
+
+  if (!diffs.missingInLoaded.length && !diffs.missingInCode.length && !diffs.changed.length) {
+    // If only providedByGroup entries exist, that's not a real diff
+    if (diffs.providedByGroup.length === 0) return null;
+  }
+  return diffs;
+}
+
+function diffRequestBody(codeBody = {}, loadBody = {}) {
+  if (deepEqual(codeBody, loadBody)) return null;
+  const cTypes = Object.keys(codeBody?.content || {});
+  const lTypes = Object.keys(loadBody?.content || {});
+  const allTypes = new Set([...cTypes, ...lTypes]);
+  const result = { missingInLoaded: [], missingInCode: [], schemaDiffs: [] };
+  for (const t of allTypes) {
+    const c = codeBody?.content?.[t]?.schema;
+    const l = loadBody?.content?.[t]?.schema;
+    if (c && !l) result.missingInLoaded.push(t);
+    else if (!c && l) result.missingInCode.push(t);
+    else if (!deepEqual(c, l)) result.schemaDiffs.push({ contentType: t, code: c, loaded: l });
+  }
+  if (!result.missingInLoaded.length && !result.missingInCode.length && !result.schemaDiffs.length) return null;
+  return result;
+}
+
+function diffResponses(codeResponses = {}, loadResponses = {}) {
+  if (deepEqual(codeResponses, loadResponses)) return null;
+  const codes = new Set([...Object.keys(codeResponses || {}), ...Object.keys(loadResponses || {})]);
+  const result = { missingInLoaded: [], missingInCode: [], contentDiffs: [] };
+  for (const sc of codes) {
+    const c = codeResponses?.[sc];
+    const l = loadResponses?.[sc];
+    if (c && !l) { result.missingInLoaded.push(sc); continue; }
+    if (!c && l) { result.missingInCode.push(sc); continue; }
+    const cTypes = new Set([
+      ...Object.keys(c?.content || {}),
+      ...Object.keys(l?.content || {}),
+    ]);
+    for (const t of cTypes) {
+      const cSchema = c?.content?.[t]?.schema;
+      const lSchema = l?.content?.[t]?.schema;
+      if (!cSchema && lSchema) result.contentDiffs.push({ status: sc, contentType: t, missingInCode: true });
+      else if (cSchema && !lSchema) result.contentDiffs.push({ status: sc, contentType: t, missingInLoaded: true });
+      else if (!deepEqual(cSchema, lSchema)) result.contentDiffs.push({ status: sc, contentType: t, code: cSchema, loaded: lSchema });
+    }
+  }
+  if (!result.missingInLoaded.length && !result.missingInCode.length && !result.contentDiffs.length) return null;
+  return result;
+}
+
 function main() {
   const mode = (process.argv[2] || "store").toLowerCase();
   const logicalPath = process.argv[3];
@@ -128,17 +228,27 @@ function main() {
       hasDiff = true;
       continue;
     }
-    if (!deepEqual(codeDef.parameters || [], loadDef.parameters || [])) {
-      console.log(`Method ${m.toUpperCase()} parameters differ.`);
+    const codeHasListingGroup = Array.isArray(codeDef.parameters) && codeDef.parameters.some((p) => p && p['x-parameter-group'] === 'productListingCriteria');
+    const p = diffParameters(codeDef.parameters, loadDef.parameters, { codeHasListingGroup });
+    const rb = diffRequestBody(codeDef.requestBody, loadDef.requestBody);
+    const rs = diffResponses(codeDef.responses, loadDef.responses);
+    // Consider diff present only if meaningful (ignore providedByGroup-only case)
+    const pIsMeaningful = p && (p.missingInLoaded.length || p.missingInCode.length || p.changed.length);
+    if (pIsMeaningful || rb || rs) {
       hasDiff = true;
-    }
-    if (!deepEqual(codeDef.requestBody || {}, loadDef.requestBody || {})) {
-      console.log(`Method ${m.toUpperCase()} requestBody differs.`);
-      hasDiff = true;
-    }
-    if (!deepEqual(codeDef.responses || {}, loadDef.responses || {})) {
-      console.log(`Method ${m.toUpperCase()} responses differ.`);
-      hasDiff = true;
+      console.log(`\n=== ${m.toUpperCase()} differences for ${logicalPath} ===`);
+      if (p) {
+        console.log("Parameters:");
+        console.log(JSON.stringify(p, null, 2));
+      }
+      if (rb) {
+        console.log("RequestBody:");
+        console.log(JSON.stringify(rb, null, 2));
+      }
+      if (rs) {
+        console.log("Responses:");
+        console.log(JSON.stringify(rs, null, 2));
+      }
     }
   }
 

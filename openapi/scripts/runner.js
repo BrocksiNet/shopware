@@ -47,7 +47,7 @@ function ensureEnvFromCiSnippet() {
 
 function branchAndPush(remote, branch, message) {
 	run("git", ["switch", "-c", branch]);
-	run("git", ["add", "api-types/"]);
+	run("git", ["add", "openapi/diffs/"]);
 	run("git", ["commit", "-m", message]);
 	run("git", ["push", remote, branch]);
 }
@@ -99,35 +99,38 @@ function main() {
 		run("node", ["openapi/scripts/generate.js", mode]);
 	} catch (e) {
 		const message = String(e.message || e);
-		if (process.env.CI === "true") {
-			progress.endpoints[next.path] = { status: "error", error: message };
-		} else {
-			progress.endpoints[next.path] = { status: "pending", lastError: message };
-		}
+		progress.endpoints[next.path] = { status: "error", error: message };
 		writeJSON(progressPath, progress);
-		if (process.env.CI === "true") {
-			throw e;
-		}
-		process.stderr.write(
-			`Local run failed, endpoint reverted to pending: ${message}\n`,
-		);
-		return;
+		throw e;
 	}
 
-	const changed = getChangedFiles().some((f) => f.startsWith("api-types/"));
-	if (!changed) {
+	// Run comparator for the specific endpoint; only open branch if diffs exist
+	const logicalPath = next.path.replace(/^\/(store-api|api)/, "");
+	const compare = spawnSync(
+		"node",
+		["openapi/scripts/diff-endpoint.js", mode, logicalPath],
+		{ encoding: "utf8" },
+	);
+	const compareOut = (compare.stdout || "") + (compare.stderr || "");
+
+	if (compare.status === 0) {
 		progress.endpoints[next.path] = { status: "done" };
 		writeJSON(progressPath, progress);
-		process.stdout.write("No schema changes; marking done.\n");
+		process.stdout.write(`Comparator: no differences for ${next.path}. Marking done.\n`);
 		return;
 	}
 
+	const diffsDir = path.join("openapi", "diffs", mode);
+	fs.mkdirSync(diffsDir, { recursive: true });
 	const slug = slugify(next.path.replace(/^\/+/, ""));
+	const diffFile = path.join(diffsDir, `${slug}.txt`);
+	fs.writeFileSync(diffFile, compareOut || `Differences detected for ${next.path}`, "utf8");
+
 	const branch = `feat/openapi-${mode}/${slug}`;
 	const message = `OpenAPI(${mode === "admin" ? "Admin" : "Store"}): refine ${next.path}`;
 	branchAndPush(config.remote || remote, branch, message);
 
-	progress.endpoints[next.path] = { status: "done", branch };
+	progress.endpoints[next.path] = { status: "done", branch, diff: path.relative(".", diffFile) };
 	writeJSON(progressPath, progress);
 }
 
