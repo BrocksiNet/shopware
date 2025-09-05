@@ -27,16 +27,6 @@ function slugify(input) {
 		.toLowerCase();
 }
 
-function getChangedFiles() {
-	const res = spawnSync("git", ["status", "--porcelain"], { encoding: "utf8" });
-	if (res.status !== 0) return [];
-	return res.stdout
-		.split("\n")
-		.map((l) => l.trim())
-		.filter(Boolean)
-		.map((l) => l.slice(3));
-}
-
 function ensureEnvFromCiSnippet() {
 	if (!fs.existsSync(".env")) {
 		process.stderr.write(
@@ -56,8 +46,8 @@ function main() {
 	const mode = process.env.MODE || process.argv[2] || "store";
 	const remote = process.env.REMOTE || process.argv[3] || "brocksinet";
 
-	const progressPath = "openapi/progress.json";
-	const configPath = "openapi/config.json";
+	const progressPath = path.resolve(__dirname, "..", "progress.json");
+	const configPath = path.resolve(__dirname, "..", "config.json");
 	const progress = fs.existsSync(progressPath)
 		? readJSON(progressPath)
 		: { mode, lastProcessed: null, endpoints: {} };
@@ -65,11 +55,8 @@ function main() {
 		? readJSON(configPath)
 		: { defaultMode: mode, remote };
 
-	const collect = spawnSync(
-		"node",
-		["openapi/scripts/collect-endpoints.js", mode],
-		{ encoding: "utf8" },
-	);
+	const collectScript = path.resolve(__dirname, "collect-endpoints.js");
+	const collect = spawnSync("node", [collectScript, mode], { encoding: "utf8" });
 	if (collect.status !== 0) {
 		throw new Error(collect.stderr || collect.stdout);
 	}
@@ -96,7 +83,8 @@ function main() {
 	ensureEnvFromCiSnippet();
 
 	try {
-		run("node", ["openapi/scripts/generate.js", mode]);
+		const generateScript = path.resolve(__dirname, "generate.js");
+		run("node", [generateScript, mode]);
 	} catch (e) {
 		const message = String(e.message || e);
 		progress.endpoints[next.path] = { status: "error", error: message };
@@ -122,7 +110,7 @@ function main() {
 		return;
 	}
 
-	const diffsDir = path.join("openapi", "diffs", mode);
+	const diffsDir = path.resolve(__dirname, "..", "diffs", mode);
 	fs.mkdirSync(diffsDir, { recursive: true });
 	const slug = slugify(next.path.replace(/^\/+/, ""));
 	const diffFile = path.join(diffsDir, `${slug}.txt`);

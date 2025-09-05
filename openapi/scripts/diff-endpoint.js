@@ -65,10 +65,7 @@ function findCodePathDef(mode, logicalPath) {
 	for (const file of files) {
 		const full = path.join(baseDir, file);
 		const json = readJSON(full);
-		if (
-			json?.paths &&
-			Object.prototype.hasOwnProperty.call(json.paths, logicalPath)
-		) {
+		if (json?.paths?.[logicalPath] !== undefined) {
 			return json.paths[logicalPath];
 		}
 	}
