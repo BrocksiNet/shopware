@@ -58,7 +58,7 @@ function readFromCode(mode, prefix) {
 	return results;
 }
 
-function readFromControllerCode(prefix) {
+function readFromControllerCode() {
 	// Scan PHP files under src/ for Symfony #[Route(...)] attributes with /api paths
 	const rootDir = path.resolve(__dirname, "..", "..");
 	const srcDir = path.join(rootDir, "src");
@@ -132,7 +132,7 @@ function main() {
 		let routes = [];
 		if (mode === "admin") {
 			// Prefer code scan for admin
-			routes = readFromControllerCode(prefix);
+			routes = readFromControllerCode();
 			if (!routes || routes.length === 0) {
 				// fallback to router
 				routes = filterByPrefix(readSymfonyRoutes(), prefix);
