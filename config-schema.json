@@ -571,6 +571,9 @@
                 "import_export_file_download": {
                     "$ref": "#/definitions/rate_limiter_config"
                 },
+                "cookie_consent_log": {
+                    "$ref": "#/definitions/rate_limiter_config"
+                },
                 "mcp": {
                     "$ref": "#/definitions/rate_limiter_config"
                 }
@@ -595,6 +598,12 @@
                         "object",
                         "array"
                     ]
+                },
+                "limit": {
+                    "type": "integer"
+                },
+                "interval": {
+                    "type": "string"
                 }
             },
             "title": "Rate limiter config"
