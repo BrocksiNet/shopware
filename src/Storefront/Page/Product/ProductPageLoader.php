@@ -8,6 +8,7 @@ use Shopware\Core\Content\Product\Aggregate\ProductMedia\ProductMediaCollection;
 use Shopware\Core\Content\Product\Aggregate\ProductReview\ProductReviewCollection;
 use Shopware\Core\Content\Product\Exception\ProductNotFoundException;
 use Shopware\Core\Content\Product\SalesChannel\Detail\AbstractProductDetailRoute;
+use Shopware\Core\Content\Product\SalesChannel\Detail\ProductDetailRoute;
 use Shopware\Core\Content\Product\SalesChannel\Review\ProductReviewResult;
 use Shopware\Core\Content\Product\SalesChannel\Review\RatingMatrix;
 use Shopware\Core\Content\Property\Aggregate\PropertyGroupOption\PropertyGroupOptionCollection;
@@ -87,6 +88,15 @@ class ProductPageLoader
         );
 
         $this->eventDispatcher->dispatch(new ProductPageCriteriaEvent($productId, $criteria, $context));
+
+        // the storefront builds the breadcrumb itself below, so the route must not resolve it a second time
+        $request->attributes->set(ProductDetailRoute::SKIP_BREADCRUMB, true);
+
+        if (!$this->systemConfigService->getBool('core.listing.buildBreadcrumbByReferrerCategory', $context->getSalesChannelId())) {
+            // the route honours the parameter whenever a client sends it, so a link that still carries it must not
+            // bring referrer breadcrumbs back into a shop where the merchant disabled them
+            $request->attributes->set(ProductDetailRoute::REFERRER_CATEGORY_ID, null);
+        }
 
         $result = $this->productDetailRoute->load($productId, $request, $context, $criteria);
         $product = $result->getProduct();

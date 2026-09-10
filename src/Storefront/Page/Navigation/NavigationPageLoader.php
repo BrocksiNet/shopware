@@ -5,6 +5,7 @@ namespace Shopware\Storefront\Page\Navigation;
 use Shopware\Core\Content\Category\CategoryEntity;
 use Shopware\Core\Content\Category\CategoryException;
 use Shopware\Core\Content\Category\SalesChannel\AbstractCategoryRoute;
+use Shopware\Core\Content\Category\SalesChannel\CategoryRoute;
 use Shopware\Core\Content\Category\Service\CategoryBreadcrumbBuilder;
 use Shopware\Core\Content\Seo\SeoUrlPlaceholderHandlerInterface;
 use Shopware\Core\Framework\Feature;
@@ -40,6 +41,9 @@ class NavigationPageLoader implements NavigationPageLoaderInterface
         $page = NavigationPage::createFrom($page);
 
         $navigationId = $request->attributes->get('navigationId', $context->getSalesChannel()->getNavigationCategoryId());
+
+        // the storefront builds the breadcrumb itself below, so the route must not resolve it a second time
+        $request->attributes->set(CategoryRoute::SKIP_BREADCRUMB, true);
 
         $category = $this->cmsPageRoute
             ->load($navigationId, $request, $context)
