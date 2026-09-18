@@ -31,6 +31,7 @@ use Shopware\Core\Framework\DataAbstractionLayer\Field\TranslationsAssociationFi
 use Shopware\Core\Framework\DataAbstractionLayer\Field\VersionField;
 use Shopware\Core\Framework\Feature;
 use Shopware\Core\Framework\Log\Package;
+use Shopware\Core\Framework\Migration\InheritanceUpdaterTrait;
 use Shopware\Core\Framework\Struct\ArrayEntity;
 use Symfony\Component\String\Inflector\EnglishInflector;
 
@@ -203,6 +204,8 @@ class DefinitionValidator
             $violations = array_merge_recursive($violations, $this->validatePrimaryKeyConsistency($definition, $schema));
 
             $violations = array_merge_recursive($violations, $this->validateColumn($definition, $schema));
+
+            $violations = array_merge_recursive($violations, $this->validateInheritanceColumns($definition, $schema));
 
             $violations = array_merge_recursive($violations, $this->checkEntityNameConstant($definition));
 
@@ -504,7 +507,7 @@ class DefinitionValidator
                 continue;
             }
 
-            if ($column->getNotnull() && empty($column->getDefault())) {
+            if ($column->getNotnull() && (bool) $column->getDefault() === false) {
                 $violations[$translationDefinition->getClass()][] = \sprintf(
                     'Column `%s`.`%s` is not nullable',
                     $translationDefinition->getEntityName(),
@@ -981,6 +984,55 @@ class DefinitionValidator
         }
 
         return [$definition->getClass() => $notices];
+    }
+
+    /**
+     * @return array<class-string<EntityDefinition>, list<string>>
+     */
+    private function validateInheritanceColumns(EntityDefinition $definition, Schema $schema): array
+    {
+        if (!$schema->hasTable($definition->getEntityName())) {
+            return [];
+        }
+
+        $table = $schema->getTable($definition->getEntityName());
+        $violations = [];
+
+        foreach ($definition->getFields() as $field) {
+            if (!$field instanceof AssociationField || !$field->is(Inherited::class)) {
+                continue;
+            }
+
+            $columnName = $field->getPropertyName();
+
+            if (!$definition->isInheritanceAware()) {
+                $violations[] = \sprintf(
+                    'Field %s on %s is flagged as Inherited, but the definition is not inheritance aware. Remove the `%s` flag from the field or make the definition inheritance aware by overriding `isInheritanceAware()`.',
+                    $columnName,
+                    $definition->getClass(),
+                    Inherited::class
+                );
+
+                continue;
+            }
+
+            if ($table->hasColumn($columnName)) {
+                continue;
+            }
+
+            $violations[] = \sprintf(
+                'Field %s on %s is flagged as Inherited but the inheritance helper column `%s` is missing on table `%s`. Add a migration which uses the `%s` and calls $this->updateInheritance($connection, \'%s\', \'%s\').',
+                $columnName,
+                $definition->getClass(),
+                $columnName,
+                $definition->getEntityName(),
+                InheritanceUpdaterTrait::class,
+                $definition->getEntityName(),
+                $columnName
+            );
+        }
+
+        return [$definition->getClass() => $violations];
     }
 
     /**
