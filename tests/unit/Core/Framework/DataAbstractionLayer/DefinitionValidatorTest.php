@@ -562,6 +562,37 @@ class DefinitionValidatorTest extends TestCase
     }
 
     /**
+     * @param class-string<Entity> $entityClass
+     * @param list<string> $expectedViolations
+     */
+    #[DataProvider('foreignKeyNextToManyToManyProvider')]
+    public function testManyToManyDoesNotRequireAVersionReferenceOnTheDefinition(string $entityClass, array $expectedViolations): void
+    {
+        $violations = $this->createValidatorWithRegisteredAttributeEntities($entityClass, TrackEntity::class)->validate();
+
+        static::assertSame(
+            $expectedViolations,
+            array_values(array_filter(
+                $violations[$entityClass] ?? [],
+                static fn (string $violation): bool => str_contains($violation, 'Missing version reference')
+            ))
+        );
+    }
+
+    /**
+     * @return \Generator<string, array{class-string<Entity>, list<string>}>
+     */
+    public static function foreignKeyNextToManyToManyProvider(): \Generator
+    {
+        yield 'version reference present, nothing to report' => [PlaylistEntity::class, []];
+
+        yield 'version reference missing, reported once for the many-to-one' => [
+            AlbumEntity::class,
+            ['Missing version reference for foreign key column track.id for definition association album.leadSingle'],
+        ];
+    }
+
+    /**
      * A column that no field maps to is reported as a violation, unless the `<entity>.<column>` key is
      * ignored. The reported violations are therefore the observable behaviour of the ignore lists.
      *
@@ -981,4 +1012,67 @@ class CriterionEntity extends Entity
 
     #[ManyToOne(entity: 'criterion')]
     public ?CriterionEntity $parent = null;
+}
+
+/**
+ * @internal
+ */
+#[EntityAttribute('track')]
+class TrackEntity extends Entity
+{
+    #[PrimaryKey]
+    #[Field(type: FieldType::UUID)]
+    public string $id;
+
+    #[Version]
+    public ?string $versionId = null;
+}
+
+/**
+ * @internal
+ */
+#[EntityAttribute('playlist')]
+class PlaylistEntity extends Entity
+{
+    #[PrimaryKey]
+    #[Field(type: FieldType::UUID)]
+    public string $id;
+
+    #[ForeignKey(entity: 'track')]
+    public ?string $coverTrackId = null;
+
+    #[ReferenceVersion(entity: 'track')]
+    public ?string $coverTrackVersionId = null;
+
+    #[ManyToOne(entity: 'track')]
+    public ?TrackEntity $coverTrack = null;
+
+    /**
+     * @var array<string, TrackEntity>|null
+     */
+    #[ManyToMany(entity: 'track')]
+    public ?array $tracks = null;
+}
+
+/**
+ * @internal
+ */
+#[EntityAttribute('album')]
+class AlbumEntity extends Entity
+{
+    #[PrimaryKey]
+    #[Field(type: FieldType::UUID)]
+    public string $id;
+
+    #[ForeignKey(entity: 'track')]
+    public ?string $leadSingleId = null;
+
+    #[ManyToOne(entity: 'track')]
+    public ?TrackEntity $leadSingle = null;
+
+    /**
+     * @var array<string, TrackEntity>|null
+     */
+    #[ManyToMany(entity: 'track')]
+    public ?array $tracks = null;
 }
