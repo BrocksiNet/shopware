@@ -9,12 +9,14 @@ use Shopware\Core\Framework\Api\Acl\AclRoles;
 use Shopware\Core\Framework\Api\Acl\ApiCaller;
 use Shopware\Core\Framework\Api\Context\AdminApiSource;
 use Shopware\Core\Framework\Context;
+use Shopware\Core\Framework\DataAbstractionLayer\Dbal\RowLoader;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\DeleteCommand;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\InsertCommand;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\UpdateCommand;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\WriteCommand;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\EntityExistence;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\EntityWriteGatewayInterface;
+use Shopware\Core\Framework\DataAbstractionLayer\Write\Validation\WriteOutcome;
 use Shopware\Core\Framework\HttpException;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Uuid\Uuid;
@@ -49,8 +51,13 @@ class WriteAuthorizerTest extends TestCase
 
     private AclRoleLoader $aclRoleLoader;
 
+    private RowLoader $rowLoader;
+
     protected function setUp(): void
     {
+        $this->rowLoader = static::createStub(RowLoader::class);
+        $this->rowLoader->method('load')->willReturn([]);
+
         $this->registry = new StaticDefinitionInstanceRegistry(
             [WebhookDefinition::class],
             static::createStub(ValidatorInterface::class),
@@ -268,6 +275,7 @@ class WriteAuthorizerTest extends TestCase
             ->willReturn([
                 $update->getDecodedPrimaryKey()['id'] => new WebhookSubscription($update->getDecodedPrimaryKey()['id'], SubscriberType::User, self::USER_ID, 'product.written', null),
             ]);
+        $this->storeRow($update, 'product.written', null);
 
         $this->aclRoleLoader = $this->createMock(AclRoleLoader::class);
         $this->aclRoleLoader->expects($this->once())
@@ -346,6 +354,7 @@ class WriteAuthorizerTest extends TestCase
         $this->webhookLoader->method('getSubscriptions')->willReturn([
             $update->getDecodedPrimaryKey()['id'] => new WebhookSubscription($update->getDecodedPrimaryKey()['id'], SubscriberType::User, self::USER_ID, 'order.written', ['role', 'lost-role']),
         ]);
+        $this->storeRow($update, 'order.written', ['role', 'lost-role']);
 
         static::assertSame([], $this->authorize([$update]));
     }
@@ -357,7 +366,7 @@ class WriteAuthorizerTest extends TestCase
      */
     private function authorize(array $commands, ?Context $context = null): array
     {
-        return (new WriteAuthorizer($this->validator, $this->webhookLoader, $this->aclRoleLoader))
+        return (new WriteAuthorizer($this->validator, $this->webhookLoader, $this->aclRoleLoader, new WriteOutcome($this->rowLoader)))
             ->getViolations($commands, $context ?? $this->userContext(self::USER_ID));
     }
 
@@ -367,6 +376,20 @@ class WriteAuthorizerTest extends TestCase
         $this->webhookLoader->method('getSubscriptions')->willReturn([
             $command->getDecodedPrimaryKey()['id'] => new WebhookSubscription($command->getDecodedPrimaryKey()['id'], $ownerType, $ownerId, 'product.written', null),
         ]);
+        $this->storeRow($command, 'product.written', null);
+    }
+
+    /**
+     * @param list<string>|null $aclRoleIds
+     */
+    private function storeRow(WriteCommand $command, string $eventName, ?array $aclRoleIds): void
+    {
+        $this->rowLoader = static::createStub(RowLoader::class);
+        $this->rowLoader->method('load')->willReturn([[
+            'id' => $command->getPrimaryKey()['id'],
+            'event_name' => $eventName,
+            'acl_role_ids' => $aclRoleIds === null ? null : json_encode($aclRoleIds, \JSON_THROW_ON_ERROR),
+        ]]);
     }
 
     private function userContext(string $userId, bool $isAdmin = false): Context
