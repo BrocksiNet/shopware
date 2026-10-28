@@ -1,0 +1,46 @@
+{
+  "warmups": [
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "Script ran on page and returned:\n```json\n{\"readyMs\":21904.599999964237,\"ttfbMs\":76.29999995231628,\"loadMs\":1482.0999999642372,\"dclMs\":1481.8999999761581,\"fcpMs\":21932,\"completedRequestsStartedBeforeReady\":4215,\"resourcesWithResponseTiming\":4214,\"resourceTtfbMedianMs\":2.899999976158142,\"resourceTtfbP95Ms\":7.699999988079071,\"transferMiB\":12.131192207336426,\"decodedMiB\":94.59214401245117,\"errors\":[],\"button\":\"Native SFC state counter 0: edit this text to test HMR.\"}\n```"
+        }
+      ]
+    },
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "Script ran on page and returned:\n```json\n{\"readyMs\":13574.600000023842,\"ttfbMs\":20.899999976158142,\"loadMs\":1228.800000011921,\"dclMs\":1228.6000000238419,\"fcpMs\":13604,\"completedRequestsStartedBeforeReady\":4213,\"resourcesWithResponseTiming\":4212,\"resourceTtfbMedianMs\":3.300000011920929,\"resourceTtfbP95Ms\":8.600000023841858,\"transferMiB\":12.130549430847168,\"decodedMiB\":94.80872917175293,\"errors\":[],\"button\":\"Native SFC state counter 0: edit this text to test HMR.\"}\n```"
+        }
+      ]
+    }
+  ],
+  "runs": [
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "Script ran on page and returned:\n```json\n{\"timeOrigin\":1793179239065.3,\"readyMs\":23490.5,\"ttfbMs\":70.29999995231628,\"loadMs\":1705.800000011921,\"dclMs\":1705.6000000238419,\"fcpMs\":23524,\"completedRequestsStartedBeforeReady\":4215,\"resourcesWithResponseTiming\":4214,\"resourceTtfbMedianMs\":2.899999976158142,\"resourceTtfbP95Ms\":7.5,\"transferMiB\":12.131192207336426,\"decodedMiB\":94.59214401245117,\"errors\":[],\"button\":\"Native SFC state counter 0: edit this text to test HMR.\"}\n```"
+        }
+      ]
+    },
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "Script ran on page and returned:\n```json\n{\"timeOrigin\":1793179271047,\"readyMs\":12104.699999988079,\"ttfbMs\":195,\"loadMs\":1763.5999999642372,\"dclMs\":1763.3999999761581,\"fcpMs\":12132,\"completedRequestsStartedBeforeReady\":4214,\"resourcesWithResponseTiming\":4212,\"resourceTtfbMedianMs\":3.199999988079071,\"resourceTtfbP95Ms\":9,\"transferMiB\":12.130549430847168,\"decodedMiB\":94.59207344055176,\"errors\":[],\"button\":\"Native SFC state counter 0: edit this text to test HMR.\"}\n```"
+        }
+      ]
+    },
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "Script ran on page and returned:\n```json\n{\"timeOrigin\":1793179292614.7,\"readyMs\":13311.300000011921,\"ttfbMs\":91.80000001192093,\"loadMs\":1215.3999999761581,\"dclMs\":1215.300000011921,\"fcpMs\":13344,\"completedRequestsStartedBeforeReady\":4213,\"resourcesWithResponseTiming\":4212,\"resourceTtfbMedianMs\":3.199999988079071,\"resourceTtfbP95Ms\":11.5,\"transferMiB\":12.130549430847168,\"decodedMiB\":92.68440055847168,\"errors\":[],\"button\":\"Native SFC state counter 0: edit this text to test HMR.\"}\n```"
+        }
+      ]
+    }
+  ]
+}

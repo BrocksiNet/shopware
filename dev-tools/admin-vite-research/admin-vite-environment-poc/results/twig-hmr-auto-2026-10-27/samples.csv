@@ -1,0 +1,2 @@
+elapsedMs,containerRssMiB,viteTreeRssMiB,containerCpuPercent,viteTreeCpuTicksPerSecond,processCount,openFds,threads,inotifyWatches,listeners
+0,2445.16015625,1393.50390625,0,0,4,149,88,12837,42

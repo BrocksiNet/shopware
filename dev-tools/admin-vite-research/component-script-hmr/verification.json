@@ -1,0 +1,18 @@
+{
+  "pr": "https://github.com/shopware/shopware/pull/22150",
+  "featureCommit": "695fc0e2ced07a5ca8dfa2c5cc613639dd0ace96",
+  "integrationCommit": "9eeb2c939956605d883fd4ca6735905adab4b229",
+  "tests": 1546,
+  "suites": 71,
+  "fullAdminLint": "passed with existing warnings",
+  "scopedPluginLint": "passed",
+  "productionCoreBuild": "passed",
+  "ci": "pending at handoff",
+  "finalBrowser": {
+    "hostBoot": "7f1ce7d6-2100-47f2-b79a-a47425b5e761",
+    "nativeComputed": 40,
+    "parentCounter": 2,
+    "sdkDraftsPreserved": true,
+    "sdkRegistrationsSingular": true
+  }
+}

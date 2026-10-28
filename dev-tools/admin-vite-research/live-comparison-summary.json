@@ -1,0 +1,147 @@
+{
+  "baseline": {
+    "runs": [
+      {
+        "timeOrigin": 1793179239065.3,
+        "readyMs": 23490.5,
+        "ttfbMs": 70.29999995231628,
+        "loadMs": 1705.800000011921,
+        "dclMs": 1705.6000000238419,
+        "fcpMs": 23524,
+        "completedRequestsStartedBeforeReady": 4215,
+        "resourcesWithResponseTiming": 4214,
+        "resourceTtfbMedianMs": 2.899999976158142,
+        "resourceTtfbP95Ms": 7.5,
+        "transferMiB": 12.131192207336426,
+        "decodedMiB": 94.59214401245117,
+        "errors": [],
+        "button": "Native SFC state counter 0: edit this text to test HMR.",
+        "serverCpuSeconds": 5.019999999999996,
+        "peakRssGiB": 2.213123321533203,
+        "peakPssGiB": 2.0756635665893555
+      },
+      {
+        "timeOrigin": 1793179271047,
+        "readyMs": 12104.699999988079,
+        "ttfbMs": 195,
+        "loadMs": 1763.5999999642372,
+        "dclMs": 1763.3999999761581,
+        "fcpMs": 12132,
+        "completedRequestsStartedBeforeReady": 4214,
+        "resourcesWithResponseTiming": 4212,
+        "resourceTtfbMedianMs": 3.199999988079071,
+        "resourceTtfbP95Ms": 9,
+        "transferMiB": 12.130549430847168,
+        "decodedMiB": 94.59207344055176,
+        "errors": [],
+        "button": "Native SFC state counter 0: edit this text to test HMR.",
+        "serverCpuSeconds": 5.260000000000005,
+        "peakRssGiB": 2.2000656127929688,
+        "peakPssGiB": 2.0625486373901367
+      },
+      {
+        "timeOrigin": 1793179292614.7,
+        "readyMs": 13311.300000011921,
+        "ttfbMs": 91.80000001192093,
+        "loadMs": 1215.3999999761581,
+        "dclMs": 1215.300000011921,
+        "fcpMs": 13344,
+        "completedRequestsStartedBeforeReady": 4213,
+        "resourcesWithResponseTiming": 4212,
+        "resourceTtfbMedianMs": 3.199999988079071,
+        "resourceTtfbP95Ms": 11.5,
+        "transferMiB": 12.130549430847168,
+        "decodedMiB": 92.68440055847168,
+        "errors": [],
+        "button": "Native SFC state counter 0: edit this text to test HMR.",
+        "serverCpuSeconds": 4.290000000000006,
+        "peakRssGiB": 2.1755599975585938,
+        "peakPssGiB": 2.0380430221557617
+      }
+    ],
+    "listeners": [
+      78
+    ],
+    "nodeProcesses": [
+      3
+    ],
+    "peakFds": 611,
+    "inotifyWatches": [
+      19195
+    ]
+  },
+  "shared": {
+    "runs": [
+      {
+        "timeOrigin": 1793179412980.3,
+        "readyMs": 16935.5,
+        "ttfbMs": 18.5,
+        "loadMs": 999.5,
+        "dclMs": 999.4000000357628,
+        "fcpMs": 16960,
+        "completedRequestsStartedBeforeReady": 4215,
+        "cachedResources": 171,
+        "resourcesWithResponseTiming": 4213,
+        "resourceTtfbMedianMs": 1.100000023841858,
+        "resourceTtfbP95Ms": 6,
+        "transferMiB": 12.13088607788086,
+        "decodedMiB": 94.58620357513428,
+        "errors": [],
+        "button": "Native SFC state counter 0: edit this text to test HMR.",
+        "serverCpuSeconds": 1.3599999999999994,
+        "peakRssGiB": 1.6751174926757812,
+        "peakPssGiB": 1.5996532440185547
+      },
+      {
+        "timeOrigin": 1793179443451.6,
+        "readyMs": 5051,
+        "ttfbMs": 79.10000002384186,
+        "loadMs": 566.0999999642372,
+        "dclMs": 566.0999999642372,
+        "fcpMs": 5088,
+        "completedRequestsStartedBeforeReady": 4211,
+        "cachedResources": 171,
+        "resourcesWithResponseTiming": 4210,
+        "resourceTtfbMedianMs": 1,
+        "resourceTtfbP95Ms": 2.5,
+        "transferMiB": 12.128413200378418,
+        "decodedMiB": 94.57304668426514,
+        "errors": [],
+        "button": "Native SFC state counter 0: edit this text to test HMR.",
+        "serverCpuSeconds": 0.9200000000000017,
+        "peakRssGiB": 1.6847724914550781,
+        "peakPssGiB": 1.6092777252197266
+      },
+      {
+        "timeOrigin": 1793179460303,
+        "readyMs": 9032.199999988079,
+        "ttfbMs": 50.19999998807907,
+        "loadMs": 1072,
+        "dclMs": 1071.9000000357628,
+        "fcpMs": 9068,
+        "completedRequestsStartedBeforeReady": 4214,
+        "cachedResources": 171,
+        "resourcesWithResponseTiming": 4212,
+        "resourceTtfbMedianMs": 1,
+        "resourceTtfbP95Ms": 3.199999988079071,
+        "transferMiB": 12.13056468963623,
+        "decodedMiB": 94.58616828918457,
+        "errors": [],
+        "button": "Native SFC state counter 0: edit this text to test HMR.",
+        "serverCpuSeconds": 2.1400000000000006,
+        "peakRssGiB": 1.6949958801269531,
+        "peakPssGiB": 1.6195011138916016
+      }
+    ],
+    "listeners": [
+      1
+    ],
+    "nodeProcesses": [
+      2
+    ],
+    "peakFds": 126,
+    "inotifyWatches": [
+      19203
+    ]
+  }
+}

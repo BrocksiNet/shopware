@@ -1,0 +1,25 @@
+{
+  "tests": 950,
+  "suites": 26,
+  "adapter": {
+    "addedStatements": 27,
+    "uncovered": 0,
+    "addedBranchGroups": 9,
+    "partial": 0
+  },
+  "factory": {
+    "addedStatements": 26,
+    "uncovered": 0,
+    "addedBranchGroups": 7,
+    "partial": 0
+  },
+  "impact": {
+    "blastRadius": "Administration override registration and focused regression tests; shared cache, checkout, remote assets and Symfony container unaffected by this follow-up.",
+    "whoPays": "Same override registration work; removes an unreachable conditional.",
+    "complexity": "No additional developer setup.",
+    "verdict": "ship"
+  },
+  "commit": "dc2986fc234a0f160997183bf88f5685e63ac7a7",
+  "fullAdminLint": "passed: types, ESLint, SCSS, formatting; existing warnings",
+  "hostedCodecov": "pending new CI upload"
+}

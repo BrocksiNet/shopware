@@ -1,0 +1,5 @@
+mode,status,nodeVersion,platform,cpuModel,cpuCount,count,appEvery,sourceProfile,appCount,runs,pluginSourceFilesPerExtension,appSourceFilesPerExtension,sourceMultiplier,transformedFiles,fixtureFileCount,fixtureBytes,serverInstances,listeners,environments,serverStartupMs,transformMs,totalMs,peakTreeRssMiB,observedRssAtAbortMiB,reason,peakFileDescriptors,peakInotifyWatches,peakProcessCount,peakThreads,processTreeCpuMs
+per-extension,ok,v24.13.0,linux-arm64,unknown,8,40,0,shopware-shaped,0,1,126,20,2,5040,5080,17269240,41,41,82,873,4741,5628,415.7,,,63,5285,1,32,7930
+environments-default,ok,v24.13.0,linux-arm64,unknown,8,40,0,shopware-shaped,0,1,126,20,2,5040,5080,17269240,1,1,42,97,5617,5793,692.2,,,23,5045,1,35,8390
+environments-no-discovery,ok,v24.13.0,linux-arm64,unknown,8,40,0,shopware-shaped,0,1,126,20,2,5040,5080,17269240,1,1,42,57,4311,4393,479.3,,,23,5045,1,32,6320
+shared-client,ok,v24.13.0,linux-arm64,unknown,8,40,0,shopware-shaped,0,1,126,20,2,5040,5080,17269240,1,1,2,48,4799,4874,501.2,,,23,5045,1,32,6710

@@ -1,0 +1,46 @@
+{
+  "warmups": [
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "Script ran on page and returned:\n```json\n{\"timeOrigin\":1793179350742.3,\"readyMs\":14713.300000011921,\"ttfbMs\":92.5,\"loadMs\":1428.8999999761581,\"dclMs\":1428.699999988079,\"fcpMs\":14748,\"completedRequestsStartedBeforeReady\":4211,\"resourcesWithResponseTiming\":4210,\"resourceTtfbMedianMs\":1.100000023841858,\"resourceTtfbP95Ms\":12.600000023841858,\"transferMiB\":45.65348815917969,\"decodedMiB\":92.06960582733154,\"errors\":[],\"button\":\"Native SFC state counter 0: edit this text to test HMR.\"}\n```"
+        }
+      ]
+    },
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "Script ran on page and returned:\n```json\n{\"timeOrigin\":1793179390442.1,\"readyMs\":9403.899999976158,\"ttfbMs\":40.30000001192093,\"loadMs\":788.6999999880791,\"dclMs\":788.5,\"fcpMs\":9428,\"completedRequestsStartedBeforeReady\":4213,\"resourcesWithResponseTiming\":4212,\"resourceTtfbMedianMs\":1.100000023841858,\"resourceTtfbP95Ms\":4.5,\"transferMiB\":12.142389297485352,\"decodedMiB\":94.58616828918457,\"errors\":[],\"button\":\"Native SFC state counter 0: edit this text to test HMR.\"}\n```"
+        }
+      ]
+    }
+  ],
+  "runs": [
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "Script ran on page and returned:\n```json\n{\"timeOrigin\":1793179412980.3,\"readyMs\":16935.5,\"ttfbMs\":18.5,\"loadMs\":999.5,\"dclMs\":999.4000000357628,\"fcpMs\":16960,\"completedRequestsStartedBeforeReady\":4215,\"cachedResources\":171,\"resourcesWithResponseTiming\":4213,\"resourceTtfbMedianMs\":1.100000023841858,\"resourceTtfbP95Ms\":6,\"transferMiB\":12.13088607788086,\"decodedMiB\":94.58620357513428,\"errors\":[],\"button\":\"Native SFC state counter 0: edit this text to test HMR.\"}\n```"
+        }
+      ]
+    },
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "Script ran on page and returned:\n```json\n{\"timeOrigin\":1793179443451.6,\"readyMs\":5051,\"ttfbMs\":79.10000002384186,\"loadMs\":566.0999999642372,\"dclMs\":566.0999999642372,\"fcpMs\":5088,\"completedRequestsStartedBeforeReady\":4211,\"cachedResources\":171,\"resourcesWithResponseTiming\":4210,\"resourceTtfbMedianMs\":1,\"resourceTtfbP95Ms\":2.5,\"transferMiB\":12.128413200378418,\"decodedMiB\":94.57304668426514,\"errors\":[],\"button\":\"Native SFC state counter 0: edit this text to test HMR.\"}\n```"
+        }
+      ]
+    },
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "Script ran on page and returned:\n```json\n{\"timeOrigin\":1793179460303,\"readyMs\":9032.199999988079,\"ttfbMs\":50.19999998807907,\"loadMs\":1072,\"dclMs\":1071.9000000357628,\"fcpMs\":9068,\"completedRequestsStartedBeforeReady\":4214,\"cachedResources\":171,\"resourcesWithResponseTiming\":4212,\"resourceTtfbMedianMs\":1,\"resourceTtfbP95Ms\":3.199999988079071,\"transferMiB\":12.13056468963623,\"decodedMiB\":94.58616828918457,\"errors\":[],\"button\":\"Native SFC state counter 0: edit this text to test HMR.\"}\n```"
+        }
+      ]
+    }
+  ]
+}

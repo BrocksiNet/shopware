@@ -1,0 +1,376 @@
+{
+  "date": "2026-10-28",
+  "scope": "Curated public research archive; exact local originals retained separately.",
+  "transformations": [
+    "Personal workspace paths replaced with placeholders.",
+    "Historical-status banners added and relative links repaired.",
+    "Links to excluded local raw evidence rendered as prose.",
+    "Generated SVG trailing whitespace normalized without changing graph data."
+  ],
+  "files": [
+    {
+      "path": "05-vite-dev-server-and-twig-hmr.md",
+      "sourceSha256": "afe1717be9b5db93379d77911ec6e6abf768111d08ead7868283a30286db5313",
+      "archivedSha256": "094f8c1d228187bcfd40cfde9d938a167d5c62219ab294077ccccc5c131c0f9d",
+      "bytes": 31911,
+      "changedForArchive": true
+    },
+    {
+      "path": "06-vite-shared-server-poc-decision-log.md",
+      "sourceSha256": "0321d99be7106236069a74d0e237b608b9b3eaa477be2eb0d6d2a066dc2fd9f0",
+      "archivedSha256": "2a2d6274106f883a7bf2f85d4a66ec64c68f2bee19b411e8f9235dc2278f246e",
+      "bytes": 20935,
+      "changedForArchive": true
+    },
+    {
+      "path": "2026-10-28-acceptance-and-benchmarks.md",
+      "sourceSha256": "1c60dbb5f05c0cefe18c1bd629eb073ac3cf95bdaa525826e3313ef3afe66bb6",
+      "archivedSha256": "2589e20cecf4a42a6621696e311c1d2b0e51820ffe0ed862552f3d14517d3ecd",
+      "bytes": 18683,
+      "changedForArchive": true
+    },
+    {
+      "path": "2026-10-28-review-and-port-pr.md",
+      "sourceSha256": "57d4637ede17ef43e5f97b0f2af582113a203781e6a0b9db23076c015f15181a",
+      "archivedSha256": "03a8f0d8be69bfdc817470ade85e6695c2afb70807864bfba7d3c80cf0440e50",
+      "bytes": 5453,
+      "changedForArchive": true
+    },
+    {
+      "path": "admin-vite-environment-poc/README.md",
+      "sourceSha256": "47fde0df0f25c02b4550145c2cb25354ca5462bd2bfea607102e65e13ce40227",
+      "archivedSha256": "e771abda74f9cb9e4ae380e9c964bc037fc264f5e436a2d12800ab65c188c732",
+      "bytes": 15862,
+      "changedForArchive": true
+    },
+    {
+      "path": "admin-vite-environment-poc/benchmark.mjs",
+      "sourceSha256": "3f5e01c66f9ee36f53c70375be44e6603d9c37bb1f5eecafd916b8e865442ae9",
+      "archivedSha256": "3f5e01c66f9ee36f53c70375be44e6603d9c37bb1f5eecafd916b8e865442ae9",
+      "bytes": 46229,
+      "changedForArchive": false
+    },
+    {
+      "path": "admin-vite-environment-poc/generate-shopware-fixture.mjs",
+      "sourceSha256": "e98ca582cd68441868ee4181732526d512a588981700faf3261db5a9dc5d9cab",
+      "archivedSha256": "e98ca582cd68441868ee4181732526d512a588981700faf3261db5a9dc5d9cab",
+      "bytes": 11485,
+      "changedForArchive": false
+    },
+    {
+      "path": "admin-vite-environment-poc/lighthouserc.shopware-vite8.cjs",
+      "sourceSha256": "78fd4119fc661bee6e3fdd0624924f7c660fd63cebce83a3f97186fb5b2661fe",
+      "archivedSha256": "78fd4119fc661bee6e3fdd0624924f7c660fd63cebce83a3f97186fb5b2661fe",
+      "bytes": 1372,
+      "changedForArchive": false
+    },
+    {
+      "path": "admin-vite-environment-poc/results/2026-10-27/README.md",
+      "sourceSha256": "5ba25e4a4e8d9c4f95f7a1efd4d9820af040584168fd1ec2e38f1c93afcdadd8",
+      "archivedSha256": "104df219f6136193625c059404f6d678f41dbc42212a9a45b121c804698b1b30",
+      "bytes": 899,
+      "changedForArchive": true
+    },
+    {
+      "path": "admin-vite-environment-poc/results/2026-10-27/graphs.svg",
+      "sourceSha256": "ca0beb79a7be4066d2804c962d11037a1d2a39d37044d1973e006923fe053885",
+      "archivedSha256": "830dc4e456a6b6ce11d894a9581de82853fa899eab42094b27fff2d544869b0b",
+      "bytes": 13730,
+      "changedForArchive": true
+    },
+    {
+      "path": "admin-vite-environment-poc/results/2026-10-27/raw.json",
+      "sourceSha256": "b31b337bd74088c75ca7b003bd9c62b78d3d938300f9df6ab5b0cb201847cadf",
+      "archivedSha256": "b31b337bd74088c75ca7b003bd9c62b78d3d938300f9df6ab5b0cb201847cadf",
+      "bytes": 35688,
+      "changedForArchive": false
+    },
+    {
+      "path": "admin-vite-environment-poc/results/2026-10-27/summary.csv",
+      "sourceSha256": "1e43263ad9c6cab8e163936bc1fef7d31faedd31df0c0a04cb482036584c53fa",
+      "archivedSha256": "1e43263ad9c6cab8e163936bc1fef7d31faedd31df0c0a04cb482036584c53fa",
+      "bytes": 3395,
+      "changedForArchive": false
+    },
+    {
+      "path": "admin-vite-environment-poc/results/apps-mix-2026-10-27/README.md",
+      "sourceSha256": "cd5eacb06c678877469bafcc55aa9f11e097eb4b5a69143ec2f7a1494f55efa1",
+      "archivedSha256": "3e8e0e394477a5117b124afc53a88cee04ef7660a1b51b3e95cd664cf74232e3",
+      "bytes": 899,
+      "changedForArchive": true
+    },
+    {
+      "path": "admin-vite-environment-poc/results/apps-mix-2026-10-27/graphs.svg",
+      "sourceSha256": "9e27b0c854182bc6f81f72d18a8ad8474434db3ce8c72949285eab67dae19bdf",
+      "archivedSha256": "3c97a48c465cea8a4a176f68154698a5cef319d0b84d227215d0009446aa96d2",
+      "bytes": 9010,
+      "changedForArchive": true
+    },
+    {
+      "path": "admin-vite-environment-poc/results/apps-mix-2026-10-27/raw.json",
+      "sourceSha256": "c4642db79c6155c6630f66c7a8aa68a5418709ecc3deb9f3504c8f3b9f126592",
+      "archivedSha256": "c4642db79c6155c6630f66c7a8aa68a5418709ecc3deb9f3504c8f3b9f126592",
+      "bytes": 8045,
+      "changedForArchive": false
+    },
+    {
+      "path": "admin-vite-environment-poc/results/apps-mix-2026-10-27/summary.csv",
+      "sourceSha256": "d1c19135150c3a418baae9ca3135eb1d57404cd16dfeaec78020564423c75ee9",
+      "archivedSha256": "d1c19135150c3a418baae9ca3135eb1d57404cd16dfeaec78020564423c75ee9",
+      "bytes": 1741,
+      "changedForArchive": false
+    },
+    {
+      "path": "admin-vite-environment-poc/results/commercial-test-2026-10-27.md",
+      "sourceSha256": "2e44919697678621f839ce8f18704c1b2cdad1f8edcf195c0f508e1a93aa0e36",
+      "archivedSha256": "eb984c78b002935fc980a874b5e7a99cb2860c72ca4c3d2ec7b3150aa131162b",
+      "bytes": 3771,
+      "changedForArchive": true
+    },
+    {
+      "path": "admin-vite-environment-poc/results/large-extension-profile-2026-10-27/README.md",
+      "sourceSha256": "4164b7441c57864053507695beaba90af9216139482cb098ddd2fd306935ae6a",
+      "archivedSha256": "33c66d352f83e1c9db11a07899c9bef1aab5357c54ed9f484c003b51e8ebb79f",
+      "bytes": 899,
+      "changedForArchive": true
+    },
+    {
+      "path": "admin-vite-environment-poc/results/large-extension-profile-2026-10-27/graphs.svg",
+      "sourceSha256": "986573bc451b9c4b5bc2b685ab5a4fa15a22b0641b49460860ea6c034cf9dc74",
+      "archivedSha256": "1f5566697ee410932790252961e60aa97713a171d1a68d6b51d47ead79053871",
+      "bytes": 7058,
+      "changedForArchive": true
+    },
+    {
+      "path": "admin-vite-environment-poc/results/large-extension-profile-2026-10-27/raw.json",
+      "sourceSha256": "655a5028bcd284909801f3f28ec6fcc4ba7d9ba32dc897c502547d2f2c547f7e",
+      "archivedSha256": "655a5028bcd284909801f3f28ec6fcc4ba7d9ba32dc897c502547d2f2c547f7e",
+      "bytes": 3603,
+      "changedForArchive": false
+    },
+    {
+      "path": "admin-vite-environment-poc/results/large-extension-profile-2026-10-27/summary.csv",
+      "sourceSha256": "ee8c8ed57a0685f4eb6abb9a96fd29d412b37471daf5013ab96a75fb60cdb09b",
+      "archivedSha256": "ee8c8ed57a0685f4eb6abb9a96fd29d412b37471daf5013ab96a75fb60cdb09b",
+      "bytes": 1028,
+      "changedForArchive": false
+    },
+    {
+      "path": "admin-vite-environment-poc/results/shopware-vite8-40-extensions-2026-10-27/README.md",
+      "sourceSha256": "626a2b150dfc9d23b55c7ad44e876c2ba5f87d332134ec709d510c7e623707b2",
+      "archivedSha256": "d7ee5d5973d0061bc40687172d87ab7c7a5524cbcc635a4efb90667a22c9cb40",
+      "bytes": 1956,
+      "changedForArchive": true
+    },
+    {
+      "path": "admin-vite-environment-poc/results/shopware-vite8-40-extensions-2026-10-27/browser-validation.md",
+      "sourceSha256": "ae4c9034ecc137f727ec2f3f467fd9b7f0f6c418a166d065e40fce798d9164cc",
+      "archivedSha256": "55e9761d545e3d912c63a901b0422c3d0610c0a843a1f809a0da6a66182c9ab3",
+      "bytes": 4008,
+      "changedForArchive": true
+    },
+    {
+      "path": "admin-vite-environment-poc/results/shopware-vite8-40-extensions-2026-10-27/graphs.svg",
+      "sourceSha256": "7de652f0b79eb5947fd3cc132f6aad63d315eb7a98be25f884310941bb84be6e",
+      "archivedSha256": "66f78430a8aed008ea1b6808a58be2dd60d852a6d7fb58bc48a00d0c4f32593a",
+      "bytes": 5371,
+      "changedForArchive": true
+    },
+    {
+      "path": "admin-vite-environment-poc/results/shopware-vite8-40-extensions-2026-10-27/raw.json",
+      "sourceSha256": "e586e11e37aaec3fb46310584209e327b173ed7d50f10954306ea829e2f138d9",
+      "archivedSha256": "e586e11e37aaec3fb46310584209e327b173ed7d50f10954306ea829e2f138d9",
+      "bytes": 15153,
+      "changedForArchive": false
+    },
+    {
+      "path": "admin-vite-environment-poc/results/shopware-vite8-40-extensions-2026-10-27/samples.csv",
+      "sourceSha256": "0e74a83e8a29c3cf7b80f824ff25fee94635b077c5bc1828d97aed2ebe0f6341",
+      "archivedSha256": "0e74a83e8a29c3cf7b80f824ff25fee94635b077c5bc1828d97aed2ebe0f6341",
+      "bytes": 2703,
+      "changedForArchive": false
+    },
+    {
+      "path": "admin-vite-environment-poc/results/twig-hmr-auto-2026-10-27/README.md",
+      "sourceSha256": "28e18f74e2a09725a29c8f1266e26b9b148764694718daba284bf4c7e3f47607",
+      "archivedSha256": "6cb0621c1e44e6b9067b0d356418306019805cd803e4cc63fdc436570bff722c",
+      "bytes": 1438,
+      "changedForArchive": true
+    },
+    {
+      "path": "admin-vite-environment-poc/results/twig-hmr-auto-2026-10-27/graphs.svg",
+      "sourceSha256": "1e4ecdfb864192863f1764789853c534af3ac1144cddea538158209420fb3f15",
+      "archivedSha256": "87d17af9a968b976205e33bec0eb4773e14ed66bdb160c8fff00421a27c6ab9b",
+      "bytes": 3030,
+      "changedForArchive": true
+    },
+    {
+      "path": "admin-vite-environment-poc/results/twig-hmr-auto-2026-10-27/raw.json",
+      "sourceSha256": "369a36798a2fc7d8cf6f0af816df13608d1e38a121441d6038d59dfa0465b265",
+      "archivedSha256": "369a36798a2fc7d8cf6f0af816df13608d1e38a121441d6038d59dfa0465b265",
+      "bytes": 1572,
+      "changedForArchive": false
+    },
+    {
+      "path": "admin-vite-environment-poc/results/twig-hmr-auto-2026-10-27/samples.csv",
+      "sourceSha256": "69ad2b446662921315e19fb9e51cbf59a1b8e202435a8fed3b9673e8c9fffe36",
+      "archivedSha256": "69ad2b446662921315e19fb9e51cbf59a1b8e202435a8fed3b9673e8c9fffe36",
+      "bytes": 193,
+      "changedForArchive": false
+    },
+    {
+      "path": "admin-vite-environment-poc/run-poc.mjs",
+      "sourceSha256": "5bd0ca4ae039304b26117f310defc5dfc448ca85cb6dbcc0f8698c498e7f7fbc",
+      "archivedSha256": "5bd0ca4ae039304b26117f310defc5dfc448ca85cb6dbcc0f8698c498e7f7fbc",
+      "bytes": 14490,
+      "changedForArchive": false
+    },
+    {
+      "path": "admin-vite-environment-poc/run-shopware-vite8-benchmark.mjs",
+      "sourceSha256": "36e09a282fa756182ef3e1884ccb23fc7f174df8b3165defa86c0149967c9eaa",
+      "archivedSha256": "36e09a282fa756182ef3e1884ccb23fc7f174df8b3165defa86c0149967c9eaa",
+      "bytes": 19893,
+      "changedForArchive": false
+    },
+    {
+      "path": "admin-vite-environment-poc/verify-shopware-fixture.mjs",
+      "sourceSha256": "b364d10ed316185257faaec87ed4580a43ad8ea3b987b8cdad8dd1cc75323471",
+      "archivedSha256": "b364d10ed316185257faaec87ed4580a43ad8ea3b987b8cdad8dd1cc75323471",
+      "bytes": 14984,
+      "changedForArchive": false
+    },
+    {
+      "path": "analyze-live-comparison.py",
+      "sourceSha256": "681e7c2e7d7b4f82bd67994009889bf349c48436b26241d71ecfeb8a20fe4cdd",
+      "archivedSha256": "681e7c2e7d7b4f82bd67994009889bf349c48436b26241d71ecfeb8a20fe4cdd",
+      "bytes": 3607,
+      "changedForArchive": false
+    },
+    {
+      "path": "app-lifecycle/README.md",
+      "sourceSha256": "0192fde438e2ffb5906af2cb924627fef3ead613c6a20636612150de20339e8b",
+      "archivedSha256": "7d5cdad358fc912db5d38513aa5ca0e9e48fad4268c753104be584aeb6081d47",
+      "bytes": 13573,
+      "changedForArchive": true
+    },
+    {
+      "path": "baseline-live-samples.json",
+      "sourceSha256": "b87ed91f97df309e37fdf67d07a58f26f4760ce32be6bdfeecbea11281ec2a2a",
+      "archivedSha256": "b87ed91f97df309e37fdf67d07a58f26f4760ce32be6bdfeecbea11281ec2a2a",
+      "bytes": 54916,
+      "changedForArchive": false
+    },
+    {
+      "path": "browser-baseline.json",
+      "sourceSha256": "a99b7d898be7a28c608c4ed287dec102d0ff7d6434da320b72cdf9b051092226",
+      "archivedSha256": "a99b7d898be7a28c608c4ed287dec102d0ff7d6434da320b72cdf9b051092226",
+      "bytes": 3104,
+      "changedForArchive": false
+    },
+    {
+      "path": "browser-shared.json",
+      "sourceSha256": "d936b874d6ba661ca2b2d2a040c93acb9fe4dc6265fbc58281f9555450e1d534",
+      "archivedSha256": "d936b874d6ba661ca2b2d2a040c93acb9fe4dc6265fbc58281f9555450e1d534",
+      "bytes": 3129,
+      "changedForArchive": false
+    },
+    {
+      "path": "component-script-hmr/README.md",
+      "sourceSha256": "7ee59e3c19338cf825f5ee65f7644ab31ba0df1e514f2063bd45adf9585a1841",
+      "archivedSha256": "18aed34803412f724c19367e4f2d3fdb1ac185ba9362359f29cee26e1c1acfac",
+      "bytes": 9712,
+      "changedForArchive": true
+    },
+    {
+      "path": "component-script-hmr/committed-smoke.png",
+      "sourceSha256": "3fd7821a085c7d51da8fe527038bf6cb8822c9e0b5e16f01065505a7b7251ad0",
+      "archivedSha256": "3fd7821a085c7d51da8fe527038bf6cb8822c9e0b5e16f01065505a7b7251ad0",
+      "bytes": 70490,
+      "changedForArchive": false
+    },
+    {
+      "path": "component-script-hmr/verification.json",
+      "sourceSha256": "0ac5ee99775b155ab64b35043a4a019933fa139a38f2f5439d73264b51baa83c",
+      "archivedSha256": "0ac5ee99775b155ab64b35043a4a019933fa139a38f2f5439d73264b51baa83c",
+      "bytes": 574,
+      "changedForArchive": false
+    },
+    {
+      "path": "full-script-hmr/README.md",
+      "sourceSha256": "b47683257af8f9302f4b33ab8b14eb7a7c6d96871230aab7119931f8d147ec0a",
+      "archivedSha256": "16aa4a687284f67cde273a0e29db19d6d8a23baa7f0c97a99a899440368e513c",
+      "bytes": 20209,
+      "changedForArchive": true
+    },
+    {
+      "path": "live-comparison-summary.json",
+      "sourceSha256": "17c440f3d0172aed1eed980cc69869ac0e64a14f6a91e9e219abe97c253fe216",
+      "archivedSha256": "17c440f3d0172aed1eed980cc69869ac0e64a14f6a91e9e219abe97c253fe216",
+      "bytes": 4687,
+      "changedForArchive": false
+    },
+    {
+      "path": "live-comparison.png",
+      "sourceSha256": "a5bae6fb619f8cf5854c40c5cfdba171865f07c263c0c1947b79e0adb0e1de5a",
+      "archivedSha256": "a5bae6fb619f8cf5854c40c5cfdba171865f07c263c0c1947b79e0adb0e1de5a",
+      "bytes": 187997,
+      "changedForArchive": false
+    },
+    {
+      "path": "live-comparison.svg",
+      "sourceSha256": "85c1edb631d58488d7b101be1a57975ed791855d209a4a4dd3767996d08d44e6",
+      "archivedSha256": "23644e46cb78566f1d8a681b591687db3a30394cfca7230b22076744506fbde2",
+      "bytes": 132263,
+      "changedForArchive": true
+    },
+    {
+      "path": "shared-live-samples.json",
+      "sourceSha256": "a9d8c60fa3a9c140659ea42344e74c0f200ebb5ee69c8e3062e4a97883671d1a",
+      "archivedSha256": "a9d8c60fa3a9c140659ea42344e74c0f200ebb5ee69c8e3062e4a97883671d1a",
+      "bytes": 64246,
+      "changedForArchive": false
+    },
+    {
+      "path": "template-hmr-coverage/verification.json",
+      "sourceSha256": "534ec9529f93ea8da7cb180662423be3564de5366f25867efd9f5e2b74ca35b2",
+      "archivedSha256": "534ec9529f93ea8da7cb180662423be3564de5366f25867efd9f5e2b74ca35b2",
+      "bytes": 799,
+      "changedForArchive": false
+    },
+    {
+      "path": "template-hmr-ready/README.md",
+      "sourceSha256": "d2d8037991de088e79313f2f318e28d7afc5a6a46b17349954bb1ca6902147d8",
+      "archivedSha256": "2d4268b40c2eb06cd24eee92f0fdebf9cf161b466eb694939f48bdcb2c0467bf",
+      "bytes": 4820,
+      "changedForArchive": true
+    },
+    {
+      "path": "primary-trunk-snapshot/05-vite-dev-server-and-twig-hmr.md",
+      "sourceSha256": "34153344c5bda4f44ed45ae73f0d06c39cdd77cb063c3e9b39fbc2be968f8263",
+      "archivedSha256": "a4132d060065be95fcdee567f579024e37acb017355ba5b99e114f5de67af44f",
+      "bytes": 26265,
+      "changedForArchive": true
+    },
+    {
+      "path": "primary-trunk-snapshot/original-prototype-README.md",
+      "sourceSha256": "40d632f25032bffdf05c439f0b71a25f7f4e81ce538930ba2e27866e858d08c4",
+      "archivedSha256": "4ffab9e0e7b48f86155a1183f7e635a00e84099fc6117f4de9fa83c6bdf23433",
+      "bytes": 7609,
+      "changedForArchive": true
+    }
+  ],
+  "editorialFiles": [
+    {
+      "path": "README.md",
+      "sha256": "2e44571ed1826343fdcc60b4be30f5785c2ed02ff7ad9f63202ce90558c2b54f"
+    },
+    {
+      "path": "BLOG_POST.md",
+      "sha256": "fb38a3f2769b73e4ec6bae20814811bfbd6167d3ea752f23080016331e31421b"
+    },
+    {
+      "path": "SUPPORT_MATRIX.md",
+      "sha256": "1e8320b2b8c83d53bdf92c892c297b6b717e8397321c0cc805eef849742ff04c"
+    }
+  ]
+}

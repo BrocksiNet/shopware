@@ -1,0 +1,79 @@
+{
+  "date": "2026-10-27",
+  "node": "v24.13.0",
+  "cpuModel": "unknown",
+  "extensionEntries": 41,
+  "extensionViteServers": 41,
+  "verificationPeakContainerRssMiB": 2645.1640625,
+  "mainVitePort": 5173,
+  "startupMs": {
+    "mainReady": 1007,
+    "extensionsReady": 2804
+  },
+  "durationMs": 0,
+  "intervalMs": 500,
+  "summaries": {
+    "containerRssMiB": {
+      "median": 2445.16015625,
+      "max": 2445.16015625,
+      "min": 2445.16015625
+    },
+    "viteTreeRssMiB": {
+      "median": 1393.50390625,
+      "max": 1393.50390625,
+      "min": 1393.50390625
+    },
+    "containerCpuPercent": {
+      "median": 0,
+      "max": 0,
+      "min": 0
+    },
+    "viteTreeCpuTicksPerSecond": {
+      "median": 0,
+      "max": 0,
+      "min": 0
+    },
+    "processCount": {
+      "median": 4,
+      "max": 4,
+      "min": 4
+    },
+    "openFds": {
+      "median": 149,
+      "max": 149,
+      "min": 149
+    },
+    "threads": {
+      "median": 88,
+      "max": 88,
+      "min": 88
+    },
+    "inotifyWatches": {
+      "median": 12837,
+      "max": 12837,
+      "min": 12837
+    },
+    "listeners": {
+      "median": 42,
+      "max": 42,
+      "min": 42
+    }
+  },
+  "samples": [
+    {
+      "elapsedMs": 0,
+      "containerRssMiB": 2445.16015625,
+      "containerCpuPercent": 0,
+      "viteTreeRssMiB": 1393.50390625,
+      "viteTreeCpuTicksPerSecond": 0,
+      "processCount": 4,
+      "openFds": 149,
+      "threads": 88,
+      "inotifyWatches": 12837,
+      "listeners": 42,
+      "cgroupCpuUsec": 946188846,
+      "treeCpuTicks": 1704
+    }
+  ],
+  "safetyLimitMiB": 4096
+}
