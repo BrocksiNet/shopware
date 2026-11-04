@@ -262,9 +262,10 @@ export async function exportViteServerMapping(): Promise<void> {
  * @private
  *
  * A bundle can ship an Administration entry and a meteor-app, which run as two servers under the same technical name.
+ * Sibling roots keep the two paths from being prefixes of each other.
  */
 export function getExtensionBasePath(extension: ExtensionDefinition): string {
-    return `/_internal_ext/${extension.technicalName}/${extension.isApp ? 'meteor-app/' : ''}`;
+    return `/${extension.isApp ? '_internal_app' : '_internal_ext'}/${extension.technicalName}/`;
 }
 
 /**

@@ -138,7 +138,7 @@ describe('build/vite-plugins/extension-dev-server', () => {
                     result.alpha = await text(${JSON.stringify(entry('alpha'))});
                     await new Promise((resolve) => setTimeout(resolve, 250));
                 }
-                result.meteorApp = await text('/_internal_ext/alpha/meteor-app/');
+                result.meteorApp = await text('/_internal_app/alpha/');
                 result.missingFile = await status('/_internal_ext/alpha/missing.js');
                 result.failing = await status(${JSON.stringify(entry('failing'))});
                 result.hmr = await hmr('alpha');
@@ -194,7 +194,7 @@ describe('build/vite-plugins/extension-dev-server', () => {
             const { alpha, meteorApp, ...result } = serve(bundledDev);
 
             expect(alpha).toContain('alpha plugin');
-            expect(meteorApp).toContain('/_internal_ext/alpha/meteor-app/@vite/client');
+            expect(meteorApp).toContain('/_internal_app/alpha/@vite/client');
             expect(result).toEqual({
                 missingFile: 404,
                 failing: 503,
