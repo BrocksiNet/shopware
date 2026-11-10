@@ -368,6 +368,7 @@ Extensions and headless frontends that convert `payload.value` into the cart cur
 
 Plugins whose `executeComposerCommands()` returns `true` get their Composer package through two new routes, `api.extension.composer-require` (`POST /api/_action/extension/composer-require/{type}/{technicalName}`) and `api.extension.composer-remove` (`POST /api/_action/extension/composer-remove/{type}/{technicalName}`).
 Call `composer-require` before the install or update request, and `composer-remove` after the uninstall or update request.
+Both answer with `composerRan`, which is `true` when Composer changed the project in that request.
 The install, update, uninstall and remove routes accept `separateComposerStep: true` in the request body, so they leave Composer to these routes.
 The Administration and the `plugin:install`, `plugin:update`, `plugin:update:all`, `plugin:uninstall` and `store:download` commands already do this.
 In PHP, `PluginComposerDependencyService::requireDependency()` and `removeDependency()` do the same.
