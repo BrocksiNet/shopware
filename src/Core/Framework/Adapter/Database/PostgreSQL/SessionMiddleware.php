@@ -1,6 +1,6 @@
 <?php declare(strict_types=1);
 
-namespace Shopware\Core\Framework\Adapter\Database;
+namespace Shopware\Core\Framework\Adapter\Database\PostgreSQL;
 
 use Doctrine\DBAL\Driver;
 use Doctrine\DBAL\Driver\Connection;
@@ -15,7 +15,7 @@ use Shopware\Core\Framework\Log\Package;
  * @internal
  */
 #[Package('framework')]
-class PostgreSQLSessionMiddleware implements Middleware
+class SessionMiddleware implements Middleware
 {
     public function wrap(Driver $driver): Driver
     {
