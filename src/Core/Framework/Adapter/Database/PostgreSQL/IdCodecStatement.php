@@ -22,6 +22,13 @@ class IdCodecStatement extends AbstractStatementMiddleware
             return;
         }
 
+        // Pagination starts with an empty binary id (`WHERE id > :lastId`), the nil uuid sorts before every id as well
+        if ($value === '' && $type === ParameterType::BINARY) {
+            parent::bindValue($param, '00000000-0000-0000-0000-000000000000', ParameterType::STRING);
+
+            return;
+        }
+
         $boundAsBinary = $type === ParameterType::BINARY || $type === ParameterType::LARGE_OBJECT;
         $encoded = IdCodecMiddleware::encode($value, $boundAsBinary);
 

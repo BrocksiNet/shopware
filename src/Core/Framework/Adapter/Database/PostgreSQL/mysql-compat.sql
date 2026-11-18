@@ -2,6 +2,10 @@
 -- Functions and operators that MySQL flavoured SQL in the core relies on and that can be provided inside the database.
 -- Idempotent, apply with: psql -v ON_ERROR_STOP=1 -f mysql-compat.sql
 
+-- Collation ---------------------------------------------------------------------------------------------------------
+-- utf8mb4_unicode_ci: case and accent insensitive comparison, DdlRewriter maps every such string column to COLLATE "ci"
+CREATE COLLATION IF NOT EXISTS ci (provider = icu, locale = 'und-u-ks-level1', deterministic = false);
+
 -- HEX() / UNHEX() ---------------------------------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION hex(uuid) RETURNS text LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE
     RETURN upper(replace($1::text, '-', ''));
@@ -164,3 +168,124 @@ CREATE OR REPLACE FUNCTION json_type(jsonb) RETURNS text LANGUAGE sql IMMUTABLE 
         ELSE upper(jsonb_typeof($1)) END $$;
 CREATE OR REPLACE FUNCTION json_type(text) RETURNS text LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE
     AS $$ SELECT json_type($1::jsonb) $$;
+
+-- NOW(6) ------------------------------------------------------------------------------------------------------------
+-- MySQL accepts a fractional seconds precision, the session time zone is UTC (SessionMiddleware)
+CREATE OR REPLACE FUNCTION now(integer) RETURNS timestamp LANGUAGE sql STABLE STRICT PARALLEL SAFE
+    RETURN localtimestamp;
+
+-- DATABASE() is the database name, information_schema.table_schema is rewritten to the database name as well (InformationSchemaRewriter)
+CREATE OR REPLACE FUNCTION database() RETURNS text LANGUAGE sql STABLE PARALLEL SAFE
+    AS $$ SELECT current_database()::text $$;
+
+-- LIKE on a JSON column compares the text form, like on MySQL
+CREATE OR REPLACE FUNCTION jsonb_like(jsonb, text) RETURNS boolean LANGUAGE sql IMMUTABLE PARALLEL SAFE
+    AS $$ SELECT $1::text LIKE $2 $$;
+CREATE OR REPLACE FUNCTION jsonb_not_like(jsonb, text) RETURNS boolean LANGUAGE sql IMMUTABLE PARALLEL SAFE
+    AS $$ SELECT $1::text NOT LIKE $2 $$;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_operator WHERE oprname = '~~' AND oprleft = 'jsonb'::regtype AND oprright = 'text'::regtype) THEN
+        CREATE OPERATOR ~~ (LEFTARG = jsonb, RIGHTARG = text, FUNCTION = jsonb_like);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_operator WHERE oprname = '!~~' AND oprleft = 'jsonb'::regtype AND oprright = 'text'::regtype) THEN
+        CREATE OPERATOR !~~ (LEFTARG = jsonb, RIGHTARG = text, FUNCTION = jsonb_not_like);
+    END IF;
+END
+$$;
+
+-- REPLACE on a JSON column works on the text form
+CREATE OR REPLACE FUNCTION replace(jsonb, text, text) RETURNS jsonb LANGUAGE sql IMMUTABLE PARALLEL SAFE
+    AS $$ SELECT replace($1::text, $2, $3)::jsonb $$;
+
+-- MySQL converts the arguments of IFNULL to a common type, PostgreSQL does not unify text and numbers
+CREATE OR REPLACE FUNCTION ifnull(text, bigint) RETURNS text LANGUAGE sql IMMUTABLE PARALLEL SAFE
+    AS $$ SELECT COALESCE($1, $2::text) $$;
+
+-- JSON_SET(doc, '$.a.b[0]', value) for plain keys and array indexes, a missing last key is created like on MySQL
+CREATE OR REPLACE FUNCTION mysql_compat_json_path(text) RETURNS text[] LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE
+    AS $$ SELECT string_to_array(trim(both '.' from regexp_replace(regexp_replace($1, '^\$', ''), '\[(\d+)\]', '.\1', 'g')), '.') $$;
+CREATE OR REPLACE FUNCTION json_set(jsonb, text, jsonb) RETURNS jsonb LANGUAGE sql IMMUTABLE PARALLEL SAFE
+    AS $$ SELECT jsonb_set($1, mysql_compat_json_path($2), $3, true) $$;
+CREATE OR REPLACE FUNCTION json_set(jsonb, text, text) RETURNS jsonb LANGUAGE sql IMMUTABLE PARALLEL SAFE
+    AS $$ SELECT jsonb_set($1, mysql_compat_json_path($2), to_jsonb($3), true) $$;
+CREATE OR REPLACE FUNCTION json_set(jsonb, text, numeric) RETURNS jsonb LANGUAGE sql IMMUTABLE PARALLEL SAFE
+    AS $$ SELECT jsonb_set($1, mysql_compat_json_path($2), to_jsonb($3), true) $$;
+
+-- SUBSTRING_INDEX(str, delim, count): everything before the count-th delimiter, from the end for a negative count
+CREATE OR REPLACE FUNCTION substring_index(text, text, integer) RETURNS text LANGUAGE sql IMMUTABLE PARALLEL SAFE
+    AS $$
+        SELECT CASE
+            WHEN $3 = 0 OR $2 = '' THEN ''
+            WHEN $3 > 0 THEN array_to_string((string_to_array($1, $2))[1:$3], $2)
+            ELSE array_to_string((string_to_array($1, $2))[GREATEST(cardinality(string_to_array($1, $2)) + $3 + 1, 1):], $2)
+        END
+    $$;
+
+-- JSON_CONTAINS_PATH(doc, 'one'|'all', path, ...)
+CREATE OR REPLACE FUNCTION json_contains_path(jsonb, text, VARIADIC text[]) RETURNS boolean LANGUAGE sql IMMUTABLE PARALLEL SAFE
+    AS $$
+        SELECT CASE lower($2)
+            WHEN 'all' THEN NOT EXISTS (SELECT 1 FROM unnest($3) p WHERE $1 #> mysql_compat_json_path(p) IS NULL)
+            ELSE EXISTS (SELECT 1 FROM unnest($3) p WHERE $1 #> mysql_compat_json_path(p) IS NOT NULL)
+        END
+    $$;
+
+-- JSON_EXTRACT(...) IN (strings), the translator uses this variant so the right hand side is compared as text
+CREATE OR REPLACE FUNCTION json_extract_text(jsonb, text) RETURNS text LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE
+    AS $$ SELECT json_extract($1, $2) #>> '{}' $$;
+CREATE OR REPLACE FUNCTION json_extract_text(text, text) RETURNS text LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE
+    AS $$ SELECT json_extract($1, $2) #>> '{}' $$;
+
+-- JSON_REMOVE(doc, path)
+CREATE OR REPLACE FUNCTION json_remove(jsonb, text) RETURNS jsonb LANGUAGE sql IMMUTABLE PARALLEL SAFE
+    AS $$ SELECT $1 #- mysql_compat_json_path($2) $$;
+
+-- JSON_EXTRACT(...) = true / 5, MySQL compares the JSON value with the scalar
+CREATE OR REPLACE FUNCTION jsonb_eq_scalar(jsonb, boolean) RETURNS boolean LANGUAGE sql IMMUTABLE PARALLEL SAFE AS $$ SELECT $1 = to_jsonb($2) $$;
+CREATE OR REPLACE FUNCTION jsonb_ne_scalar(jsonb, boolean) RETURNS boolean LANGUAGE sql IMMUTABLE PARALLEL SAFE AS $$ SELECT $1 <> to_jsonb($2) $$;
+CREATE OR REPLACE FUNCTION jsonb_eq_scalar(jsonb, numeric) RETURNS boolean LANGUAGE sql IMMUTABLE PARALLEL SAFE AS $$ SELECT $1 = to_jsonb($2) $$;
+CREATE OR REPLACE FUNCTION jsonb_ne_scalar(jsonb, numeric) RETURNS boolean LANGUAGE sql IMMUTABLE PARALLEL SAFE AS $$ SELECT $1 <> to_jsonb($2) $$;
+DO $$ BEGIN
+    CREATE OPERATOR = (LEFTARG = jsonb, RIGHTARG = boolean, FUNCTION = jsonb_eq_scalar);
+    CREATE OPERATOR <> (LEFTARG = jsonb, RIGHTARG = boolean, FUNCTION = jsonb_ne_scalar);
+    CREATE OPERATOR = (LEFTARG = jsonb, RIGHTARG = numeric, FUNCTION = jsonb_eq_scalar);
+    CREATE OPERATOR <> (LEFTARG = jsonb, RIGHTARG = numeric, FUNCTION = jsonb_ne_scalar);
+EXCEPTION WHEN duplicate_function THEN NULL;
+END $$;
+
+-- UUID() returns the textual form, like MySQL
+CREATE OR REPLACE FUNCTION uuid() RETURNS text LANGUAGE sql VOLATILE PARALLEL SAFE AS $$ SELECT gen_random_uuid()::text $$;
+
+-- JSON_VALID(): a jsonb value is valid by construction, text is checked
+CREATE OR REPLACE FUNCTION json_valid(jsonb) RETURNS boolean LANGUAGE sql IMMUTABLE PARALLEL SAFE AS $$ SELECT $1 IS NOT NULL $$;
+CREATE OR REPLACE FUNCTION json_valid(text) RETURNS boolean LANGUAGE plpgsql IMMUTABLE PARALLEL SAFE AS $$
+BEGIN
+    IF $1 IS NULL THEN RETURN NULL; END IF;
+    PERFORM $1::jsonb;
+    RETURN true;
+EXCEPTION WHEN others THEN RETURN false;
+END $$;
+
+-- JSON_ARRAY_APPEND(doc, path, value), an unknown path leaves the document unchanged, a scalar becomes an array
+CREATE OR REPLACE FUNCTION json_array_append(jsonb, text, text) RETURNS jsonb LANGUAGE sql IMMUTABLE PARALLEL SAFE
+    AS $$
+        SELECT CASE
+            WHEN $1 #> mysql_compat_json_path($2) IS NULL THEN $1
+            WHEN jsonb_typeof($1 #> mysql_compat_json_path($2)) = 'array'
+                THEN jsonb_set($1, mysql_compat_json_path($2), ($1 #> mysql_compat_json_path($2)) || jsonb_build_array($3))
+            ELSE jsonb_set($1, mysql_compat_json_path($2), jsonb_build_array($1 #> mysql_compat_json_path($2), $3))
+        END
+    $$;
+
+-- Assigning text to a bytea column (a serialized text column copied into a binary column), MySQL stores the bytes of the string
+CREATE OR REPLACE FUNCTION mysql_compat_text_to_bytea(text) RETURNS bytea LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE
+    AS $$ SELECT convert_to($1, 'UTF8') $$;
+DO $$ BEGIN
+    CREATE CAST (text AS bytea) WITH FUNCTION mysql_compat_text_to_bytea(text) AS ASSIGNMENT;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+    CREATE CAST (character varying AS bytea) WITH FUNCTION mysql_compat_text_to_bytea(text) AS ASSIGNMENT;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;

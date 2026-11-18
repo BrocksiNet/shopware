@@ -23,6 +23,9 @@ class UpdateRewriter
 
     public static function rewrite(string $sql): string
     {
+        // UPDATE IGNORE skips rows that violate a constraint, PostgreSQL has no equivalent, the modifier is dropped
+        $sql = preg_replace('/^(\s*UPDATE)\s+IGNORE\b/i', '$1', $sql) ?? $sql;
+
         if (preg_match(self::START, $sql, $match) !== 1) {
             return $sql;
         }
@@ -34,14 +37,48 @@ class UpdateRewriter
         if ($set === null) {
             return $sql;
         }
+
+        // UPDATE ... [ORDER BY o] [LIMIT n]: the order only matters together with a limit, PostgreSQL has neither
+        $orderBy = self::findWord($body, 'ORDER', $set + 3);
+        $limit = self::findWord($body, 'LIMIT', $set + 3);
+        $tailStart = $orderBy === null ? $limit : ($limit === null ? $orderBy : min($orderBy, $limit));
+        if ($tailStart !== null) {
+            $tail = rtrim(trim(substr($body, $tailStart)), ';');
+            $body = substr($body, 0, $tailStart);
+            if ($limit !== null) {
+                $whereAt = self::findWord($body, 'WHERE', $set + 3);
+                $head = trim(substr($body, 0, $set));
+                if (self::findWord($head, 'JOIN', 0) !== null || self::split($head, ',') !== [$head]) {
+                    return $sql;
+                }
+                $assignments = $whereAt === null ? substr($body, $set + 3) : substr($body, $set + 3, $whereAt - $set - 3);
+                $condition = $whereAt === null ? '' : ' WHERE ' . trim(substr($body, $whereAt + 5));
+
+                $assignments = implode(',', array_map(
+                    static fn (string $assignment): string => (string) preg_replace('/^(\s*)(?:(?:"[^"]+"|[A-Za-z0-9_]+)\s*\.\s*)+((?:"[^"]+"|[A-Za-z0-9_]+)\s*=)/', '$1$2', $assignment),
+                    self::split($assignments, ',')
+                ));
+
+                return $prefix . $head . ' SET' . rtrim($assignments) . ' WHERE ctid IN (SELECT ctid FROM ' . $head . $condition . ' ' . $tail . ')';
+            }
+        }
+
         $where = self::findWord($body, 'WHERE', $set + 3);
 
         $head = trim(substr($body, 0, $set));
         $assignments = $where === null ? substr($body, $set + 3) : substr($body, $set + 3, $where - $set - 3);
         $condition = $where === null ? null : substr($body, $where + 5);
 
-        if (self::findWord($head, 'LEFT', 0) !== null || self::findWord($head, 'RIGHT', 0) !== null) {
-            return $sql;
+        // rows of the joined table without a target row have nothing to update, so RIGHT JOIN selects the same rows as INNER JOIN
+        if (self::findWord($head, 'RIGHT', 0) !== null) {
+            if (self::findWord($head, 'LEFT', 0) !== null) {
+                return $sql;
+            }
+            $head = (string) preg_replace('/\bRIGHT\s+(?:OUTER\s+)?JOIN\b/i', 'INNER JOIN', $head);
+        }
+
+        if (self::findWord($head, 'LEFT', 0) !== null) {
+            return self::rewriteLeftJoin($prefix, $head, $assignments, $condition) ?? $sql;
         }
 
         $from = [];
@@ -118,6 +155,42 @@ class UpdateRewriter
         }
 
         return null;
+    }
+
+    /**
+     * UPDATE t LEFT JOIN b [alias] ON c SET ... [WHERE w]
+     * The target table can not be part of a join in the FROM list of an UPDATE, the join is moved into a subquery that is matched by ctid.
+     * The subquery carries the name of the joined table, so qualified references like b.column keep working.
+     */
+    private static function rewriteLeftJoin(string $prefix, string $head, string $assignments, ?string $condition): ?string
+    {
+        $ident = '(?:"[^"]+"|[A-Za-z0-9_]+)';
+        if (preg_match('/^(' . $ident . ')(?:\s+(?:AS\s+)?(?!LEFT\b)(' . $ident . '))?\s+LEFT\s+(?:OUTER\s+)?JOIN\s+(' . $ident . ')(?:\s+(?:AS\s+)?(?!ON\b)(' . $ident . '))?\s+ON\s+(.+)$/is', trim($head), $m) !== 1) {
+            return null;
+        }
+        if (self::findWord($m[5], 'JOIN', 0) !== null) {
+            return null;
+        }
+
+        [, $table, $targetAlias, $joined, $joinedAlias, $on] = $m + [4 => '', 5 => ''];
+        $targetName = $targetAlias !== '' ? $targetAlias : $table;
+        $targetSpec = $table . ($targetAlias !== '' ? ' ' . $targetAlias : '');
+        $joinedName = $joinedAlias !== '' ? $joinedAlias : $joined;
+        $joinedSpec = $joined . ($joinedAlias !== '' ? ' ' . $joinedAlias : '');
+
+        $set = [];
+        foreach (self::split(rtrim(rtrim($assignments), ';'), ',') as $assignment) {
+            $set[] = (string) preg_replace('/^(\s*)(?:(?:"[^"]+"|[A-Za-z0-9_]+)\s*\.\s*)+((?:"[^"]+"|[A-Za-z0-9_]+)\s*=)/', '$1$2', $assignment);
+        }
+
+        $result = $prefix . $targetSpec . ' SET' . implode(',', $set)
+            . ' FROM (SELECT ' . $targetName . '.ctid AS "__ctid", ' . $joinedName . '.* FROM ' . $targetSpec . ' LEFT JOIN ' . $joinedSpec . ' ON ' . trim($on) . ') AS ' . $joinedName
+            . ' WHERE ' . $targetName . '.ctid = ' . $joinedName . '."__ctid"';
+        if ($condition !== null) {
+            $result .= ' AND (' . trim(rtrim(trim($condition), ';')) . ')';
+        }
+
+        return $result;
     }
 
     /**

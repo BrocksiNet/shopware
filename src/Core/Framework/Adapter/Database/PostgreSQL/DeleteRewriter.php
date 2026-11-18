@@ -30,6 +30,8 @@ class DeleteRewriter
             }
             $from = $table . ($alias !== '' ? ' ' . $alias : '');
             $rest = rtrim(trim($rest), ';');
+            // MySQL accepts a join without ON, PostgreSQL needs one
+            $rest = preg_replace('/\b((?:INNER\s+)?JOIN\s+' . self::IDENT . '(?:\s+(?:AS\s+)?(?!(?:WHERE|ON|USING|LEFT|RIGHT|INNER|JOIN|CROSS)\b)' . self::IDENT . ')?)(\s+WHERE\b)/i', '$1 ON TRUE$2', $rest) ?? $rest;
 
             return $lead . 'DELETE FROM ' . $from . ' WHERE ' . $name . '.ctid IN (SELECT ' . $name . '.ctid FROM ' . $from . ' ' . $rest . ')';
         }

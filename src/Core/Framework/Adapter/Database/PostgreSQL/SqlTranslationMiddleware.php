@@ -30,6 +30,8 @@ class SqlTranslationMiddleware implements Middleware
                      */
                     private array $primaryKeys = [];
 
+                    private bool $inTransaction = false;
+
                     public function __construct(Connection $connection, private readonly MySQLToPostgreSQLTranslator $translator)
                     {
                         parent::__construct($connection);
@@ -45,18 +47,66 @@ class SqlTranslationMiddleware implements Middleware
                     public function query(string $sql): Result
                     {
                         [$translated, $caseMap] = $this->translator->translate($sql);
-                        $result = parent::query($translated);
+                        $result = parent::query(ShowRewriter::matches($translated) ? ShowRewriter::rewrite($translated) : (InformationSchemaRewriter::matches($translated) ? InformationSchemaRewriter::rewrite($translated) : $translated));
 
                         return $caseMap === [] ? $result : new ColumnCaseResult($result, $caseMap);
                     }
 
                     public function exec(string $sql): int|string
                     {
-                        return parent::exec($this->rewriteStatement($this->translator->translate($sql)[0]));
+                        $rewritten = $this->rewriteStatement($this->translator->translate($sql)[0]);
+
+                        if (!$this->inTransaction || !DdlRewriter::isDdl($this->translator->translate($sql)[0])) {
+                            return parent::exec($rewritten);
+                        }
+
+                        // A failed statement aborts the whole PostgreSQL transaction, MySQL migrations catch and ignore failing DDL (e.g. "PK already exists")
+                        parent::exec('SAVEPOINT sw_ddl');
+                        try {
+                            $result = parent::exec($rewritten);
+                        } catch (\Throwable $e) {
+                            parent::exec('ROLLBACK TO SAVEPOINT sw_ddl');
+                            parent::exec('RELEASE SAVEPOINT sw_ddl');
+
+                            throw $e;
+                        }
+                        parent::exec('RELEASE SAVEPOINT sw_ddl');
+
+                        return $result;
+                    }
+
+                    public function beginTransaction(): void
+                    {
+                        parent::beginTransaction();
+                        $this->inTransaction = true;
+                    }
+
+                    public function commit(): void
+                    {
+                        parent::commit();
+                        $this->inTransaction = false;
+                    }
+
+                    public function rollBack(): void
+                    {
+                        parent::rollBack();
+                        $this->inTransaction = false;
                     }
 
                     private function rewriteStatement(string $sql): string
                     {
+                        if (InformationSchemaRewriter::matches($sql)) {
+                            $sql = InformationSchemaRewriter::rewrite($sql);
+                        }
+
+                        if (ShowRewriter::matches($sql)) {
+                            return ShowRewriter::rewrite($sql);
+                        }
+
+                        if (DdlRewriter::isDdl($sql)) {
+                            return (new DdlRewriter($this->getColumnType(...)))->rewrite($sql);
+                        }
+
                         if (stripos($sql, 'UPDATE') !== false) {
                             $sql = UpdateRewriter::rewrite($sql);
                         }
@@ -65,8 +115,12 @@ class SqlTranslationMiddleware implements Middleware
                             $sql = DeleteRewriter::rewrite($sql);
                         }
 
-                        if (stripos($sql, 'DELETE') !== false) {
-                            $sql = DeleteRewriter::rewrite($sql);
+                        if (stripos($sql, 'SELECT') !== false && (stripos($sql, 'INSERT') !== false || stripos($sql, 'REPLACE') !== false)) {
+                            $sql = InsertSelectRewriter::rewrite($sql, $this->getColumnType(...));
+                        }
+
+                        if ((stripos($sql, 'INSERT') !== false || stripos($sql, 'REPLACE') !== false) && stripos($sql, ' SET') !== false) {
+                            $sql = InsertSetRewriter::rewrite($sql);
                         }
 
                         if (stripos($sql, 'IGNORE') === false && stripos($sql, 'REPLACE') === false && stripos($sql, 'DUPLICATE') === false) {
@@ -74,6 +128,16 @@ class SqlTranslationMiddleware implements Middleware
                         }
 
                         return UpsertRewriter::rewrite($sql, $this->getPrimaryKey(...));
+                    }
+
+                    private function getColumnType(string $table, string $column): ?string
+                    {
+                        $type = parent::query(
+                            'SELECT format_type(a.atttypid, a.atttypmod) FROM pg_attribute a'
+                            . ' WHERE a.attrelid = to_regclass(' . parent::quote('"' . $table . '"') . ') AND a.attname = ' . parent::quote($column) . ' AND NOT a.attisdropped'
+                        )->fetchOne();
+
+                        return $type === false ? null : (string) $type;
                     }
 
                     /**

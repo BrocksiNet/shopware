@@ -69,6 +69,11 @@ class MySQLToPostgreSQLTranslator
         $out = '';
         $length = \strlen($sql);
         $i = 0;
+        // one entry per open parenthesis, true for the argument list of jsonb_build_object / jsonb_build_array
+        $parens = [];
+        // MySQL returns the column names of information_schema in the spelling of the statement, usually upper case
+        $restoreUpper = stripos($sql, 'information_schema') !== false;
+        $jsonCall = false;
 
         while ($i < $length) {
             $char = $sql[$i];
@@ -77,7 +82,14 @@ class MySQLToPostgreSQLTranslator
                 [$content, $i] = $this->readString($sql, $i, $char);
                 // MySQL accepts a string literal as column alias: SELECT x AS '0'
                 $isAlias = preg_match('/\bAS\s+$/i', substr($out, -12)) === 1;
-                $out .= $isAlias ? $this->identifier($content, $caseMap) : $this->stringLiteral($content);
+                if ($isAlias) {
+                    $out .= $this->identifier($content, $caseMap);
+                } elseif ($this->followsJsonExtract($out)) {
+                    // JSON_EXTRACT(...) = 'text': MySQL compares with the JSON string, PostgreSQL would parse the literal as JSON
+                    $out .= 'to_jsonb(' . $this->stringLiteral($content) . '::text)';
+                } else {
+                    $out .= $this->stringLiteral($content);
+                }
 
                 continue;
             }
@@ -134,12 +146,72 @@ class MySQLToPostgreSQLTranslator
                 continue;
             }
 
+            // @@FOREIGN_KEY_CHECKS and friends, PostgreSQL always enforces constraints
+            if ($char === '@' && preg_match('/\G@@(?:(?:SESSION|GLOBAL)\.)?(foreign_key_checks|unique_checks|sql_mode|version)\b/i', $sql, $variable, 0, $i) === 1) {
+                $out .= match (strtolower($variable[1])) {
+                    'sql_mode' => '\'\'',
+                    'version' => 'current_setting(\'server_version\')',
+                    default => '1',
+                };
+                $i += \strlen($variable[0]);
+
+                continue;
+            }
+
+            // 0x0fa91ce3... (16 byte hex literal) is an id, ids are uuid on PostgreSQL
+            if ($char === '0' && ($sql[$i + 1] ?? '') === 'x' && preg_match('/\G0x([0-9a-fA-F]{32})(?![0-9A-Za-z_])/', $sql, $hex, 0, $i) === 1 && ($i === 0 || !preg_match('/[A-Za-z0-9_$]/', $sql[$i - 1]))) {
+                $out .= '\'' . strtolower($hex[1]) . '\'::uuid';
+                $i += 34;
+
+                continue;
+            }
+
             if (ctype_alpha($char) || $char === '_') {
                 $wordLength = strspn($sql, 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_$', $i);
                 $word = substr($sql, $i, $wordLength);
                 $lower = strtolower($word);
                 if (isset(self::KEYWORDS[$lower])) {
                     $out .= self::KEYWORDS[$lower];
+                    $i += $wordLength;
+
+                    continue;
+                }
+                // x REGEXP y => x ~* y, x NOT REGEXP y => x !~* y (case insensitive like the MySQL default collation, COLLATE "C" because regular expressions reject the nondeterministic "ci" collation)
+                if ($lower === 'regexp' || $lower === 'rlike') {
+                    $out = preg_match('/\bNOT\s+$/i', $out, $not) === 1 ? substr($out, 0, -\strlen($not[0])) . ' COLLATE "C" !~* ' : $out . ' COLLATE "C" ~* ';
+                    $i += $wordLength;
+
+                    continue;
+                }
+                // JSON_OBJECT(k, v, ...) and JSON_ARRAY(...) => jsonb_build_object / jsonb_build_array, both take any argument types
+                if (($lower === 'json_object' || $lower === 'json_array') && (ltrim(substr($sql, $i + $wordLength, 8))[0] ?? '') === '(') {
+                    $out .= $lower === 'json_object' ? 'jsonb_build_object' : 'jsonb_build_array';
+                    $jsonCall = true;
+                    $i += $wordLength;
+
+                    continue;
+                }
+                // CAST(x AS SIGNED [INTEGER]) / AS UNSIGNED => AS bigint
+                if (($lower === 'signed' || $lower === 'unsigned') && preg_match('/\bAS\s+$/i', substr($out, -12)) === 1) {
+                    $out .= 'bigint';
+                    $i += $wordLength;
+                    if (preg_match('/\G\s+INTEGER\b/i', $sql, $integer, 0, $i) === 1) {
+                        $i += \strlen($integer[0]);
+                    }
+
+                    continue;
+                }
+                // CONCAT(:a, 'x') takes arguments of any type, a bare placeholder gets text
+                if (($lower === 'concat' || $lower === 'concat_ws') && (ltrim(substr($sql, $i + $wordLength, 8))[0] ?? '') === '(') {
+                    $out .= $word;
+                    $jsonCall = true;
+                    $i += $wordLength;
+
+                    continue;
+                }
+                // JSON_EXTRACT(...) IN ('a', :b): the values are strings, PostgreSQL would parse them as JSON
+                if ($lower === 'json_extract' && $this->isFollowedByIn($sql, $i + $wordLength)) {
+                    $out .= 'json_extract_text';
                     $i += $wordLength;
 
                     continue;
@@ -151,13 +223,38 @@ class MySQLToPostgreSQLTranslator
 
                     continue;
                 }
-                if ($word !== $lower && $word !== strtoupper($word)) {
+                if ($word !== $lower && ($word !== strtoupper($word) || $restoreUpper)) {
                     $caseMap[$lower] ??= $word;
                 }
                 $out .= $word;
                 $i += $wordLength;
 
                 continue;
+            }
+
+            // JSON_EXTRACT(...) = :value, the bound value is a string
+            if (($char === '?' || ($char === ':' && preg_match('/\G:[A-Za-z_]\w*/', $sql, $named, 0, $i) === 1 && ($sql[$i - 1] ?? '') !== ':')) && $this->followsJsonExtract($out)) {
+                $name = $char === '?' ? '?' : $named[0];
+                $out .= 'to_jsonb(' . $name . '::text)';
+                $i += \strlen($name);
+
+                continue;
+            }
+
+            if ($char === '(') {
+                $parens[] = $jsonCall;
+                $jsonCall = false;
+            } elseif ($char === ')') {
+                array_pop($parens);
+            } elseif (($char === ':' || $char === '?') && ($parens[\count($parens) - 1] ?? false) && \in_array(substr(rtrim($out), -1), ['(', ','], true)) {
+                // the type of a bare placeholder in a JSON function can not be determined by PostgreSQL, MySQL binds it as a string as well
+                $name = $char === ':' ? ':' . substr($sql, $i + 1, strspn($sql, 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_', $i + 1)) : '?';
+                if ($name !== ':') {
+                    $out .= $name . '::text';
+                    $i += \strlen($name);
+
+                    continue;
+                }
             }
 
             $out .= $char;
@@ -223,6 +320,55 @@ class MySQLToPostgreSQLTranslator
         }
 
         return '"' . str_replace('"', '""', $name) . '"';
+    }
+
+    /**
+     * True when the call that starts at $offset (its opening parenthesis) is followed by IN (
+     */
+    private function isFollowedByIn(string $sql, int $offset): bool
+    {
+        $length = \strlen($sql);
+        $offset += \strspn($sql, " \t\r\n", $offset);
+        if (($sql[$offset] ?? '') !== '(') {
+            return false;
+        }
+
+        $depth = 0;
+        for ($i = $offset; $i < $length; ++$i) {
+            $char = $sql[$i];
+            if ($char === '\'' || $char === '"' || $char === '`') {
+                [, $i] = $this->readString($sql, $i, $char);
+                --$i;
+            } elseif ($char === '(') {
+                ++$depth;
+            } elseif ($char === ')' && --$depth === 0) {
+                return preg_match('/\G\s+IN\s*\(/i', $sql, $m, 0, $i + 1) === 1;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * True when the output ends with `JSON_EXTRACT(...) =` (or !=, <>).
+     */
+    private function followsJsonExtract(string $out): bool
+    {
+        if (preg_match('/\)\s*(?:=|!=|<>)\s*$/', $out, $m) !== 1) {
+            return false;
+        }
+
+        $i = \strlen($out) - \strlen($m[0]);
+        $depth = 0;
+        for (; $i >= 0; --$i) {
+            if ($out[$i] === ')') {
+                ++$depth;
+            } elseif ($out[$i] === '(' && --$depth === 0) {
+                return preg_match('/\bjson_extract\s*$/i', substr($out, 0, $i)) === 1;
+            }
+        }
+
+        return false;
     }
 
     private function stringLiteral(string $content): string
