@@ -187,9 +187,9 @@ class EntityAggregator implements EntityAggregatorInterface
 
             $join = '';
             foreach ($pks as $pk) {
-                $scoreQuery->addGroupBy($pk);
-
                 $pk = EntityDefinitionQueryHelper::escape($pk);
+                // qualified, an unqualified primary key is ambiguous on PostgreSQL as soon as a table is joined
+                $scoreQuery->addGroupBy($escapedTable . '.' . $pk);
                 $scoreQuery->addSelect($escapedTable . '.' . $pk);
 
                 $join .= \sprintf('score_table.%s = %s.%s AND ', $pk, $escapedTable, $pk);

@@ -724,6 +724,43 @@ class EntityDefinitionQueryHelper
         }
     }
 
+    /**
+     * PostgreSQL only accepts selected columns in a grouped query when they are part of the GROUP BY clause, functionally
+     * dependent on it or aggregated. MySQL without ONLY_FULL_GROUP_BY returns the value of an arbitrary row of the group.
+     * `any_value()` (PostgreSQL 16+) gives the same result explicitly.
+     */
+    public function makeSelectValidForGroupBy(Criteria $criteria, QueryBuilder $query): void
+    {
+        if ($criteria->getGroupFields() === [] && !$query->hasState(self::HAS_TO_MANY_JOIN)) {
+            return;
+        }
+
+        $select = [];
+        foreach ($query->getSelectParts() as $part) {
+            $expression = $part;
+            $alias = null;
+            if (preg_match('/^(.+)\s+as\s+([`"][^`"]+[`"])$/is', $part, $match) === 1) {
+                [, $expression, $alias] = $match;
+            } elseif (preg_match('/^[`"][^`"]+[`"]\.([`"][^`"]+[`"])$/', $part, $match) === 1) {
+                $alias = $match[1];
+            } elseif (preg_match('/^[`"][^`"]+[`"]$/', $part) === 1) {
+                $alias = $part;
+            }
+
+            if ($alias === null || preg_match('/^\s*(any_value|min|max|sum|avg|count|group_concat)\s*\(/i', $expression) === 1) {
+                $select[] = $part;
+
+                continue;
+            }
+
+            $select[] = 'any_value(' . $expression . ') as ' . $alias;
+        }
+
+        if ($select !== []) {
+            $query->select(...$select);
+        }
+    }
+
     private function callResolver(FieldResolverContext $context): string
     {
         $resolver = $context->getField()->getResolver();

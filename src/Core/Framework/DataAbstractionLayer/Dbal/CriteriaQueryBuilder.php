@@ -219,7 +219,8 @@ class CriteriaQueryBuilder
 
         $minScore = min($minScore);
 
-        $query->andHaving('_score >= :_minScore');
+        // the expression is repeated instead of referencing the `_score` alias, PostgreSQL does not resolve select aliases in HAVING
+        $query->andHaving('(' . $select . ') >= :_minScore');
         $query->setParameter('_minScore', $minScore);
         $query->addState(Criteria::SCORE_FIELD);
 

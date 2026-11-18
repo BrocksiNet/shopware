@@ -4,6 +4,7 @@ namespace Shopware\Core\Framework\DataAbstractionLayer\Dbal;
 
 use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
+use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use Psr\Log\LoggerInterface;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\DataAbstractionLayerException;
@@ -421,6 +422,10 @@ class EntityReader implements EntityReaderInterface
         }
 
         $this->queryHelper->addGroupBy($definition, $criteria, $context, $query, $table);
+
+        if ($this->connection->getDatabasePlatform() instanceof PostgreSQLPlatform) {
+            $this->queryHelper->makeSelectValidForGroupBy($criteria, $query);
+        }
 
         if ($criteria->getTitle()) {
             $query->setTitle($criteria->getTitle() . '::read');
