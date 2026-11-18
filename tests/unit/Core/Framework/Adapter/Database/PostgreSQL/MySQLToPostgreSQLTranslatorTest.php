@@ -124,6 +124,11 @@ class MySQLToPostgreSQLTranslatorTest extends TestCase
             'SELECT * FROM t WHERE JSON_EXTRACT(c, \'$.a\') = to_jsonb(:p::text)',
         ];
 
+        yield 'json set with a cast value stays a number' => [
+            'UPDATE t SET c = JSON_SET(IFNULL(c, \'{}\'), ?, CAST(? AS SIGNED))',
+            'UPDATE t SET c = JSON_SET(IFNULL(c, \'{}\'), ?, CAST(? AS bigint))',
+        ];
+
         yield 'json extract in a list' => [
             'SELECT * FROM t WHERE JSON_EXTRACT(c, \'$.a\') IN (\'a\',\'b\')',
             'SELECT * FROM t WHERE json_extract_text(c, \'$.a\') IN (\'a\',\'b\')',

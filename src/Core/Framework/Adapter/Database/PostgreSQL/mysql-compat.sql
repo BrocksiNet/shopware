@@ -235,6 +235,10 @@ CREATE OR REPLACE FUNCTION json_extract_text(text, text) RETURNS text LANGUAGE s
 CREATE OR REPLACE FUNCTION json_remove(jsonb, text) RETURNS jsonb LANGUAGE sql IMMUTABLE PARALLEL SAFE
     AS $$ SELECT $1 #- mysql_compat_json_path($2) $$;
 
+-- JSON_LENGTH(doc): number of members of an object or elements of an array, 1 for a scalar
+CREATE OR REPLACE FUNCTION json_length(jsonb) RETURNS integer LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE
+    AS $$ SELECT CASE jsonb_typeof($1) WHEN 'object' THEN (SELECT count(*) FROM jsonb_object_keys($1))::integer WHEN 'array' THEN jsonb_array_length($1) ELSE 1 END $$;
+
 -- JSON_EXTRACT(...) = true / 5, MySQL compares the JSON value with the scalar
 CREATE OR REPLACE FUNCTION jsonb_eq_scalar(jsonb, boolean) RETURNS boolean LANGUAGE sql IMMUTABLE PARALLEL SAFE AS $$ SELECT $1 = to_jsonb($2) $$;
 CREATE OR REPLACE FUNCTION jsonb_ne_scalar(jsonb, boolean) RETURNS boolean LANGUAGE sql IMMUTABLE PARALLEL SAFE AS $$ SELECT $1 <> to_jsonb($2) $$;

@@ -349,7 +349,8 @@ class PromotionRedemptionUpdater implements EventSubscriberInterface
 
         $redeemed = array_filter($customerCounts);
         if ($redeemed !== []) {
-            $ordersPerCustomerCount = 'JSON_SET(IFNULL(' . $ordersPerCustomerCount . ', \'{}\')' . str_repeat(', ?, ?', \count($redeemed)) . ')';
+            // The explicit cast keeps the count a JSON number on PostgreSQL, where an untyped placeholder in JSON_SET is bound as text
+            $ordersPerCustomerCount = 'JSON_SET(IFNULL(' . $ordersPerCustomerCount . ', \'{}\')' . str_repeat(', ?, CAST(? AS SIGNED)', \count($redeemed)) . ')';
 
             foreach ($redeemed as $customerId => $count) {
                 array_push($params, '$."' . $customerId . '"', $count);
