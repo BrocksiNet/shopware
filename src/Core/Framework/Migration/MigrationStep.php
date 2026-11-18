@@ -155,7 +155,7 @@ abstract class MigrationStep
             }
 
             // fk does not exist
-            if (str_contains($e->getMessage(), 'SQLSTATE[42000]')) {
+            if (str_contains($e->getMessage(), 'SQLSTATE[42000]') || str_contains($e->getMessage(), 'SQLSTATE[42704]')) {
                 return false;
             }
 

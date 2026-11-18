@@ -32,7 +32,19 @@ final readonly class Column
             length: $dbalColumn->getLength(),
             unsigned: $dbalColumn->getUnsigned(),
             isNotNull: $dbalColumn->getNotnull(),
-            defaultValue: $dbalColumn->getDefault(),
+            defaultValue: self::normalizeDefault($dbalColumn->getDefault()),
         );
+    }
+
+    /**
+     * MySQL reports the default of a boolean column as 0 / 1, PostgreSQL as false / true
+     */
+    private static function normalizeDefault(mixed $default): mixed
+    {
+        return match (true) {
+            $default === true || $default === 'true' => '1',
+            $default === false || $default === 'false' => '0',
+            default => $default,
+        };
     }
 }

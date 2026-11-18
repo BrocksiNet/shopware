@@ -3,6 +3,7 @@
 namespace Shopware\Core\Framework\Migration;
 
 use Doctrine\DBAL\Connection;
+use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use Doctrine\DBAL\Query\QueryBuilder;
 use Psr\Log\LoggerInterface;
 use Shopware\Core\Framework\Log\Package;
@@ -37,9 +38,14 @@ class MigrationRuntime
 
             $migration = new $migration();
 
+            $this->beginMigrationTransaction();
+
             try {
                 $migration->update($this->connection);
+                $this->setExecuted($migration);
+                $this->commitMigrationTransaction();
             } catch (\Exception $e) {
+                $this->rollbackMigrationTransaction();
                 $this->logError($migration, $e->getMessage());
 
                 $this->enrichException($e);
@@ -47,7 +53,6 @@ class MigrationRuntime
                 throw $e;
             }
 
-            $this->setExecuted($migration);
             yield $migration::class;
         }
     }
@@ -70,15 +75,19 @@ class MigrationRuntime
 
             $migration = new $migration();
 
+            $this->beginMigrationTransaction();
+
             try {
                 $migration->updateDestructive($this->connection);
+                $this->setExecutedDestructive($migration);
+                $this->commitMigrationTransaction();
             } catch (\Exception $e) {
+                $this->rollbackMigrationTransaction();
                 $this->logError($migration, $e->getMessage());
 
                 throw $e;
             }
 
-            $this->setExecutedDestructive($migration);
             yield $migration::class;
         }
     }
@@ -117,6 +126,31 @@ class MigrationRuntime
     protected function setDefaultStorageEngine(): void
     {
         $this->connection->executeStatement('SET default_storage_engine=InnoDB');
+    }
+
+    /**
+     * MySQL commits every DDL statement implicitly, a failed migration stays half applied.
+     * PostgreSQL DDL is transactional, so a migration runs in one transaction and a failed one leaves no trace.
+     */
+    private function beginMigrationTransaction(): void
+    {
+        if ($this->connection->getDatabasePlatform() instanceof PostgreSQLPlatform) {
+            $this->connection->beginTransaction();
+        }
+    }
+
+    private function commitMigrationTransaction(): void
+    {
+        if ($this->connection->isTransactionActive() && $this->connection->getDatabasePlatform() instanceof PostgreSQLPlatform) {
+            $this->connection->commit();
+        }
+    }
+
+    private function rollbackMigrationTransaction(): void
+    {
+        while ($this->connection->isTransactionActive() && $this->connection->getDatabasePlatform() instanceof PostgreSQLPlatform) {
+            $this->connection->rollBack();
+        }
     }
 
     private function getExecutableMigrationsBaseQuery(MigrationSource $source, ?int $until = null, ?int $limit = null): QueryBuilder

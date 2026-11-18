@@ -4,10 +4,12 @@ namespace Shopware\Core\Framework\Migration;
 
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Platforms\MySQLPlatform;
+use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use Doctrine\DBAL\Schema\AbstractSchemaManager;
 use Doctrine\DBAL\Schema\ForeignKeyConstraint;
 use Doctrine\DBAL\Schema\Name\OptionallyQualifiedName;
 use Doctrine\DBAL\Schema\Name\UnqualifiedName;
+use Shopware\Core\Framework\Adapter\Database\PostgreSQL\DdlRewriter;
 use Shopware\Core\Framework\Deprecation\BCChange\BecomesInternal;
 use Shopware\Core\Framework\Log\Package;
 
@@ -39,6 +41,25 @@ FROM
 WHERE
 	REFERENCED_TABLE_SCHEMA = '%s'
     AND REFERENCED_TABLE_NAME = '%s';
+EOD;
+
+    // information_schema.key_column_usage has no referenced columns on PostgreSQL
+    private const FIND_RELATIONSHIPS_QUERY_POSTGRESQL = <<<EOD
+SELECT
+    child.relname AS "TABLE_NAME",
+    child_column.attname AS "COLUMN_NAME",
+    constraint_.conname AS "CONSTRAINT_NAME",
+    parent.relname AS "REFERENCED_TABLE_NAME",
+    parent_column.attname AS "REFERENCED_COLUMN_NAME"
+FROM pg_constraint constraint_
+JOIN pg_class parent ON parent.oid = constraint_.confrelid
+JOIN pg_class child ON child.oid = constraint_.conrelid
+JOIN pg_namespace ns ON ns.oid = parent.relnamespace AND ns.nspname = current_schema()
+CROSS JOIN LATERAL unnest(constraint_.conkey, constraint_.confkey) WITH ORDINALITY AS k(child_attnum, parent_attnum, position)
+JOIN pg_attribute child_column ON child_column.attrelid = child.oid AND child_column.attnum = k.child_attnum
+JOIN pg_attribute parent_column ON parent_column.attrelid = parent.oid AND parent_column.attnum = k.parent_attnum
+WHERE constraint_.contype = 'f' AND parent.relname = :table
+ORDER BY constraint_.conname, k.position
 EOD;
 
     /**
@@ -95,7 +116,8 @@ EOD;
 
             foreach ($indexes as $index) {
                 $indexName = $index->getObjectName()->getIdentifier()->getValue();
-                if (strtolower($constraintName) === $indexName) {
+                // PostgreSQL prefixes the index names with the table, see DdlRewriter::indexName()
+                if (strtolower($constraintName) === $indexName || DdlRewriter::indexName($tableName, strtolower($constraintName)) === $indexName) {
                     $playbook[] = \sprintf(self::DROP_KEY, $tableName, $constraintName);
                 }
             }
@@ -240,6 +262,11 @@ EOD;
      */
     private function fetchRelationData(string $tableName): array
     {
+        if ($this->connection->getDatabasePlatform() instanceof PostgreSQLPlatform) {
+            /* @phpstan-ignore return.type (PHPStan cannot properly determine the array type from the DB) */
+            return $this->connection->fetchAllAssociative(self::FIND_RELATIONSHIPS_QUERY_POSTGRESQL, ['table' => $tableName]);
+        }
+
         $databaseName = $this->connection->fetchOne('SELECT DATABASE()') ?: '';
         $query = \sprintf(self::FIND_RELATIONSHIPS_QUERY, $databaseName, $tableName);
 

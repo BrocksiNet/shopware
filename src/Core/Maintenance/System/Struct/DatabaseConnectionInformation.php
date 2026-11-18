@@ -32,6 +32,11 @@ class DatabaseConnectionInformation extends Struct
 
     protected ?bool $sslDontVerifyServerCert = null;
 
+    /**
+     * The DATABASE_URL scheme, `mysql` or `pgsql`
+     */
+    protected string $scheme = 'mysql';
+
     public function assign(#[\SensitiveParameter] array $options): DatabaseConnectionInformation
     {
         // We pass request values directly to the assign method,
@@ -76,7 +81,8 @@ class DatabaseConnectionInformation extends Struct
 
         return (new self())->assign([
             'hostname' => $params['host'],
-            'port' => (int) ($params['port'] ?? '3306'),
+            'scheme' => \in_array($params['scheme'], ['pgsql', 'postgres', 'postgresql'], true) ? 'pgsql' : 'mysql',
+            'port' => (int) ($params['port'] ?? (\in_array($params['scheme'], ['pgsql', 'postgres', 'postgresql'], true) ? '5432' : '3306')),
             'username' => $params['user'] ?? null,
             'password' => $params['pass'] ?? null,
             'databaseName' => $dbName,
@@ -92,6 +98,10 @@ class DatabaseConnectionInformation extends Struct
      */
     public function toDBALParameters(bool $withoutDatabaseName = false): array
     {
+        if ($this->isPostgreSQL()) {
+            return $this->toPostgreSQLParameters($withoutDatabaseName);
+        }
+
         $parameters = [
             'host' => $this->hostname,
             'port' => $this->port,
@@ -134,10 +144,16 @@ class DatabaseConnectionInformation extends Struct
         return $parameters;
     }
 
+    public function isPostgreSQL(): bool
+    {
+        return $this->scheme === 'pgsql';
+    }
+
     public function asDsn(bool $withoutDatabaseName = false): string
     {
         $dsn = \sprintf(
-            'mysql://%s%s:%d',
+            '%s://%s%s:%d',
+            $this->scheme,
             $this->username ? ($this->username . ($this->password ? ':' . rawurlencode($this->password) : '') . '@') : '',
             $this->hostname,
             $this->port
@@ -218,5 +234,31 @@ class DatabaseConnectionInformation extends Struct
         if ($this->username === null || $this->username === '') {
             throw MaintenanceException::dbConnectionParameterMissing('username');
         }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function toPostgreSQLParameters(bool $withoutDatabaseName): array
+    {
+        $parameters = [
+            'host' => $this->hostname,
+            'port' => $this->port,
+            'charset' => 'utf8',
+            'driver' => 'pdo_pgsql',
+            'driverOptions' => [\PDO::ATTR_STRINGIFY_FETCHES => true],
+            // the maintenance database, the target database may not exist yet
+            'dbname' => $withoutDatabaseName ? 'postgres' : $this->databaseName,
+        ];
+
+        if ($this->username !== null) {
+            $parameters['user'] = $this->username;
+        }
+
+        if ($this->password !== null) {
+            $parameters['password'] = $this->password;
+        }
+
+        return $parameters;
     }
 }

@@ -242,6 +242,11 @@ class SystemInstallCommand extends Command
             $output->writeln('Created database `' . $databaseConnectionInformation->getDatabaseName() . '`');
         }
 
+        if ($databaseConnectionInformation->isPostgreSQL()) {
+            // a PostgreSQL connection is bound to one database
+            $connection = $this->databaseConnectionFactory->getConnection($databaseConnectionInformation);
+        }
+
         $importedBaseSchema = $this->setupDatabaseAdapter->initializeShopwareDb($connection, $databaseConnectionInformation->getDatabaseName());
 
         if ($importedBaseSchema) {

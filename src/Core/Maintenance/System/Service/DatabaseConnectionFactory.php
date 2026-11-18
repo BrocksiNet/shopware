@@ -5,6 +5,9 @@ namespace Shopware\Core\Maintenance\System\Service;
 use Doctrine\DBAL\Configuration;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\DriverManager;
+use Shopware\Core\Framework\Adapter\Database\PostgreSQL\IdCodecMiddleware;
+use Shopware\Core\Framework\Adapter\Database\PostgreSQL\SessionMiddleware;
+use Shopware\Core\Framework\Adapter\Database\PostgreSQL\SqlTranslationMiddleware;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Maintenance\MaintenanceException;
 use Shopware\Core\Maintenance\System\Struct\DatabaseConnectionInformation;
@@ -25,6 +28,14 @@ class DatabaseConnectionFactory
 
     public static function createConnection(DatabaseConnectionInformation $connectionInformation, bool $withoutDatabase = false): Connection
     {
+        if ($connectionInformation->isPostgreSQL()) {
+            // same middleware chain as the runtime connection, the installer and the migrations run MySQL SQL
+            return DriverManager::getConnection(
+                $connectionInformation->toDBALParameters($withoutDatabase),
+                (new Configuration())->setMiddlewares([new SessionMiddleware(), new SqlTranslationMiddleware(), new IdCodecMiddleware()])
+            );
+        }
+
         $connection = DriverManager::getConnection($connectionInformation->toDBALParameters($withoutDatabase), new Configuration());
 
         self::checkVersion($connection);

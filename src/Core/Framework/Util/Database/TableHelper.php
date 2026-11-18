@@ -6,6 +6,7 @@ namespace Shopware\Core\Framework\Util\Database;
 
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Platforms\AbstractPlatform;
+use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use Doctrine\DBAL\Schema\AbstractSchemaManager;
 use Doctrine\DBAL\Schema\Column as DbalColumn;
 use Doctrine\DBAL\Schema\Exception\TableDoesNotExist;
@@ -113,7 +114,17 @@ class TableHelper
     public static function indexExists(Connection $connection, string $table, string $indexName): bool
     {
         try {
-            return self::getSchemaManager($connection)->introspectTableByUnquotedName($table)->hasIndex($indexName);
+            if (self::getSchemaManager($connection)->introspectTableByUnquotedName($table)->hasIndex($indexName)) {
+                return true;
+            }
+
+            // MySQL creates an index for every foreign key and names it like the constraint, PostgreSQL does not, and prefixes the names of indexes with the table
+            return $connection->getDatabasePlatform() instanceof PostgreSQLPlatform
+                && (bool) $connection->fetchOne(
+                    'SELECT 1 FROM pg_constraint WHERE contype = \'f\' AND conname = :name AND conrelid = to_regclass(:table)'
+                    . ' UNION ALL SELECT 1 FROM pg_indexes WHERE schemaname = current_schema() AND tablename = :plain AND indexname = :prefixed',
+                    ['name' => $indexName, 'table' => '"' . $table . '"', 'plain' => $table, 'prefixed' => $table . '.' . $indexName]
+                );
         } catch (TableHelperException $e) {
             throw $e;
         } catch (TableDoesNotExist) {
