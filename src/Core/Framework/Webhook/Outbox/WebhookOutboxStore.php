@@ -78,7 +78,8 @@ class WebhookOutboxStore
             }
 
             try {
-                $entry = $this->insertDeliveryAndStream($insert, $eventLogId, WebhookEventLogDefinition::STATUS_QUEUED);
+                // own savepoint: PostgreSQL aborts the whole transaction after a failed statement, MySQL does not
+                $entry = $this->connection->transactional(fn (): OutboxEntry => $this->insertDeliveryAndStream($insert, $eventLogId, WebhookEventLogDefinition::STATUS_QUEUED));
             } catch (UniqueConstraintViolationException) {
                 // Two workers racing the same backfill — first commit wins, drop the duplicate.
                 return null;
@@ -467,7 +468,8 @@ class WebhookOutboxStore
             $eventLogId = Uuid::fromHexToBytes($insert->webhookEventId);
 
             try {
-                $inserted = $this->insertEventLog($insert->webhookId, $eventLogId, $initialStatus, $insert->serializedMessage);
+                // own savepoint: PostgreSQL aborts the whole transaction after a failed statement, MySQL does not
+                $inserted = $this->connection->transactional(fn (): bool => $this->insertEventLog($insert->webhookId, $eventLogId, $initialStatus, $insert->serializedMessage));
             } catch (UniqueConstraintViolationException) {
                 return null;
             }
