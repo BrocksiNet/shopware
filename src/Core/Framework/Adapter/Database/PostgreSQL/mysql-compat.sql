@@ -288,3 +288,16 @@ END $$;
 CREATE OR REPLACE FUNCTION mysql_compat_json_path(text) RETURNS text[] LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE
     AS $$ SELECT COALESCE(array_agg(COALESCE(m[1], m[2], m[3]) ORDER BY n), ARRAY[]::text[])
           FROM regexp_matches(regexp_replace($1, '^\$', ''), '\."([^"]*)"|\[(\d+)\]|\.?([^.\[]+)', 'g') WITH ORDINALITY AS t(m, n) $$;
+
+-- Integer written to a boolean column (MySQL BOOL is TINYINT(1)), BooleanAssignmentRewriter wraps such values
+-- The text variant covers untyped parameters, PDO sends PHP false as '' and true as '1'
+CREATE OR REPLACE FUNCTION mysql_compat_to_bool(boolean) RETURNS boolean LANGUAGE sql IMMUTABLE PARALLEL SAFE
+    RETURN $1;
+CREATE OR REPLACE FUNCTION mysql_compat_to_bool(integer) RETURNS boolean LANGUAGE sql IMMUTABLE PARALLEL SAFE
+    RETURN $1 <> 0;
+CREATE OR REPLACE FUNCTION mysql_compat_to_bool(bigint) RETURNS boolean LANGUAGE sql IMMUTABLE PARALLEL SAFE
+    RETURN $1 <> 0;
+CREATE OR REPLACE FUNCTION mysql_compat_to_bool(numeric) RETURNS boolean LANGUAGE sql IMMUTABLE PARALLEL SAFE
+    RETURN $1 <> 0;
+CREATE OR REPLACE FUNCTION mysql_compat_to_bool(text) RETURNS boolean LANGUAGE sql IMMUTABLE PARALLEL SAFE
+    RETURN CASE WHEN $1 = '' THEN false WHEN $1 ~ '^-?[0-9]+$' THEN $1::numeric <> 0 ELSE $1::boolean END;
