@@ -42,16 +42,18 @@ class StatesUpdater
             Feature::deprecatedMethodMessage(self::class, 'update', 'v6.8.0.0')
         );
 
+        // EXISTS instead of a join with a partial GROUP BY, which only MySQL without ONLY_FULL_GROUP_BY accepts
         $sql = 'SELECT LOWER(HEX(`product`.`id`)) as id,
-                IF(`product_download`.`id` IS NOT NULL, 1, 0) as hasDownloads,
+                IF(EXISTS(
+                    SELECT 1 FROM `product_download`
+                    WHERE `product`.`id` = `product_download`.`product_id`
+                    AND `product`.`version_id` = `product_download`.`product_version_id`
+                ), 1, 0) as hasDownloads,
                 `product`.`type`,
                 `product`.`states`
                 FROM `product`
-                LEFT JOIN `product_download` ON `product`.`id` = `product_download`.`product_id`
-                AND `product`.`version_id` = `product_download`.`product_version_id`
                 WHERE `product`.`id` IN (:ids)
-                AND `product`.`version_id` = :versionId
-                GROUP BY `product`.`id`';
+                AND `product`.`version_id` = :versionId';
 
         $params = [
             'ids' => Uuid::fromHexToBytesList($ids),

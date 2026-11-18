@@ -4,6 +4,7 @@ namespace Shopware\Core\Content\Product\Stock;
 
 use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
+use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use Shopware\Core\Content\Product\Events\ProductBackInStockEvent;
 use Shopware\Core\Content\Product\Events\ProductNoLongerAvailableEvent;
 use Shopware\Core\Content\Product\Events\ProductStockAlteredEvent;
@@ -115,6 +116,24 @@ class StockStorage extends AbstractStockStorage
             WHERE product.id IN (:ids)
             AND product.version_id = :version
         ';
+
+        if ($this->connection->getDatabasePlatform() instanceof PostgreSQLPlatform) {
+            // PostgreSQL has no UPDATE ... LEFT JOIN, the parent is read in a correlated sub select
+            $sql = '
+                UPDATE product
+                SET available = COALESCE((
+                    SELECT COALESCE(product.is_closeout, parent.is_closeout, false)::int * product.stock
+                        >= COALESCE(product.is_closeout, parent.is_closeout, false)::int * COALESCE(product.min_purchase, parent.min_purchase)
+                    FROM (SELECT 1) one
+                    LEFT JOIN product parent
+                        ON parent.id = product.parent_id
+                        AND parent.version_id = product.version_id
+                ), false),
+                    updated_at = NOW()
+                WHERE product.id IN (:ids)
+                AND product.version_id = :version
+            ';
+        }
 
         $before = $this->connection->fetchAllKeyValue(
             'SELECT LOWER(HEX(id)), available FROM product WHERE id IN (:ids) AND product.version_id = :version',
