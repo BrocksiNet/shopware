@@ -19,7 +19,7 @@ class Migration1602494495SetUsersAsAdmins extends MigrationStep
 
     public function update(Connection $connection): void
     {
-        $connection->executeStatement('UPDATE `user` SET `admin` = 1, `title` = `Admin`');
+        $connection->executeStatement('UPDATE `user` SET `admin` = 1, `title` = \'Admin\'');
     }
 
     public function updateDestructive(Connection $connection): void

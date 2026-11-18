@@ -41,6 +41,7 @@ class Migration1654839361ProductDownloadMedia extends MigrationStep
         // media folder
         $folderId = $connection->fetchOne('SELECT id FROM media_folder WHERE default_folder_id = :id', ['id' => $defaultFolderId]);
         if (!$folderId) {
+            $folderId = Uuid::randomBytes();
             $connection->executeStatement('
                 INSERT INTO `media_folder_configuration` (`id`, `thumbnail_quality`, `create_thumbnails`, `private`, created_at)
                 VALUES (:id, 80, 0, 1, :createdAt)

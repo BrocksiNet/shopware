@@ -312,7 +312,7 @@ class Migration1571990395UpdateDefaultStatusMailTemplates extends MigrationStep
         $templateId = $connection->executeQuery(
             'SELECT `id` from `mail_template` WHERE `mail_template_type_id` = :typeId AND `updated_at` = null',
             ['typeId' => $templateTypeId]
-        )->fetchOne();
+        )->fetchOne() ?: null;
 
         $descriptionEn = 'Shopware Default Template';
         $descriptionDe = 'Shopware Basis Template';

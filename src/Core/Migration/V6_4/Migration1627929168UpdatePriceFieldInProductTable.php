@@ -30,9 +30,9 @@ class Migration1627929168UpdatePriceFieldInProductTable extends MigrationStep
                         ROUND(
                             (
                                 IF(
-                                    IFNULL(JSON_UNQUOTE(JSON_EXTRACT(price, "$.cb7d2554b0ce847cd82f3ac9bd1c0dfca.listPrice.net")), 0) = 0, 0,
-                                    100 - JSON_UNQUOTE(JSON_EXTRACT(price, CONCAT("$.cb7d2554b0ce847cd82f3ac9bd1c0dfca.net"))) /
-                                    JSON_UNQUOTE(JSON_EXTRACT(price, "$.cb7d2554b0ce847cd82f3ac9bd1c0dfca.listPrice.net")) * 100
+                                    IFNULL(CAST(JSON_UNQUOTE(JSON_EXTRACT(price, "$.cb7d2554b0ce847cd82f3ac9bd1c0dfca.listPrice.net")) AS DECIMAL(30, 10)), 0) = 0, 0,
+                                    100 - CAST(JSON_UNQUOTE(JSON_EXTRACT(price, CONCAT("$.cb7d2554b0ce847cd82f3ac9bd1c0dfca.net"))) AS DECIMAL(30, 10)) /
+                                    CAST(JSON_UNQUOTE(JSON_EXTRACT(price, "$.cb7d2554b0ce847cd82f3ac9bd1c0dfca.listPrice.net")) AS DECIMAL(30, 10)) * 100
                                 )
                             ),
                             2
@@ -44,10 +44,10 @@ class Migration1627929168UpdatePriceFieldInProductTable extends MigrationStep
                         ROUND(
                                 (
                                     IF (
-                                        IFNULL(JSON_UNQUOTE(JSON_EXTRACT(price, "$.cb7d2554b0ce847cd82f3ac9bd1c0dfca.listPrice.gross")), 0) = 0,
+                                        IFNULL(CAST(JSON_UNQUOTE(JSON_EXTRACT(price, "$.cb7d2554b0ce847cd82f3ac9bd1c0dfca.listPrice.gross")) AS DECIMAL(30, 10)), 0) = 0,
                                         0,
-                                        100 - JSON_UNQUOTE(JSON_EXTRACT(price, CONCAT("$.cb7d2554b0ce847cd82f3ac9bd1c0dfca.gross"))) /
-                                        JSON_UNQUOTE(JSON_EXTRACT(price, "$.cb7d2554b0ce847cd82f3ac9bd1c0dfca.listPrice.gross")) * 100
+                                        100 - CAST(JSON_UNQUOTE(JSON_EXTRACT(price, CONCAT("$.cb7d2554b0ce847cd82f3ac9bd1c0dfca.gross"))) AS DECIMAL(30, 10)) /
+                                        CAST(JSON_UNQUOTE(JSON_EXTRACT(price, "$.cb7d2554b0ce847cd82f3ac9bd1c0dfca.listPrice.gross")) AS DECIMAL(30, 10)) * 100
                                     )
                                 )
                             ,2
