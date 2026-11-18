@@ -6,6 +6,7 @@ use Composer\Autoload\ClassLoader;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Exception as DBALException;
 use Shopware\Core\DevOps\Environment\EnvironmentHelper;
+use Shopware\Core\Framework\Adapter\Database\ConnectionFactory;
 use Shopware\Core\Framework\Adapter\Database\MySQLFactory;
 use Shopware\Core\Framework\Api\Controller\FallbackController;
 use Shopware\Core\Framework\Bundle as ShopwareBundle;
@@ -172,7 +173,7 @@ class Kernel extends HttpKernel
             return self::$connection;
         }
 
-        self::$connection = MySQLFactory::create();
+        self::$connection = ConnectionFactory::create();
 
         return self::$connection;
     }

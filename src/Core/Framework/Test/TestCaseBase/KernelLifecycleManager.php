@@ -5,7 +5,7 @@ namespace Shopware\Core\Framework\Test\TestCaseBase;
 use Composer\Autoload\ClassLoader;
 use Doctrine\DBAL\Connection;
 use Shopware\Core\DevOps\Environment\EnvironmentHelper;
-use Shopware\Core\Framework\Adapter\Database\MySQLFactory;
+use Shopware\Core\Framework\Adapter\Database\ConnectionFactory;
 use Shopware\Core\Framework\Adapter\Kernel\KernelFactory;
 use Shopware\Core\Framework\Plugin\KernelPluginLoader\DbalKernelPluginLoader;
 use Shopware\Core\Framework\Plugin\KernelPluginLoader\StaticKernelPluginLoader;
@@ -206,7 +206,7 @@ class KernelLifecycleManager
     public static function getConnection(): Connection
     {
         if (!static::$connection) {
-            static::$connection = MySQLFactory::create();
+            static::$connection = ConnectionFactory::create();
         }
 
         return static::$connection;

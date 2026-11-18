@@ -22,36 +22,37 @@ class DbalKernelPluginLoader extends KernelPluginLoader
 
     protected function loadPluginInfos(): void
     {
+        // Portable SQL: no backticks, no IF() and no camel case aliases, PostgreSQL folds unquoted aliases to lower case
         $sql = <<<'SQL'
-        # dbal-plugin-loader
+        /* dbal-plugin-loader */
         SELECT
-               `name`,
-               `base_class` AS baseClass,
-               IF(`active` = 1 AND `installed_at` IS NOT NULL, 1, 0) AS active,
-               `path`,
-               `version`,
-               `autoload`,
-               `managed_by_composer` AS managedByComposer,
-               composer_name as composerName
-        FROM `plugin`
-        ORDER BY `installed_at`;
+               name,
+               base_class,
+               CASE WHEN active AND installed_at IS NOT NULL THEN 1 ELSE 0 END AS is_active,
+               path,
+               version,
+               autoload,
+               managed_by_composer,
+               composer_name
+        FROM plugin
+        ORDER BY installed_at;
 SQL;
 
         $plugins = $this->connection->executeQuery($sql)->fetchAllAssociative();
 
         $result = [];
 
-        /** @var array{baseClass: string, name: string, active: int, path: string, version: string|null, autoload: string, managedByComposer: int, composerName: string } $plugin */
+        /** @var array{base_class: string, name: string, is_active: int, path: string, version: string|null, autoload: string, managed_by_composer: int, composer_name: string } $plugin */
         foreach ($plugins as $plugin) {
             $result[] = [
-                'baseClass' => $plugin['baseClass'],
+                'baseClass' => $plugin['base_class'],
                 'name' => $plugin['name'],
-                'active' => (bool) $plugin['active'],
+                'active' => (bool) $plugin['is_active'],
                 'path' => $plugin['path'],
                 'version' => $plugin['version'],
                 'autoload' => json_decode((string) $plugin['autoload'], true, 512, \JSON_THROW_ON_ERROR),
-                'managedByComposer' => (bool) $plugin['managedByComposer'],
-                'composerName' => $plugin['composerName'],
+                'managedByComposer' => (bool) $plugin['managed_by_composer'],
+                'composerName' => $plugin['composer_name'],
             ];
         }
 

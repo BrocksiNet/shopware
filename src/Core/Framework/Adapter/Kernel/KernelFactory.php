@@ -6,7 +6,7 @@ use Composer\Autoload\ClassLoader;
 use Composer\InstalledVersions;
 use Doctrine\DBAL\Connection;
 use Shopware\Core\DevOps\Environment\EnvironmentHelper;
-use Shopware\Core\Framework\Adapter\Database\MySQLFactory;
+use Shopware\Core\Framework\Adapter\Database\ConnectionFactory;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Plugin\KernelPluginLoader\DbalKernelPluginLoader;
 use Shopware\Core\Framework\Plugin\KernelPluginLoader\KernelPluginLoader;
@@ -59,7 +59,7 @@ class KernelFactory
         // we cannot gate on it.
         $middlewares[] = new QueryCountMiddleware();
 
-        $connection ??= MySQLFactory::create($middlewares);
+        $connection ??= ConnectionFactory::create($middlewares);
 
         $pluginLoader ??= new DbalKernelPluginLoader($classLoader, null, $connection);
 
