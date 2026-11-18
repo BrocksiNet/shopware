@@ -131,7 +131,11 @@ class CriteriaQueryBuilder
             }
 
             if ($sorting->getNaturalSorting()) {
-                $query->addOrderBy('LENGTH(' . $accessor . ')', $sorting->getDirection());
+                // inside a grouped query the value must be aggregated, PostgreSQL rejects a bare column here
+                $lengthAccessor = $this->hasGroupBy($criteria, $query)
+                    ? ($sorting->getDirection() === FieldSorting::ASCENDING ? 'MIN(' : 'MAX(') . $accessor . ')'
+                    : $accessor;
+                $query->addOrderBy('LENGTH(' . $lengthAccessor . ')', $sorting->getDirection());
             }
 
             if (!$this->hasGroupBy($criteria, $query)) {

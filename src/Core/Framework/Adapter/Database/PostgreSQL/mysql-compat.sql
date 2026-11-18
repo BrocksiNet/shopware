@@ -146,3 +146,21 @@ CREATE OR REPLACE FUNCTION date_format(timestamptz, text) RETURNS text LANGUAGE 
     AS $$ SELECT date_format($1::timestamp, $2) $$;
 CREATE OR REPLACE FUNCTION date_format(text, text) RETURNS text LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE
     AS $$ SELECT date_format($1::timestamp, $2) $$;
+
+-- LENGTH(datetime_column), used by the natural sorting of the DAL -----------------------------------------------------------
+CREATE OR REPLACE FUNCTION length(timestamp) RETURNS integer LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE
+    AS $$ SELECT length($1::text) $$;
+CREATE OR REPLACE FUNCTION length(integer) RETURNS integer LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE
+    AS $$ SELECT length($1::text) $$;
+CREATE OR REPLACE FUNCTION length(bigint) RETURNS integer LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE
+    AS $$ SELECT length($1::text) $$;
+CREATE OR REPLACE FUNCTION length(numeric) RETURNS integer LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE
+    AS $$ SELECT length($1::text) $$;
+
+-- JSON_TYPE(doc) -----------------------------------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION json_type(jsonb) RETURNS text LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE
+    AS $$ SELECT CASE jsonb_typeof($1)
+        WHEN 'number' THEN CASE WHEN $1::text ~ '[.eE]' THEN 'DOUBLE' ELSE 'INTEGER' END
+        ELSE upper(jsonb_typeof($1)) END $$;
+CREATE OR REPLACE FUNCTION json_type(text) RETURNS text LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE
+    AS $$ SELECT json_type($1::jsonb) $$;
