@@ -61,6 +61,14 @@ class SqlTranslationMiddleware implements Middleware
                             $sql = UpdateRewriter::rewrite($sql);
                         }
 
+                        if (stripos($sql, 'DELETE') !== false) {
+                            $sql = DeleteRewriter::rewrite($sql);
+                        }
+
+                        if (stripos($sql, 'DELETE') !== false) {
+                            $sql = DeleteRewriter::rewrite($sql);
+                        }
+
                         if (stripos($sql, 'IGNORE') === false && stripos($sql, 'REPLACE') === false && stripos($sql, 'DUPLICATE') === false) {
                             return $sql;
                         }

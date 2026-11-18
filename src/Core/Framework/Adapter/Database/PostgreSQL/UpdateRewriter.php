@@ -98,7 +98,7 @@ class UpdateRewriter
     /**
      * Position of a keyword outside of literals, quoted identifiers and parentheses.
      */
-    private static function findWord(string $sql, string $word, int $offset): ?int
+    public static function findWord(string $sql, string $word, int $offset): ?int
     {
         foreach (self::topLevel($sql) as $position => $char) {
             if ($position < $offset || !ctype_alpha($char)) {
