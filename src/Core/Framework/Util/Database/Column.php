@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Shopware\Core\Framework\Util\Database;
 
 use Doctrine\DBAL\Schema\Column as DbalColumn;
+use Doctrine\DBAL\Types\BooleanType;
 use Doctrine\DBAL\Types\Type;
 use Shopware\Core\Framework\Log\Package;
 
@@ -32,12 +33,13 @@ final readonly class Column
             length: $dbalColumn->getLength(),
             unsigned: $dbalColumn->getUnsigned(),
             isNotNull: $dbalColumn->getNotnull(),
-            defaultValue: self::normalizeDefault($dbalColumn->getDefault()),
+            defaultValue: $dbalColumn->getType() instanceof BooleanType ? self::normalizeDefault($dbalColumn->getDefault()) : $dbalColumn->getDefault(),
         );
     }
 
     /**
-     * MySQL reports the default of a boolean column as 0 / 1, PostgreSQL as false / true
+     * MySQL reports the default of a boolean column (TINYINT(1), a SmallIntType in DBAL) as 0 / 1, PostgreSQL as false / true.
+     * Only real boolean columns are normalised, so a string column with the default 'true' keeps it.
      */
     private static function normalizeDefault(mixed $default): mixed
     {

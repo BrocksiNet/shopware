@@ -24,6 +24,13 @@ class ColumnTest extends TestCase
         static::assertSame($expected, Column::createFromDbalColumn($dbalColumn)->defaultValue);
     }
 
+    public function testStringDefaultOfNonBooleanColumnIsKept(): void
+    {
+        $dbalColumn = new DbalColumn('mode', Type::getType(Types::STRING), ['default' => 'true']);
+
+        static::assertSame('true', Column::createFromDbalColumn($dbalColumn)->defaultValue);
+    }
+
     /**
      * @return iterable<string, array{mixed, mixed}>
      */
