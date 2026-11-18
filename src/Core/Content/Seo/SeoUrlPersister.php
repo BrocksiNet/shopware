@@ -101,6 +101,8 @@ class SeoUrlPersister
         $dateTime = $this->clock->now()->format(Defaults::STORAGE_DATE_TIME_FORMAT);
         $table = $this->seoUrlRepository->getDefinition()->getEntityName();
         $insertQuery = new MultiInsertQueryQueue($this->connection, 250, false, false);
+        // rows get a new id, a takeover collides on the unique path index and not on the primary key (PostgreSQL needs the target)
+        $insertQuery->setConflictTarget($table, ['language_id', 'sales_channel_id', 'seo_path_info']);
         foreach (['foreign_key', 'path_info', 'seo_path_info', 'route_name', 'is_canonical', 'is_modified', 'is_deleted'] as $updateField) {
             $insertQuery->addUpdateFieldOnDuplicateKey($table, $updateField);
         }

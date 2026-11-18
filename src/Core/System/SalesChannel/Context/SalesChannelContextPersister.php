@@ -9,6 +9,7 @@ use Psr\Clock\ClockInterface;
 use Shopware\Core\Checkout\Cart\AbstractCartPersister;
 use Shopware\Core\Defaults;
 use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\RetryableQuery;
+use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\RetryableTransaction;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Util\Random;
 use Shopware\Core\Framework\Uuid\Uuid;
@@ -78,16 +79,19 @@ class SalesChannelContextPersister
         try {
             $query->execute($data);
         } catch (UniqueConstraintViolationException) {
-            // When both unique keys conflict, retain REPLACE's behavior of removing both conflicting rows.
-            $query = new RetryableQuery(
-                $this->connection,
-                $this->connection->prepare(
-                    'REPLACE INTO sales_channel_api_context (`token`, `payload`, `sales_channel_id`, `customer_id`, `updated_at`)
-                    VALUES (:token, :payload, :salesChannelId, :customerId, :updatedAt)'
-                )
-            );
-
-            $query->execute($data);
+            // The other unique key (sales channel and customer) conflicts, or both do: remove the conflicting rows and insert,
+            // the same result as REPLACE. REPLACE itself is not an option, PostgreSQL can only resolve a conflict on one key.
+            RetryableTransaction::retryable($this->connection, function () use ($data): void {
+                $this->connection->executeStatement(
+                    'DELETE FROM sales_channel_api_context WHERE `token` = :token OR (`sales_channel_id` = :salesChannelId AND `customer_id` = :customerId)',
+                    ['token' => $data['token'], 'salesChannelId' => $data['salesChannelId'], 'customerId' => $data['customerId']]
+                );
+                $this->connection->executeStatement(
+                    'INSERT INTO sales_channel_api_context (`token`, `payload`, `sales_channel_id`, `customer_id`, `updated_at`)
+                    VALUES (:token, :payload, :salesChannelId, :customerId, :updatedAt)',
+                    $data
+                );
+            });
         }
     }
 

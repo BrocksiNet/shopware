@@ -26,6 +26,11 @@ class MultiInsertQueryQueue
     private array $updateFieldsOnDuplicateKey = [];
 
     /**
+     * @var array<string, list<string>>
+     */
+    private array $conflictTargets = [];
+
+    /**
      * @var array<string, list<list<string>>>
      */
     private array $uniqueKeys = [];
@@ -96,6 +101,18 @@ class MultiInsertQueryQueue
     }
 
     /**
+     * MySQL reacts to a duplicate in any unique key, PostgreSQL needs one conflict target.
+     * The columns are passed on as a comment (ignored by MySQL), the PostgreSQL translation uses them for `ON CONFLICT (...)`
+     * instead of the primary key. Use it when the rows get a fresh primary key and collide on another unique key.
+     *
+     * @param list<string> $columns
+     */
+    public function setConflictTarget(string $table, array $columns): void
+    {
+        $this->conflictTargets[$table] = $columns;
+    }
+
+    /**
      * @return array<array{query: string, values: list<mixed>, types: list<ParameterType>}>
      */
     private function prepareQueries(): array
@@ -122,7 +139,7 @@ class MultiInsertQueryQueue
             $onDuplicateKey = $this->prepareOnDuplicateKeyUpdatePart(
                 array_intersect($this->updateFieldsOnDuplicateKey[$table] ?? [], $columns) // only fields that are in the columns can be updated
             );
-            $tableTemplate = \sprintf('%s%s;', $template, $onDuplicateKey);
+            $tableTemplate = \sprintf('%s%s%s;', $this->conflictTargetHint($table), $template, $onDuplicateKey);
 
             $rowsChunks = array_chunk($rows, $this->chunkSize);
             foreach ($rowsChunks as $rowsChunk) {
@@ -140,6 +157,15 @@ class MultiInsertQueryQueue
         }
 
         return $queries;
+    }
+
+    private function conflictTargetHint(string $table): string
+    {
+        if (!isset($this->conflictTargets[$table]) || !isset($this->updateFieldsOnDuplicateKey[$table])) {
+            return '';
+        }
+
+        return '/* conflict-target: ' . implode(', ', $this->conflictTargets[$table]) . ' */ ';
     }
 
     /**

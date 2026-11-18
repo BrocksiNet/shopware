@@ -13,7 +13,8 @@ use Shopware\Core\Framework\Log\Package;
  *   REPLACE INTO t (columns) ...                => INSERT INTO t (columns) ... ON CONFLICT (primary key) DO UPDATE SET all other columns
  *
  * Not the same as on MySQL:
- * - the conflict target is the primary key only, a duplicate in another unique index still raises an error
+ * - the conflict target is the primary key only (or the columns named in a leading conflict-target comment),
+ *   a duplicate in another unique index still raises an error; INSERT IGNORE has no target and skips every unique index
  * - INSERT IGNORE only skips duplicates, MySQL also downgrades other errors (e.g. a missing foreign key) to warnings
  * - REPLACE keeps the columns that are not part of the statement, MySQL deletes the row and resets them to their default
  *
@@ -53,6 +54,10 @@ class UpsertRewriter
         $key = $primaryKey($table);
         if ($key === []) {
             return $sql;
+        }
+        // an explicit target for a table with more than one unique key: /* conflict-target: col_a, col_b */
+        if (preg_match('/\/\*\s*conflict-target:\s*([A-Za-z0-9_,\s]+?)\s*\*\//', $prefix, $targetMatch) === 1) {
+            $key = array_map('trim', explode(',', $targetMatch[1]));
         }
         $target = '(' . implode(', ', array_map(self::quote(...), $key)) . ')';
 

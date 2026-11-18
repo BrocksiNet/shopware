@@ -253,6 +253,24 @@ class MultiInsertQueryQueueTest extends TestCase
         );
     }
 
+    public function testConflictTargetIsPassedAsCommentForUpserts(): void
+    {
+        $executed = [];
+        $queue = new MultiInsertQueryQueue($this->createRecordingConnection($executed));
+        $queue->addInsert('table1', ['id' => 1, 'name' => 'test1']);
+        $queue->addInsert('table2', ['id' => 1, 'name' => 'test1']);
+        $queue->setConflictTarget('table1', ['name', 'id']);
+        $queue->setConflictTarget('table2', ['name']);
+        $queue->addUpdateFieldOnDuplicateKey('table1', 'name');
+
+        $queue->execute();
+
+        static::assertCount(2, $executed);
+        static::assertSame('/* conflict-target: name, id */ INSERT INTO `table1` (`id`, `name`) VALUES (?,?) ON DUPLICATE KEY UPDATE `name` = VALUES(`name`);', $executed[0]['query']);
+        // no ON DUPLICATE KEY part, no hint
+        static::assertSame('INSERT INTO `table2` (`id`, `name`) VALUES (?,?);', $executed[1]['query']);
+    }
+
     public function testExecuteWithoutInsertsDoesNotTouchTheConnection(): void
     {
         $executed = [];

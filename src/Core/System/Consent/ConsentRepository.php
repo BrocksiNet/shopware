@@ -68,7 +68,9 @@ class ConsentRepository
             throw ConsentException::cannotResolveActor($actorId);
         }
 
+        // the id is new on every call, the row is found by the unique key (name, identifier): PostgreSQL needs that as the conflict target
         $this->connection->executeStatement('
+        /* conflict-target: name, identifier */
         INSERT INTO consent_state (id, name, identifier, state, actor, revision, updated_at)
         VALUES (:id, :consentName, :identifier, :insertState, :actor, :revision, :updatedAt)
         ON DUPLICATE KEY UPDATE

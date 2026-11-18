@@ -43,6 +43,13 @@ class UpsertRewriterTest extends TestCase
             ['IGNORE'],
         ];
 
+        yield 'explicit conflict target' => [
+            '/* conflict-target: a, b */ INSERT INTO "t" ("id", "a", "b", "c") VALUES (1, 2, 3, 4) ON DUPLICATE KEY UPDATE "c" = VALUES("c")',
+            ['id'],
+            ['INSERT INTO "t"', 'ON CONFLICT ("a", "b") DO UPDATE SET "c" = EXCLUDED."c"'],
+            ['ON CONFLICT ("id")'],
+        ];
+
         yield 'values function' => [
             'INSERT INTO "t" ("pk", "b") VALUES (1, 2) ON DUPLICATE KEY UPDATE "b" = VALUES("b")',
             ['pk'],
