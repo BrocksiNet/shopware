@@ -61,10 +61,102 @@ class MySQLToPostgreSQLTranslator
     }
 
     /**
+     * GROUP_CONCAT([DISTINCT] expr [ORDER BY ...] [SEPARATOR sep]) puts the separator last, the aggregate takes it as second
+     * argument in front of ORDER BY: group_concat(expr, sep ORDER BY ...).
+     * Left as it is, the separator would silently become one more sort key.
+     * ORDER BY NULL is a no-op on MySQL and invalid together with DISTINCT, it is dropped.
+     */
+    private function moveGroupConcatSeparator(string $sql): string
+    {
+        $offset = 0;
+        while (preg_match('/\bGROUP_CONCAT\s*\(/i', $sql, $match, \PREG_OFFSET_CAPTURE, $offset) === 1) {
+            $start = $match[0][1] + \strlen($match[0][0]);
+            $offset = $start;
+            $end = $this->closingParenthesis($sql, $start);
+            if ($end === null) {
+                break;
+            }
+
+            $body = substr($sql, $start, $end - $start);
+            $orderBy = $this->topLevelWord($body, '/\bORDER\s+BY\b/i');
+            if ($orderBy === null) {
+                continue;
+            }
+            $separator = $this->topLevelWord($body, '/\bSEPARATOR\b/i');
+
+            $expression = rtrim(substr($body, 0, $orderBy[0]));
+            $order = trim(substr($body, $orderBy[0] + $orderBy[1], $separator === null || $separator[0] < $orderBy[0] ? null : $separator[0] - $orderBy[0] - $orderBy[1]));
+            $rewritten = $expression
+                . ($separator === null ? '' : ' SEPARATOR ' . trim(substr($body, $separator[0] + $separator[1])))
+                . (strtoupper($order) === 'NULL' ? '' : ' ORDER BY ' . $order);
+
+            $sql = substr($sql, 0, $start) . $rewritten . substr($sql, $end);
+            $offset = $start + \strlen($rewritten);
+        }
+
+        return $sql;
+    }
+
+    private function closingParenthesis(string $sql, int $start): ?int
+    {
+        $depth = 1;
+        $length = \strlen($sql);
+        for ($i = $start; $i < $length; ++$i) {
+            $char = $sql[$i];
+            if ($char === '\'' || $char === '"' || $char === '`') {
+                [, $i] = $this->readString($sql, $i, $char);
+                --$i;
+            } elseif ($char === '(') {
+                ++$depth;
+            } elseif ($char === ')' && --$depth === 0) {
+                return $i;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array{int, int}|null position and length of the first match outside of strings and nested parentheses
+     */
+    private function topLevelWord(string $body, string $pattern): ?array
+    {
+        if (preg_match_all($pattern, $body, $matches, \PREG_OFFSET_CAPTURE) < 1) {
+            return null;
+        }
+
+        foreach ($matches[0] as [$text, $position]) {
+            $depth = 0;
+            $quote = null;
+            for ($i = 0; $i < $position; ++$i) {
+                $char = $body[$i];
+                if ($quote !== null) {
+                    $quote = $char === $quote ? null : $quote;
+                } elseif ($char === '\'' || $char === '"' || $char === '`') {
+                    $quote = $char;
+                } elseif ($char === '(') {
+                    ++$depth;
+                } elseif ($char === ')') {
+                    --$depth;
+                }
+            }
+            if ($depth === 0 && $quote === null) {
+                return [$position, \strlen($text)];
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * @return array{string, array<string, string>}
      */
     private function rewrite(string $sql): array
     {
+        if (stripos($sql, 'group_concat') !== false) {
+            $sql = $this->moveGroupConcatSeparator($sql);
+        }
+
         $caseMap = [];
         $out = '';
         $length = \strlen($sql);

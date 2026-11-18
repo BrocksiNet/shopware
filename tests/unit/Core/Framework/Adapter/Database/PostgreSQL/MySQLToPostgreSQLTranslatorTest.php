@@ -20,6 +20,45 @@ class MySQLToPostgreSQLTranslatorTest extends TestCase
         static::assertSame('SELECT "id" FROM "product"', $sql);
     }
 
+    #[DataProvider('groupConcatProvider')]
+    public function testGroupConcatSeparatorMovesBeforeOrderBy(string $mysql, string $expected): void
+    {
+        [$sql] = (new MySQLToPostgreSQLTranslator())->translate($mysql);
+
+        static::assertSame($expected, $sql);
+    }
+
+    /**
+     * @return iterable<string, array{string, string}>
+     */
+    public static function groupConcatProvider(): iterable
+    {
+        yield 'order by and separator' => [
+            'SELECT GROUP_CONCAT(a.x ORDER BY a.y DESC SEPARATOR \'|\') FROM a',
+            'SELECT GROUP_CONCAT(a.x , \'|\' ORDER BY a.y DESC) FROM a',
+        ];
+
+        yield 'order by without separator' => [
+            'SELECT GROUP_CONCAT(a.x ORDER BY a.y, a.z) FROM a',
+            'SELECT GROUP_CONCAT(a.x ORDER BY a.y, a.z) FROM a',
+        ];
+
+        yield 'order by null is dropped' => [
+            'SELECT GROUP_CONCAT(DISTINCT a.x ORDER BY NULL SEPARATOR \' \') FROM a',
+            'SELECT GROUP_CONCAT(DISTINCT a.x , \' \') FROM a',
+        ];
+
+        yield 'nested order by is not touched' => [
+            'SELECT GROUP_CONCAT((SELECT b.x FROM b ORDER BY b.y LIMIT 1) SEPARATOR \',\') FROM a',
+            'SELECT GROUP_CONCAT((SELECT b.x FROM b ORDER BY b.y LIMIT 1) , \',\') FROM a',
+        ];
+
+        yield 'two calls' => [
+            'SELECT GROUP_CONCAT(x ORDER BY y SEPARATOR \',\'), GROUP_CONCAT(z ORDER BY z DESC SEPARATOR \';\') FROM a',
+            'SELECT GROUP_CONCAT(x , \',\' ORDER BY y), GROUP_CONCAT(z , \';\' ORDER BY z DESC) FROM a',
+        ];
+    }
+
     public function testQuotedAliasBecomesIdentifier(): void
     {
         [$sql] = (new MySQLToPostgreSQLTranslator())->translate('SELECT 1 AS \'0\'');
