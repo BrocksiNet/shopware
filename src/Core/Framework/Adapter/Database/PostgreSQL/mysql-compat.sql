@@ -116,3 +116,33 @@ EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 -- Changing the catalog needs a superuser and is not possible on most managed services, proof of concept only.
 UPDATE pg_cast SET castcontext = 'a'
 WHERE castsource = 'integer'::regtype AND casttarget = 'boolean'::regtype AND castcontext = 'e';
+
+-- JSON_CONTAINS(doc, candidate) --------------------------------------------------------------------------------------------
+-- Only the two argument form (containment), the path argument is not supported.
+CREATE OR REPLACE FUNCTION json_contains(jsonb, jsonb) RETURNS boolean LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE
+    AS $$ SELECT $1 @> $2 $$;
+CREATE OR REPLACE FUNCTION json_contains(jsonb, json) RETURNS boolean LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE
+    AS $$ SELECT $1 @> $2::jsonb $$;
+CREATE OR REPLACE FUNCTION json_contains(text, text) RETURNS boolean LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE
+    AS $$ SELECT $1::jsonb @> $2::jsonb $$;
+
+-- DATE_FORMAT(date, format) ------------------------------------------------------------------------------------------------
+-- Translates the common MySQL specifiers to to_char patterns, unknown specifiers are kept as literal text.
+CREATE OR REPLACE FUNCTION date_format(timestamp, text) RETURNS text LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE
+    AS $$
+    SELECT to_char($1, string_agg(
+        CASE WHEN t[1] IS NOT NULL THEN
+            CASE t[1] WHEN 'Y' THEN 'YYYY' WHEN 'y' THEN 'YY' WHEN 'm' THEN 'MM' WHEN 'c' THEN 'FMMM' WHEN 'd' THEN 'DD'
+                      WHEN 'e' THEN 'FMDD' WHEN 'H' THEN 'HH24' WHEN 'k' THEN 'FMHH24' WHEN 'h' THEN 'HH12' WHEN 'I' THEN 'HH12'
+                      WHEN 'l' THEN 'FMHH12' WHEN 'i' THEN 'MI' WHEN 's' THEN 'SS' WHEN 'S' THEN 'SS' WHEN 'f' THEN 'US'
+                      WHEN 'M' THEN 'FMMonth' WHEN 'b' THEN 'Mon' WHEN 'W' THEN 'FMDay' WHEN 'a' THEN 'Dy' WHEN 'j' THEN 'DDD'
+                      WHEN 'p' THEN 'AM' WHEN 'T' THEN 'HH24:MI:SS' WHEN 'r' THEN 'HH12:MI:SS AM' WHEN 'U' THEN 'WW'
+                      WHEN 'v' THEN 'IW' WHEN 'x' THEN 'IYYY' WHEN '%' THEN '%'
+                      ELSE '"%' || t[1] || '"' END
+        ELSE '"' || replace(t[2], '"', '') || '"' END, '') )
+    FROM regexp_matches($2, '%(.)|([^%]+)', 'g') AS t
+    $$;
+CREATE OR REPLACE FUNCTION date_format(timestamptz, text) RETURNS text LANGUAGE sql STABLE STRICT PARALLEL SAFE
+    AS $$ SELECT date_format($1::timestamp, $2) $$;
+CREATE OR REPLACE FUNCTION date_format(text, text) RETURNS text LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE
+    AS $$ SELECT date_format($1::timestamp, $2) $$;
