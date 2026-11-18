@@ -15,6 +15,13 @@ class IdCodecStatement extends AbstractStatementMiddleware
 {
     public function bindValue(int|string $param, mixed $value, ParameterType $type): void
     {
+        // PDO sends false as empty string, which is neither a valid boolean nor a valid integer on PostgreSQL
+        if (\is_bool($value)) {
+            parent::bindValue($param, $value ? '1' : '0', ParameterType::STRING);
+
+            return;
+        }
+
         $boundAsBinary = $type === ParameterType::BINARY || $type === ParameterType::LARGE_OBJECT;
         $encoded = IdCodecMiddleware::encode($value, $boundAsBinary);
 

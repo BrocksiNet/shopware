@@ -10,6 +10,7 @@ use Doctrine\DBAL\Tools\DsnParser;
 use Shopware\Core\DevOps\Environment\EnvironmentHelper;
 use Shopware\Core\Framework\Adapter\Database\PostgreSQL\IdCodecMiddleware;
 use Shopware\Core\Framework\Adapter\Database\PostgreSQL\SessionMiddleware;
+use Shopware\Core\Framework\Adapter\Database\PostgreSQL\SqlTranslationMiddleware;
 use Shopware\Core\Framework\Log\Package;
 
 /**
@@ -29,7 +30,7 @@ class PostgreSQLFactory
     public static function create(array $middlewares = []): Connection
     {
         $config = (new Configuration())
-            ->setMiddlewares([new SessionMiddleware(), new IdCodecMiddleware(), ...$middlewares]);
+            ->setMiddlewares([new SessionMiddleware(), new SqlTranslationMiddleware(), new IdCodecMiddleware(), ...$middlewares]);
 
         return DriverManager::getConnection(self::getConnectionParameters(), $config);
     }
