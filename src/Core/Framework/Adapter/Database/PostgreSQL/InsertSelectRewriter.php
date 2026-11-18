@@ -24,7 +24,7 @@ class InsertSelectRewriter
      */
     public static function rewrite(string $sql, \Closure $getColumnType): string
     {
-        if (preg_match('/^(\s*(?:INSERT(?:\s+IGNORE)?|REPLACE)\s+INTO\s+(' . self::IDENT . ')\s*\(([^)]*)\)\s*SELECT\s+)(.*)$/is', $sql, $m) !== 1) {
+        if (preg_match('/^(\s*(?:INSERT(?:\s+IGNORE)?|REPLACE)\s+INTO\s+(' . self::IDENT . ')\s*\(([^)]*)\)\s*SELECT\s+)(.*)$/isD', $sql, $m) !== 1) {
             return $sql;
         }
 
@@ -39,7 +39,7 @@ class InsertSelectRewriter
 
         $changed = false;
         foreach ($items as $index => $item) {
-            if (preg_match('/^(\s*)(:[A-Za-z_]\w*|\?)(\s*)$/', $item, $placeholder) !== 1) {
+            if (preg_match('/^(\s*)(:[A-Za-z_]\w*|\?)(\s*)$/D', $item, $placeholder) !== 1) {
                 continue;
             }
             $type = $getColumnType(trim($table, '"'), $columns[$index]);

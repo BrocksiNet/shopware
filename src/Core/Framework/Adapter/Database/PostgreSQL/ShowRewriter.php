@@ -40,7 +40,7 @@ class ShowRewriter
     {
         $sql = rtrim(trim($sql), ';');
 
-        if (preg_match('/^SHOW\s+(?:FULL\s+)?(?:COLUMNS|FIELDS)\s+(?:FROM|IN)\s+(' . self::IDENT . ')(?:\s+(?:FROM|IN)\s+' . self::IDENT . ')?(.*)$/is', $sql, $m) === 1) {
+        if (preg_match('/^SHOW\s+(?:FULL\s+)?(?:COLUMNS|FIELDS)\s+(?:FROM|IN)\s+(' . self::IDENT . ')(?:\s+(?:FROM|IN)\s+' . self::IDENT . ')?(.*)$/isD', $sql, $m) === 1) {
             return 'SELECT * FROM (SELECT column_name::text AS "Field", ' . self::MYSQL_TYPE . ' AS "Type",'
                 . ' is_nullable::text AS "Null", \'\'::text AS "Key", (CASE WHEN a.atttypid = \'boolean\'::regtype THEN (CASE c.column_default WHEN \'true\' THEN \'1\' WHEN \'false\' THEN \'0\' ELSE c.column_default END) ELSE c.column_default END)::text AS "Default", \'\'::text AS "Extra"'
                 . ' FROM information_schema.columns c JOIN pg_attribute a ON a.attrelid = to_regclass(quote_ident(c.table_name)) AND a.attname = c.column_name'
@@ -48,7 +48,7 @@ class ShowRewriter
                 . ' ORDER BY c.ordinal_position) s' . self::where($m[2]);
         }
 
-        if (preg_match('/^SHOW\s+(?:INDEX|INDEXES|KEYS)\s+(?:FROM|IN)\s+(' . self::IDENT . ')(?:\s+(?:FROM|IN)\s+' . self::IDENT . ')?(.*)$/is', $sql, $m) === 1) {
+        if (preg_match('/^SHOW\s+(?:INDEX|INDEXES|KEYS)\s+(?:FROM|IN)\s+(' . self::IDENT . ')(?:\s+(?:FROM|IN)\s+' . self::IDENT . ')?(.*)$/isD', $sql, $m) === 1) {
             return 'SELECT * FROM (SELECT t.relname::text AS "Table", CASE WHEN i.indisunique THEN 0 ELSE 1 END AS "Non_unique",'
                 . ' (CASE WHEN i.indisprimary THEN \'PRIMARY\' WHEN c.relname LIKE t.relname || \'.%\' THEN substr(c.relname, length(t.relname) + 2) ELSE c.relname::text END) AS "Key_name",'
                 . ' k.n AS "Seq_in_index", a.attname::text AS "Column_name"'
@@ -59,9 +59,9 @@ class ShowRewriter
                 . ' WHERE t.relname = ' . self::literal($m[1]) . ') s' . self::where($m[2]);
         }
 
-        if (preg_match('/^SHOW\s+TABLES\b(.*)$/is', $sql, $m) === 1) {
+        if (preg_match('/^SHOW\s+TABLES\b(.*)$/isD', $sql, $m) === 1) {
             $rest = trim($m[1]);
-            $like = preg_match('/^LIKE\s+(.*)$/is', $rest, $l) === 1 ? ' AND tablename LIKE ' . $l[1] : '';
+            $like = preg_match('/^LIKE\s+(.*)$/isD', $rest, $l) === 1 ? ' AND tablename LIKE ' . $l[1] : '';
 
             return 'SELECT tablename::text AS "Tables_in_db" FROM pg_tables WHERE schemaname = current_schema()' . $like;
         }

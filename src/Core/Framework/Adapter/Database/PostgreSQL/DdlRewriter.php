@@ -2,7 +2,9 @@
 
 namespace Shopware\Core\Framework\Adapter\Database\PostgreSQL;
 
+use Shopware\Core\Framework\Adapter\AdapterException;
 use Shopware\Core\Framework\Log\Package;
+use Shopware\Core\Framework\Util\Hasher;
 
 /**
  * Rewrites MySQL DDL (migrations, schema.sql) into PostgreSQL DDL.
@@ -36,8 +38,6 @@ class DdlRewriter
      * Columns that hold PHP serialize() output with NUL bytes, `text` can not store them (docs/phase3 serialized columns audit)
      */
     private const SERIALIZED_TEXT_COLUMNS = ['product.cheapest_price'];
-
-    private const LIVE_VERSION_UUID = '0fa91ce3-e96a-4bc2-be4b-d9ce752c3425';
 
     /**
      * @var \Closure(string, string): ?string|null
@@ -82,7 +82,7 @@ class DdlRewriter
             return $full;
         }
 
-        return substr($full, 0, 54) . '_' . substr(md5($full), 0, 8);
+        return substr($full, 0, 54) . '_' . substr(Hasher::hash($full, 'md5'), 0, 8);
     }
 
     /**
@@ -141,19 +141,19 @@ class DdlRewriter
         if (preg_match('/^CREATE\s+(?:TEMPORARY\s+)?TABLE\b/i', $statement) === 1) {
             return $this->createTable($statement) ?? [$statement];
         }
-        if (preg_match('/^ALTER\s+TABLE\s+(' . self::IDENT . ')\s+(.*)$/is', $statement, $m) === 1) {
+        if (preg_match('/^ALTER\s+TABLE\s+(' . self::IDENT . ')\s+(.*)$/isD', $statement, $m) === 1) {
             return $this->alterTable(self::ident($m[1]), $m[2]);
         }
-        if (preg_match('/^CREATE\s+(UNIQUE\s+)?INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?(' . self::IDENT . ')\s+(?:USING\s+\w+\s+)?ON\s+(' . self::IDENT . ')\s*\((.*)\)\s*(?:USING\s+\w+)?$/is', $statement, $m) === 1) {
+        if (preg_match('/^CREATE\s+(UNIQUE\s+)?INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?(' . self::IDENT . ')\s+(?:USING\s+\w+\s+)?ON\s+(' . self::IDENT . ')\s*\((.*)\)\s*(?:USING\s+\w+)?$/isD', $statement, $m) === 1) {
             return [$this->createIndex(self::ident($m[3]), self::ident($m[2]), $m[4], trim($m[1]) !== '')];
         }
-        if (preg_match('/^DROP\s+INDEX\s+(' . self::IDENT . ')\s+ON\s+(' . self::IDENT . ')\b.*$/is', $statement, $m) === 1) {
+        if (preg_match('/^DROP\s+INDEX\s+(' . self::IDENT . ')\s+ON\s+(' . self::IDENT . ')\b.*$/isD', $statement, $m) === 1) {
             return ['DROP INDEX IF EXISTS ' . self::quote(self::indexName(self::ident($m[2]), self::ident($m[1])))];
         }
-        if (preg_match('/^RENAME\s+TABLE\s+(.*)$/is', $statement, $m) === 1) {
+        if (preg_match('/^RENAME\s+TABLE\s+(.*)$/isD', $statement, $m) === 1) {
             $statements = [];
             foreach (self::splitTopLevel($m[1]) as $pair) {
-                if (preg_match('/^\s*(' . self::IDENT . ')\s+TO\s+(' . self::IDENT . ')\s*$/is', $pair, $p) === 1) {
+                if (preg_match('/^\s*(' . self::IDENT . ')\s+TO\s+(' . self::IDENT . ')\s*$/isD', $pair, $p) === 1) {
                     $statements[] = 'ALTER TABLE ' . self::quote(self::ident($p[1])) . ' RENAME TO ' . self::quote(self::ident($p[2]));
                 }
             }
@@ -213,7 +213,7 @@ class DdlRewriter
 
                 continue;
             }
-            if (preg_match('/^(?:CONSTRAINT\s+(?:(' . self::IDENT . ')\s+)?)?UNIQUE(?:\s+(?:KEY|INDEX))?\s*(' . self::IDENT . ')?\s*(?:USING\s+\w+\s*)?\((.*)\)\s*(?:USING\s+\w+)?$/is', $item, $k) === 1) {
+            if (preg_match('/^(?:CONSTRAINT\s+(?:(' . self::IDENT . ')\s+)?)?UNIQUE(?:\s+(?:KEY|INDEX))?\s*(' . self::IDENT . ')?\s*(?:USING\s+\w+\s*)?\((.*)\)\s*(?:USING\s+\w+)?$/isD', $item, $k) === 1) {
                 $names = self::columnNames($k[3]);
                 $name = $k[2] !== '' ? self::ident($k[2]) : ($k[1] !== '' ? self::ident($k[1]) : $names[0]);
                 $indexes[] = $this->createIndex($table, $name, $k[3], true);
@@ -224,13 +224,13 @@ class DdlRewriter
             if (preg_match('/^(?:FULLTEXT|SPATIAL)\b/i', $item) === 1) {
                 continue;
             }
-            if (preg_match('/^(?:KEY|INDEX)\s*(' . self::IDENT . ')?\s*(?:USING\s+\w+\s*)?\((.*)\)\s*(?:USING\s+\w+)?$/is', $item, $k) === 1) {
+            if (preg_match('/^(?:KEY|INDEX)\s*(' . self::IDENT . ')?\s*(?:USING\s+\w+\s*)?\((.*)\)\s*(?:USING\s+\w+)?$/isD', $item, $k) === 1) {
                 $indexes[] = $this->createIndex($table, $k[1] !== '' ? self::ident($k[1]) : self::columnNames($k[2])[0], $k[2], false);
                 $indexedPrefixes[] = self::columnNames($k[2]);
 
                 continue;
             }
-            if (preg_match('/^(?:CONSTRAINT\s+(' . self::IDENT . ')\s+)?FOREIGN\s+KEY\s*(?:' . self::IDENT . '\s*)?\(([^)]*)\)\s*(REFERENCES\s+.*)$/is', $item, $k) === 1) {
+            if (preg_match('/^(?:CONSTRAINT\s+(' . self::IDENT . ')\s+)?FOREIGN\s+KEY\s*(?:' . self::IDENT . '\s*)?\(([^)]*)\)\s*(REFERENCES\s+.*)$/isD', $item, $k) === 1) {
                 // MySQL names an unnamed foreign key <table>_ibfk_<n>, counted per table
                 $name = $k[1] !== '' ? self::ident($k[1]) : $table . '_ibfk_' . ++$unnamedForeignKeys;
                 $lines[] = 'CONSTRAINT ' . self::quote($name) . ' FOREIGN KEY (' . self::columnList($k[2], false) . ') ' . self::foreignKeyTarget($k[3]);
@@ -293,42 +293,42 @@ class DdlRewriter
 
                 continue;
             }
-            if (preg_match('/^DROP\s+(?:CHECK|CONSTRAINT)\s+(' . self::IDENT . ')$/i', $action, $m) === 1) {
+            if (preg_match('/^DROP\s+(?:CHECK|CONSTRAINT)\s+(' . self::IDENT . ')$/iD', $action, $m) === 1) {
                 $statements[] = $alter('DROP CONSTRAINT IF EXISTS ' . self::quote(self::ident($m[1])));
 
                 continue;
             }
-            if (preg_match('/^DROP\s+FOREIGN\s+KEY\s+(' . self::IDENT . ')$/i', $action, $m) === 1) {
+            if (preg_match('/^DROP\s+FOREIGN\s+KEY\s+(' . self::IDENT . ')$/iD', $action, $m) === 1) {
                 $statements[] = $alter('DROP CONSTRAINT ' . self::quote(self::ident($m[1])));
 
                 continue;
             }
-            if (preg_match('/^DROP\s+PRIMARY\s+KEY$/i', $action) === 1) {
+            if (preg_match('/^DROP\s+PRIMARY\s+KEY$/iD', $action) === 1) {
                 $statements[] = $alter('DROP CONSTRAINT ' . self::quote($table . '_pkey'));
 
                 continue;
             }
-            if (preg_match('/^DROP\s+(?:INDEX|KEY)\s+(' . self::IDENT . ')$/i', $action, $m) === 1) {
+            if (preg_match('/^DROP\s+(?:INDEX|KEY)\s+(' . self::IDENT . ')$/iD', $action, $m) === 1) {
                 $statements[] = 'DROP INDEX IF EXISTS ' . self::quote(self::indexName($table, self::ident($m[1])));
 
                 continue;
             }
-            if (preg_match('/^DROP\s+(?:COLUMN\s+)?((?:IF\s+EXISTS\s+)?' . self::IDENT . ')$/i', $action, $m) === 1 && preg_match('/^(?:PRIMARY|FOREIGN|CONSTRAINT|CHECK|INDEX|KEY)\b/i', $m[1]) !== 1) {
-                $statements[] = $alter('DROP COLUMN ' . preg_replace_callback('/' . self::IDENT . '$/', static fn (array $i): string => self::quote(self::ident($i[0])), $m[1]));
+            if (preg_match('/^DROP\s+(?:COLUMN\s+)?((?:IF\s+EXISTS\s+)?' . self::IDENT . ')$/iD', $action, $m) === 1 && preg_match('/^(?:PRIMARY|FOREIGN|CONSTRAINT|CHECK|INDEX|KEY)\b/i', $m[1]) !== 1) {
+                $statements[] = $alter('DROP COLUMN ' . preg_replace_callback('/' . self::IDENT . '$/D', static fn (array $i): string => self::quote(self::ident($i[0])), $m[1]));
 
                 continue;
             }
-            if (preg_match('/^RENAME\s+(?:INDEX|KEY)\s+(' . self::IDENT . ')\s+TO\s+(' . self::IDENT . ')$/i', $action, $m) === 1) {
+            if (preg_match('/^RENAME\s+(?:INDEX|KEY)\s+(' . self::IDENT . ')\s+TO\s+(' . self::IDENT . ')$/iD', $action, $m) === 1) {
                 $statements[] = 'ALTER INDEX IF EXISTS ' . self::quote(self::indexName($table, self::ident($m[1]))) . ' RENAME TO ' . self::quote(self::indexName($table, self::ident($m[2])));
 
                 continue;
             }
-            if (preg_match('/^RENAME\s+COLUMN\s+(' . self::IDENT . ')\s+TO\s+(' . self::IDENT . ')$/i', $action, $m) === 1) {
+            if (preg_match('/^RENAME\s+COLUMN\s+(' . self::IDENT . ')\s+TO\s+(' . self::IDENT . ')$/iD', $action, $m) === 1) {
                 $statements[] = $alter('RENAME COLUMN ' . self::quote(self::ident($m[1])) . ' TO ' . self::quote(self::ident($m[2])));
 
                 continue;
             }
-            if (preg_match('/^RENAME\s+(?:TO\s+|AS\s+)?(' . self::IDENT . ')$/i', $action, $m) === 1) {
+            if (preg_match('/^RENAME\s+(?:TO\s+|AS\s+)?(' . self::IDENT . ')$/iD', $action, $m) === 1) {
                 $statements[] = $alter('RENAME TO ' . self::quote(self::ident($m[1])));
 
                 continue;
@@ -338,14 +338,14 @@ class DdlRewriter
 
                 continue;
             }
-            if (preg_match('/^ADD\s+(?:CONSTRAINT\s+(?:(' . self::IDENT . ')\s+)?)?UNIQUE(?:\s+(?:KEY|INDEX))?\s*(' . self::IDENT . ')?\s*\((.*)\)\s*(?:USING\s+\w+)?$/is', $action, $m) === 1) {
+            if (preg_match('/^ADD\s+(?:CONSTRAINT\s+(?:(' . self::IDENT . ')\s+)?)?UNIQUE(?:\s+(?:KEY|INDEX))?\s*(' . self::IDENT . ')?\s*\((.*)\)\s*(?:USING\s+\w+)?$/isD', $action, $m) === 1) {
                 $names = self::columnNames($m[3]);
                 $name = $m[2] !== '' ? self::ident($m[2]) : ($m[1] !== '' ? self::ident($m[1]) : $names[0]);
                 $statements[] = $this->createIndex($table, $name, $m[3], true);
 
                 continue;
             }
-            if (preg_match('/^ADD\s+(?:KEY|INDEX)\s*(' . self::IDENT . ')?\s*\((.*)\)\s*(?:USING\s+\w+)?$/is', $action, $m) === 1) {
+            if (preg_match('/^ADD\s+(?:KEY|INDEX)\s*(' . self::IDENT . ')?\s*\((.*)\)\s*(?:USING\s+\w+)?$/isD', $action, $m) === 1) {
                 $statements[] = $this->createIndex($table, $m[1] !== '' ? self::ident($m[1]) : self::columnNames($m[2])[0], $m[2], false);
 
                 continue;
@@ -353,7 +353,7 @@ class DdlRewriter
             if (preg_match('/^ADD\s+(?:FULLTEXT|SPATIAL)\b/i', $action) === 1) {
                 continue;
             }
-            if (preg_match('/^ADD\s+(?:CONSTRAINT\s+(' . self::IDENT . ')\s+)?FOREIGN\s+KEY\s*(?:' . self::IDENT . '\s*)?\(([^)]*)\)\s*(REFERENCES\s+.*)$/is', $action, $m) === 1) {
+            if (preg_match('/^ADD\s+(?:CONSTRAINT\s+(' . self::IDENT . ')\s+)?FOREIGN\s+KEY\s*(?:' . self::IDENT . '\s*)?\(([^)]*)\)\s*(REFERENCES\s+.*)$/isD', $action, $m) === 1) {
                 // the number MySQL would pick depends on the existing constraints, the column names keep the name unique
                 $name = $m[1] !== '' ? self::ident($m[1]) : $table . '_ibfk_' . implode('_', self::columnNames($m[2]));
                 $columns = self::columnNames($m[2]);
@@ -371,7 +371,7 @@ class DdlRewriter
 
                 continue;
             }
-            if (preg_match('/^ADD\s+(?:COLUMN\s+)?(.*)$/is', $action, $m) === 1) {
+            if (preg_match('/^ADD\s+(?:COLUMN\s+)?(.*)$/isD', $action, $m) === 1) {
                 $definitions = trim($m[1]);
                 $definitions = $definitions !== '' && $definitions[0] === '(' ? substr($definitions, 1, (self::matchParen($definitions, 0) ?? \strlen($definitions)) - 1) : $definitions;
                 foreach (self::splitTopLevel($definitions) as $definition) {
@@ -384,10 +384,10 @@ class DdlRewriter
 
                 continue;
             }
-            if (preg_match('/^(MODIFY|CHANGE)\s+(?:COLUMN\s+)?(.*)$/is', $action, $m) === 1) {
+            if (preg_match('/^(MODIFY|CHANGE)\s+(?:COLUMN\s+)?(.*)$/isD', $action, $m) === 1) {
                 $definition = $m[2];
                 $old = null;
-                if (strtoupper($m[1]) === 'CHANGE' && preg_match('/^(' . self::IDENT . ')\s+(.*)$/s', $definition, $c) === 1) {
+                if (strtoupper($m[1]) === 'CHANGE' && preg_match('/^(' . self::IDENT . ')\s+(.*)$/sD', $definition, $c) === 1) {
                     $old = self::ident($c[1]);
                     $definition = $c[2];
                 }
@@ -403,7 +403,7 @@ class DdlRewriter
 
                 continue;
             }
-            if (preg_match('/^ALTER\s+(?:COLUMN\s+)?(' . self::IDENT . ')\s+(SET\s+DEFAULT|DROP\s+DEFAULT)\s*(.*)$/is', $action, $m) === 1) {
+            if (preg_match('/^ALTER\s+(?:COLUMN\s+)?(' . self::IDENT . ')\s+(SET\s+DEFAULT|DROP\s+DEFAULT)\s*(.*)$/isD', $action, $m) === 1) {
                 $default = $m[3];
                 // MySQL has no boolean type, a tinyint(1) default of 0 / 1 is false / true here
                 if (strtoupper($m[2]) === 'SET DEFAULT' && $this->columnTypeLookup !== null && ($this->columnTypeLookup)($table, self::ident($m[1])) === 'boolean') {
@@ -427,7 +427,7 @@ class DdlRewriter
     /**
      * MODIFY / CHANGE replace the full definition: type, nullability and default
      *
-     * @param array{name: string, type: string, collate: ?string, notNull: ?bool, default: ?string, identity: bool, generated: ?string, primary: bool, unique: bool, textLike: bool} $column
+     * @param array{name: string, type: string, collate: ?string, notNull: ?bool, default: ?string, identity: bool, generated: ?string, primary: bool, unique: bool, textLike: bool, extra?: string} $column
      *
      * @return list<string>
      */
@@ -453,7 +453,7 @@ class DdlRewriter
             $type === 'boolean' => ' USING (' . self::quote($name) . '::integer <> 0)',
             $type === 'uuid' => '',
             $type === 'smallint' => ' USING ' . self::quote($name) . '::integer::smallint',
-            default => ' USING ' . self::quote($name) . '::' . preg_replace('/\(.*$/', '', $type),
+            default => ' USING ' . self::quote($name) . '::' . preg_replace('/\(.*$/D', '', $type),
         };
         if ($type === 'jsonb' || $type === 'text' || str_starts_with($type, 'varchar') || str_starts_with($type, 'char')) {
             $using = ' USING ' . self::quote($name) . '::' . ($type === 'jsonb' ? 'jsonb' : 'text');
@@ -531,12 +531,12 @@ class DdlRewriter
     /**
      * @param array<string, bool> $jsonColumns
      *
-     * @return array{name: string, type: string, collate: ?string, notNull: ?bool, default: ?string, identity: bool, generated: ?string, primary: bool, unique: bool, textLike: bool}
+     * @return array{name: string, type: string, collate: ?string, notNull: ?bool, default: ?string, identity: bool, generated: ?string, primary: bool, unique: bool, textLike: bool, extra?: string}
      */
     private function parseColumn(string $definition, string $table, array $jsonColumns, string $tableCollation): array
     {
-        if (preg_match('/^(' . self::IDENT . ')\s+([A-Za-z]+)\s*(?:\(([^)]*)\))?((?:\s+(?:UNSIGNED|SIGNED|ZEROFILL))*)\s*(.*)$/is', $definition, $m) !== 1) {
-            throw new \InvalidArgumentException('Can not parse column definition: ' . $definition);
+        if (preg_match('/^(' . self::IDENT . ')\s+([A-Za-z]+)\s*(?:\(([^)]*)\))?((?:\s+(?:UNSIGNED|SIGNED|ZEROFILL))*)\s*(.*)$/isD', $definition, $m) !== 1) {
+            throw AdapterException::unparsableColumnDefinition($definition);
         }
 
         $name = self::ident($m[1]);
@@ -610,6 +610,7 @@ class DdlRewriter
                 } else {
                     $extra[] = 'CHECK (' . $inner . ')';
                 }
+                $w[0] ??= '';
                 $i = $close + 1;
 
                 continue;
@@ -620,7 +621,7 @@ class DdlRewriter
             $i += \strlen($w[0]);
         }
 
-        $type = $this->mapType($table, $name, $dataType, $args, $unsigned, $collation ?? $tableCollation, isset($jsonColumns[$name]) || $inlineJson, $column);
+        $type = $this->mapType($table, $name, $dataType, $args, $unsigned, isset($jsonColumns[$name]) || $inlineJson, $column);
         $column['type'] = $type;
         $column['collate'] = \in_array($type, ['text', 'jsonb'], true) || str_starts_with($type, 'varchar') || str_starts_with($type, 'char')
             ? (($collation ?? $tableCollation) === 'utf8mb4_unicode_ci' && $type !== 'jsonb' ? '"ci"' : null)
@@ -649,9 +650,9 @@ class DdlRewriter
     }
 
     /**
-     * @param array{textLike: bool} $column
+     * @param array{name: string, type: string, collate: ?string, notNull: ?bool, default: ?string, identity: bool, generated: ?string, primary: bool, unique: bool, textLike: bool, extra?: string} $column
      */
-    private function mapType(string $table, string $name, string $dataType, string $args, bool $unsigned, string $collation, bool $json, array &$column): string
+    private function mapType(string $table, string $name, string $dataType, string $args, bool $unsigned, bool $json, array &$column): string
     {
         $compact = preg_replace('/\s+/', '', $args) ?? '';
 
@@ -716,7 +717,7 @@ class DdlRewriter
             return 'text';
         }
 
-        throw new \InvalidArgumentException(\sprintf('Unmapped MySQL type %s for %s.%s', $dataType, $table, $name));
+        throw AdapterException::unmappedColumnType($dataType, $table, $name);
     }
 
     private function mapDefault(string $value, string $type): ?string
@@ -744,14 +745,14 @@ class DdlRewriter
         }
         if ($type === 'jsonb') {
             $inner = strtoupper(preg_replace('/\s+/', '', $trimmed) ?? '');
-            if (preg_match('/^\(*(?:JSON_OBJECT|JSONB_BUILD_OBJECT)\(\)\)*$/', $inner) === 1) {
+            if (preg_match('/^\(*(?:JSON_OBJECT|JSONB_BUILD_OBJECT)\(\)\)*$/D', $inner) === 1) {
                 return '\'{}\'';
             }
-            if (preg_match('/^\(*(?:JSON_ARRAY|JSONB_BUILD_ARRAY)\(\)\)*$/', $inner) === 1) {
+            if (preg_match('/^\(*(?:JSON_ARRAY|JSONB_BUILD_ARRAY)\(\)\)*$/D', $inner) === 1) {
                 return '\'[]\'';
             }
         }
-        if (preg_match('/^\((.*)\)$/s', $trimmed, $m) === 1 && self::matchParen($trimmed, 0) === \strlen($trimmed) - 1) {
+        if (preg_match('/^\((.*)\)$/sD', $trimmed, $m) === 1 && self::matchParen($trimmed, 0) === \strlen($trimmed) - 1) {
             return '(' . $m[1] . ')';
         }
         if ($type === 'bytea' && $trimmed === '\'\'') {
@@ -769,7 +770,7 @@ class DdlRewriter
         $expression = trim($expression);
         if ($type === 'uuid') {
             // a binary literal next to UNHEX(...), e.g. COALESCE(UNHEX(x), 0x0), is a uuid here
-            $expression = preg_replace_callback('/\b0x([0-9a-fA-F]{1,32})\b/', static fn (array $m): string => '\'' . strtolower(preg_replace('/^(.{8})(.{4})(.{4})(.{4})(.{12})$/', '$1-$2-$3-$4-$5', str_pad($m[1], 32, '0', \STR_PAD_LEFT)) ?? '') . '\'::uuid', $expression) ?? $expression;
+            $expression = preg_replace_callback('/\b0x([0-9a-fA-F]{1,32})\b/', static fn (array $m): string => '\'' . strtolower(preg_replace('/^(.{8})(.{4})(.{4})(.{4})(.{12})$/D', '$1-$2-$3-$4-$5', str_pad($m[1], 32, '0', \STR_PAD_LEFT)) ?? '') . '\'::uuid', $expression) ?? $expression;
         }
         $cast = match ($type) {
             'double precision' => '::double precision',
@@ -907,7 +908,7 @@ class DdlRewriter
     {
         $out = [];
         foreach (self::splitTopLevel($columns) as $part) {
-            if (preg_match('/^\s*(' . self::IDENT . ')\s*(?:\(\s*\d+\s*\))?\s*(ASC|DESC)?\s*$/i', $part, $m) !== 1) {
+            if (preg_match('/^\s*(' . self::IDENT . ')\s*(?:\(\s*\d+\s*\))?\s*(ASC|DESC)?\s*$/iD', $part, $m) !== 1) {
                 $out[] = trim($part);
 
                 continue;

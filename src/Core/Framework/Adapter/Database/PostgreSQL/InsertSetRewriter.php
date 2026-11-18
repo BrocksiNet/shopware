@@ -19,7 +19,7 @@ class InsertSetRewriter
 {
     public static function rewrite(string $sql): string
     {
-        if (preg_match('/^(\s*(?:INSERT(?:\s+IGNORE)?|REPLACE)\s+INTO\s+(?:"(?:[^"]|"")+"|[A-Za-z0-9_]+))\s+SET\s+(.*)$/is', $sql, $m) !== 1) {
+        if (preg_match('/^(\s*(?:INSERT(?:\s+IGNORE)?|REPLACE)\s+INTO\s+(?:"(?:[^"]|"")+"|[A-Za-z0-9_]+))\s+SET\s+(.*)$/isD', $sql, $m) !== 1) {
             return $sql;
         }
 
@@ -34,7 +34,7 @@ class InsertSetRewriter
         $columns = [];
         $values = [];
         foreach (DdlRewriter::splitTopLevel($rest) as $assignment) {
-            if (preg_match('/^\s*("(?:[^"]|"")+"|[A-Za-z0-9_]+)\s*=\s*(.*)$/s', $assignment, $a) !== 1) {
+            if (preg_match('/^\s*("(?:[^"]|"")+"|[A-Za-z0-9_]+)\s*=\s*(.*)$/sD', $assignment, $a) !== 1) {
                 return $sql;
             }
             $columns[] = $a[1];

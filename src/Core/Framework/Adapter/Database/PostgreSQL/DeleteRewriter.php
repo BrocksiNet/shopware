@@ -22,7 +22,7 @@ class DeleteRewriter
 
     public static function rewrite(string $sql): string
     {
-        if (preg_match('/^(\s*)DELETE\s+(?!FROM\b)(' . self::IDENT . ')\s+FROM\s+(' . self::IDENT . ')(?:\s+(?:AS\s+)?(?!(?:LEFT|RIGHT|INNER|CROSS|JOIN|WHERE|ORDER|LIMIT)\b)(' . self::IDENT . '))?(\s.*)$/is', $sql, $m) === 1) {
+        if (preg_match('/^(\s*)DELETE\s+(?!FROM\b)(' . self::IDENT . ')\s+FROM\s+(' . self::IDENT . ')(?:\s+(?:AS\s+)?(?!(?:LEFT|RIGHT|INNER|CROSS|JOIN|WHERE|ORDER|LIMIT)\b)(' . self::IDENT . '))?(\s.*)$/isD', $sql, $m) === 1) {
             [, $lead, $target, $table, $alias, $rest] = $m + [4 => ''];
             $name = $alias !== '' ? $alias : $table;
             if (strcasecmp($target, $name) !== 0) {
@@ -36,7 +36,7 @@ class DeleteRewriter
             return $lead . 'DELETE FROM ' . $from . ' WHERE ' . $name . '.ctid IN (SELECT ' . $name . '.ctid FROM ' . $from . ' ' . $rest . ')';
         }
 
-        if (preg_match('/^(\s*)DELETE\s+FROM\s+(' . self::IDENT . '(?:\s+(?:AS\s+)?(?!(?:WHERE|ORDER|LIMIT)\b)' . self::IDENT . ')?)(\s.*)$/is', $sql, $m) === 1) {
+        if (preg_match('/^(\s*)DELETE\s+FROM\s+(' . self::IDENT . '(?:\s+(?:AS\s+)?(?!(?:WHERE|ORDER|LIMIT)\b)' . self::IDENT . ')?)(\s.*)$/isD', $sql, $m) === 1) {
             [, $lead, $from, $rest] = $m;
             $rest = rtrim(trim($rest), ';');
             if (UpdateRewriter::findWord($rest, 'LIMIT', 0) === null) {

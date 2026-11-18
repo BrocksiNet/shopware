@@ -93,11 +93,11 @@ class UpdateRewriter
         $join = self::findWord($target, 'JOIN', 0);
         if ($join !== null) {
             $joins = substr($target, $join + 4);
-            $target = trim((string) preg_replace('/\s+INNER\s*$/i', '', substr($target, 0, $join)));
+            $target = trim((string) preg_replace('/\s+INNER\s*$/iD', '', substr($target, 0, $join)));
 
             while ($joins !== '') {
                 $next = self::findWord($joins, 'JOIN', 0);
-                $current = $next === null ? $joins : (string) preg_replace('/\s+INNER\s*$/i', '', substr($joins, 0, $next));
+                $current = $next === null ? $joins : (string) preg_replace('/\s+INNER\s*$/iD', '', substr($joins, 0, $next));
                 $joins = $next === null ? '' : substr($joins, $next + 4);
 
                 $on = self::findWord($current, 'ON', 0);
@@ -165,7 +165,7 @@ class UpdateRewriter
     private static function rewriteLeftJoin(string $prefix, string $head, string $assignments, ?string $condition): ?string
     {
         $ident = '(?:"[^"]+"|[A-Za-z0-9_]+)';
-        if (preg_match('/^(' . $ident . ')(?:\s+(?:AS\s+)?(?!LEFT\b)(' . $ident . '))?\s+LEFT\s+(?:OUTER\s+)?JOIN\s+(' . $ident . ')(?:\s+(?:AS\s+)?(?!ON\b)(' . $ident . '))?\s+ON\s+(.+)$/is', trim($head), $m) !== 1) {
+        if (preg_match('/^(' . $ident . ')(?:\s+(?:AS\s+)?(?!LEFT\b)(' . $ident . '))?\s+LEFT\s+(?:OUTER\s+)?JOIN\s+(' . $ident . ')(?:\s+(?:AS\s+)?(?!ON\b)(' . $ident . '))?\s+ON\s+(.+)$/isD', trim($head), $m) !== 1) {
             return null;
         }
         if (self::findWord($m[5], 'JOIN', 0) !== null) {

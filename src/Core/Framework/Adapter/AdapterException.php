@@ -35,6 +35,8 @@ class AdapterException extends HttpException
     final public const SECURITY_FUNCTION_NOT_ALLOWED = 'FRAMEWORK__SECURITY_FUNCTION_NOT_ALLOWED';
     final public const TWIG_METHOD_CALL_NOT_ALLOWED = 'FRAMEWORK__TWIG_METHOD_CALL_NOT_ALLOWED';
     final public const CACHE_COMPRESSION_ERROR = 'FRAMEWORK__CACHE_COMPRESSION_ERROR';
+    final public const POSTGRESQL_UNPARSABLE_COLUMN_DEFINITION = 'FRAMEWORK__POSTGRESQL_UNPARSABLE_COLUMN_DEFINITION';
+    final public const POSTGRESQL_UNMAPPED_COLUMN_TYPE = 'FRAMEWORK__POSTGRESQL_UNMAPPED_COLUMN_TYPE';
     final public const PCRE_FUNCTION_ERROR = 'FRAMEWORK__PCRE_FUNCTION_ERROR';
     final public const CACHE_DIRECTORY_ERROR = 'FRAMEWORK__CACHE_DIRECTORY_ERROR';
     final public const CURRENCY_FILTER_MISSING_CONTEXT = 'FRAMEWORK__CURRENCY_FILTER_MISSING_CONTEXT';
@@ -348,6 +350,26 @@ class AdapterException extends HttpException
             [
                 'error' => $error,
             ]
+        );
+    }
+
+    public static function unparsableColumnDefinition(string $definition): self
+    {
+        return new self(
+            Response::HTTP_INTERNAL_SERVER_ERROR,
+            self::POSTGRESQL_UNPARSABLE_COLUMN_DEFINITION,
+            'Can not parse column definition: {{ definition }}',
+            ['definition' => $definition]
+        );
+    }
+
+    public static function unmappedColumnType(string $dataType, string $table, string $column): self
+    {
+        return new self(
+            Response::HTTP_INTERNAL_SERVER_ERROR,
+            self::POSTGRESQL_UNMAPPED_COLUMN_TYPE,
+            'Unmapped MySQL type {{ dataType }} for {{ table }}.{{ column }}',
+            ['dataType' => $dataType, 'table' => $table, 'column' => $column]
         );
     }
 }
