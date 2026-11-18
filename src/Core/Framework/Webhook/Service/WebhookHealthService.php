@@ -37,7 +37,7 @@ class WebhookHealthService
         $newCount = (int) $row['error_count'] + 1;
 
         $params = $strategy === WebhookFailureStrategy::DisableOnThreshold && $newCount >= WebhookFailureStrategy::MAX_ERROR_COUNT
-            ? ['error_count' => 0, 'active' => false]
+            ? ['error_count' => 0, 'active' => 0]
             : ['error_count' => $newCount];
 
         $this->connection->update('webhook', $params, ['id' => Uuid::fromHexToBytes($webhookId)]);

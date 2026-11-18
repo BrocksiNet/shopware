@@ -166,9 +166,9 @@ class SeoUrlPersister
             $insert['seo_path_info'] = $seoPathInfo;
 
             $insert['route_name'] = $routeName;
-            $insert['is_canonical'] = ($seoUrl['isCanonical'] ?? true) ? true : null;
-            $insert['is_modified'] = (bool) ($seoUrl['isModified'] ?? false);
-            $insert['is_deleted'] = (bool) ($seoUrl['isDeleted'] ?? true);
+            $insert['is_canonical'] = ($seoUrl['isCanonical'] ?? true) ? 1 : null;
+            $insert['is_modified'] = ($seoUrl['isModified'] ?? false) ? 1 : 0;
+            $insert['is_deleted'] = ($seoUrl['isDeleted'] ?? true) ? 1 : 0;
 
             $insert['created_at'] = $dateTime;
 
@@ -339,7 +339,7 @@ class SeoUrlPersister
                    AND foreign_key = :foreignKey
                    AND sales_channel_id = :salesChannelId
                    AND route_name = :routeName
-                   AND is_canonical IS NULL AND is_deleted = FALSE
+                   AND is_canonical IS NULL AND is_deleted = 0
                    AND NOT EXISTS (
                        SELECT 1 FROM seo_url existing
                        WHERE existing.language_id = :languageId
@@ -369,7 +369,7 @@ class SeoUrlPersister
 
         RetryableQuery::retryable($this->connection, function () use ($ids): void {
             $this->connection->executeStatement(
-                'UPDATE seo_url SET is_canonical = TRUE, is_modified = TRUE WHERE id IN (:ids)',
+                'UPDATE seo_url SET is_canonical = 1, is_modified = 1 WHERE id IN (:ids)',
                 ['ids' => $ids],
                 ['ids' => ArrayParameterType::BINARY]
             );
@@ -415,12 +415,12 @@ class SeoUrlPersister
         $ids = Uuid::fromHexToBytesList($ids);
         $query = $this->connection->createQueryBuilder()
             ->update('seo_url')
-            ->set('is_deleted', $deleted ? 'TRUE' : 'FALSE')
+            ->set('is_deleted', $deleted ? '1' : '0')
             ->where('foreign_key IN (:fks)')
             ->andWhere('route_name = :routeName')
             // skip rows that already hold the target value to reduce write amplification
             // and lock contention between concurrent url generations (see NEXT-22174)
-            ->andWhere('is_deleted != ' . ($deleted ? 'TRUE' : 'FALSE'))
+            ->andWhere('is_deleted != ' . ($deleted ? '1' : '0'))
             ->setParameter('fks', $ids, ArrayParameterType::BINARY)
             ->setParameter('routeName', $routeName);
 

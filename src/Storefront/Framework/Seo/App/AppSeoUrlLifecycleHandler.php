@@ -193,7 +193,7 @@ class AppSeoUrlLifecycleHandler extends AbstractLifecycleHandler implements Even
         }
 
         $this->connection->executeStatement(
-            'UPDATE `seo_url` SET `is_deleted` = TRUE WHERE `route_name` IN (:routeNames) AND `is_deleted` = FALSE',
+            'UPDATE `seo_url` SET `is_deleted` = 1 WHERE `route_name` IN (:routeNames) AND `is_deleted` = 0',
             ['routeNames' => $routeNames],
             ['routeNames' => ArrayParameterType::STRING]
         );

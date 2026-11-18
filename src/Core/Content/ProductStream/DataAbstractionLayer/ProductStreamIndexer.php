@@ -118,7 +118,7 @@ class ProductStreamIndexer extends EntityIndexer
             if ($filter === []) {
                 $update->execute([
                     'serialized' => null,
-                    'invalid' => true,
+                    'invalid' => 1,
                     'id' => Uuid::fromHexToBytes($id),
                 ]);
 

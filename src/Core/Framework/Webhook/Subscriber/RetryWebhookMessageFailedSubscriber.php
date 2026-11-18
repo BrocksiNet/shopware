@@ -97,7 +97,7 @@ class RetryWebhookMessageFailedSubscriber implements EventSubscriberInterface
         $errorCount = $webhook['error_count'] + 1;
 
         if ($errorCount >= WebhookFailureStrategy::MAX_ERROR_COUNT) {
-            return ['error_count' => 0, 'active' => false];
+            return ['error_count' => 0, 'active' => 0];
         }
 
         return ['error_count' => $errorCount];

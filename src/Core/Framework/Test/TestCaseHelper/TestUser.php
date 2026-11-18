@@ -79,7 +79,7 @@ class TestUser
         $user = self::createNewTestUser($connection);
 
         $connection->executeStatement(
-            'UPDATE `user` SET admin = TRUE WHERE id = :id',
+            'UPDATE `user` SET admin = 1 WHERE id = :id',
             ['id' => Uuid::fromHexToBytes($user->getUserId())]
         );
 

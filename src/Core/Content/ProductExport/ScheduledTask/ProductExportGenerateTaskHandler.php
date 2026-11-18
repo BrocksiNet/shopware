@@ -116,7 +116,7 @@ final class ProductExportGenerateTaskHandler extends ScheduledTaskHandler
                 // Reset the running flag to allow scheduling to continue
                 $this->connection->update(
                     'product_export',
-                    ['is_running' => false],
+                    ['is_running' => 0],
                     ['id' => Uuid::fromHexToBytes($productExport['id'])],
                     ['id' => ParameterType::BINARY]
                 );

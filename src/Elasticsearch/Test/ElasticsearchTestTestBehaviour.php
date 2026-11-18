@@ -127,12 +127,12 @@ trait ElasticsearchTestTestBehaviour
         );
 
         $connection->executeStatement(
-            'UPDATE product_search_config_field SET searchable = FALSE, tokenize = FALSE WHERE product_search_config_id = ?',
+            'UPDATE product_search_config_field SET searchable = 0, tokenize = 0 WHERE product_search_config_id = ?',
             [$configId]
         );
 
         $connection->executeStatement(
-            'UPDATE product_search_config_field SET searchable = TRUE, tokenize = TRUE WHERE product_search_config_id = :configId AND field IN (:fields)',
+            'UPDATE product_search_config_field SET searchable = 1, tokenize = 1 WHERE product_search_config_id = :configId AND field IN (:fields)',
             ['configId' => $configId, 'fields' => $enabledFields],
             ['fields' => ArrayParameterType::STRING]
         );
