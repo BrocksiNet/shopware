@@ -3,6 +3,7 @@
 namespace Shopware\Core\Framework\DataAbstractionLayer\Dbal;
 
 use Doctrine\DBAL\Connection;
+use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityDefinition;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\AutoIncrementField;
@@ -84,6 +85,10 @@ class EntitySearcher implements EntitySearcherInterface
             $query = $this->buildScoreRankedQuery($query, $definition, $criteria, $context, $table, $fields);
         } else {
             $this->queryHelper->addGroupBy($definition, $criteria, $context, $query, $table);
+
+            if ($this->connection->getDatabasePlatform() instanceof PostgreSQLPlatform) {
+                $this->makeSelectValidForGroupBy($criteria, $query, $table, $fields);
+            }
         }
 
         // add pagination
@@ -217,6 +222,41 @@ class EntitySearcher implements EntitySearcherInterface
         $outer->setParameters($query->getParameters(), $query->getParameterTypes());
 
         return $outer;
+    }
+
+    /**
+     * MySQL runs these queries without ONLY_FULL_GROUP_BY and returns the columns of an arbitrary row per group.
+     * PostgreSQL requires every selected column to be grouped or aggregated.
+     *
+     * @param array<string, Field> $fields
+     */
+    private function makeSelectValidForGroupBy(Criteria $criteria, QueryBuilder $query, string $table, array $fields): void
+    {
+        $columns = [];
+        foreach ($fields as $field) {
+            if ($field instanceof StorageAware) {
+                $columns[] = $field->getStorageName();
+            }
+        }
+
+        if ($criteria->getGroupFields() !== []) {
+            $select = [];
+            foreach ($columns as $column) {
+                $select[] = 'any_value(' . EntityDefinitionQueryHelper::escape($table) . '.' . EntityDefinitionQueryHelper::escape($column) . ') AS ' . EntityDefinitionQueryHelper::escape($column);
+            }
+            $query->select(...$select);
+
+            return;
+        }
+
+        if ($query->hasState(EntityDefinitionQueryHelper::HAS_TO_MANY_JOIN)) {
+            // the group by on the id is extended to all selected columns, they belong to the same row
+            foreach ($columns as $column) {
+                if ($column !== 'id') {
+                    $query->addGroupBy(EntityDefinitionQueryHelper::escape($table) . '.' . EntityDefinitionQueryHelper::escape($column));
+                }
+            }
+        }
     }
 
     private function addTotalCountMode(Criteria $criteria, QueryBuilder $query): void
