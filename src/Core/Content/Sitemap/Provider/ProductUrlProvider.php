@@ -135,7 +135,7 @@ class ProductUrlProvider extends AbstractUrlProvider
         $query->andWhere('`product`.version_id = :versionId');
 
         if ($showAfterCloseout) {
-            $query->andWhere('(`product`.available = 1 OR COALESCE(`product`.is_closeout, parent.is_closeout, 0) = 1)');
+            $query->andWhere('(`product`.available = 1 OR COALESCE(`product`.is_closeout, parent.is_closeout, FALSE) = TRUE)');
         } else {
             $query->andWhere('`product`.available = 1');
         }
