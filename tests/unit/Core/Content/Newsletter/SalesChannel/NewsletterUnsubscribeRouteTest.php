@@ -7,6 +7,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Shopware\Core\Content\Newsletter\Aggregate\NewsletterRecipient\NewsletterRecipientCollection;
 use Shopware\Core\Content\Newsletter\Aggregate\NewsletterRecipient\NewsletterRecipientEntity;
+use Shopware\Core\Content\Newsletter\Domain\Dal\DalNewsletterRecipientStorage;
 use Shopware\Core\Content\Newsletter\Event\NewsletterUnsubscribeEvent;
 use Shopware\Core\Content\Newsletter\Extension\NewsletterUnsubscribeRouteExtension;
 use Shopware\Core\Content\Newsletter\NewsletterException;
@@ -52,6 +53,8 @@ class NewsletterUnsubscribeRouteTest extends TestCase
         ]);
 
         $newsletterRecipientEntity = new NewsletterRecipientEntity();
+        $newsletterRecipientEntity->setHash(Uuid::randomHex());
+        $newsletterRecipientEntity->setLanguageId(Uuid::randomHex());
         $newsletterRecipientEntity->setId(Uuid::randomHex());
         $newsletterRecipientEntity->setEmail('test@example.com');
         $newsletterRecipientEntity->setSalesChannelId(TestDefaults::SALES_CHANNEL);
@@ -70,7 +73,7 @@ class NewsletterUnsubscribeRouteTest extends TestCase
             );
 
         $newsletterSubscribeRoute = new NewsletterUnsubscribeRoute(
-            $entityRepository,
+            new DalNewsletterRecipientStorage($entityRepository, static::createStub(EntityRepository::class)),
             static::createStub(DataValidator::class),
             $eventDispatcher,
             static::createStub(RateLimiter::class),
@@ -84,7 +87,6 @@ class NewsletterUnsubscribeRouteTest extends TestCase
         static::assertSame([
             [
                 [
-                    'email' => $newsletterRecipientEntity->getEmail(),
                     'id' => $newsletterRecipientEntity->getId(),
                     'status' => NewsletterSubscribeRoute::STATUS_OPT_OUT,
                 ],
@@ -145,6 +147,8 @@ class NewsletterUnsubscribeRouteTest extends TestCase
         ]);
 
         $newsletterRecipientEntity = new NewsletterRecipientEntity();
+        $newsletterRecipientEntity->setHash(Uuid::randomHex());
+        $newsletterRecipientEntity->setLanguageId(Uuid::randomHex());
         $newsletterRecipientEntity->setId(Uuid::randomHex());
         $newsletterRecipientEntity->setEmail('test@example.com');
         $newsletterRecipientEntity->setSalesChannelId(TestDefaults::SALES_CHANNEL);
@@ -164,7 +168,7 @@ class NewsletterUnsubscribeRouteTest extends TestCase
         $requestStack->expects($this->once())->method('getMainRequest')->willReturn($request);
 
         $newsletterSubscribeRoute = new NewsletterUnsubscribeRoute(
-            $entityRepository,
+            new DalNewsletterRecipientStorage($entityRepository, static::createStub(EntityRepository::class)),
             static::createStub(DataValidator::class),
             static::createStub(EventDispatcherInterface::class),
             $rateLimiter,
@@ -191,7 +195,7 @@ class NewsletterUnsubscribeRouteTest extends TestCase
         });
 
         $route = new NewsletterUnsubscribeRoute(
-            static::createStub(EntityRepository::class),
+            new DalNewsletterRecipientStorage(static::createStub(EntityRepository::class), static::createStub(EntityRepository::class)),
             static::createStub(DataValidator::class),
             static::createStub(EventDispatcherInterface::class),
             static::createStub(RateLimiter::class),
@@ -211,7 +215,7 @@ class NewsletterUnsubscribeRouteTest extends TestCase
         $eventDispatcher->expects($this->never())->method('dispatch');
 
         return new NewsletterUnsubscribeRoute(
-            $newsletterRecipientRepository,
+            new DalNewsletterRecipientStorage($newsletterRecipientRepository, static::createStub(EntityRepository::class)),
             static::createStub(DataValidator::class),
             $eventDispatcher,
             static::createStub(RateLimiter::class),

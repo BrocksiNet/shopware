@@ -3,15 +3,12 @@
 namespace Shopware\Core\Content\Newsletter\SalesChannel;
 
 use Psr\Clock\ClockInterface;
-use Shopware\Core\Content\Newsletter\Aggregate\NewsletterRecipient\NewsletterRecipientCollection;
-use Shopware\Core\Content\Newsletter\Aggregate\NewsletterRecipient\NewsletterRecipientEntity;
+use Shopware\Core\Content\Newsletter\Domain\NewsletterRecipientEntityFactory;
+use Shopware\Core\Content\Newsletter\Domain\NewsletterRecipientStorage;
+use Shopware\Core\Content\Newsletter\Domain\Request\ConfirmRequest;
 use Shopware\Core\Content\Newsletter\Event\NewsletterConfirmEvent;
 use Shopware\Core\Content\Newsletter\Extension\NewsletterConfirmRouteExtension;
 use Shopware\Core\Content\Newsletter\NewsletterException;
-use Shopware\Core\Framework\Context;
-use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
-use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
-use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsFilter;
 use Shopware\Core\Framework\Extensions\ExtensionDispatcher;
 use Shopware\Core\Framework\Feature;
 use Shopware\Core\Framework\Log\Package;
@@ -37,11 +34,9 @@ class NewsletterConfirmRoute extends AbstractNewsletterConfirmRoute
 {
     /**
      * @internal
-     *
-     * @param EntityRepository<NewsletterRecipientCollection> $newsletterRecipientRepository
      */
     public function __construct(
-        private readonly EntityRepository $newsletterRecipientRepository,
+        private readonly NewsletterRecipientStorage $storage,
         private readonly DataValidator $validator,
         private readonly EventDispatcherInterface $eventDispatcher,
         private readonly ClockInterface $clock,
@@ -89,42 +84,25 @@ class NewsletterConfirmRoute extends AbstractNewsletterConfirmRoute
 
     private function _confirmWithResponse(RequestDataBag $dataBag, SalesChannelContext $context): SuccessResponse
     {
-        $recipient = $this->getNewsletterRecipient('hash', $dataBag->get('hash', ''), $context->getContext());
+        $request = ConfirmRequest::fromDataBag($dataBag);
+        $recipient = $this->storage->findByHash($request->hash, $context->getContext())
+            ?? throw NewsletterException::recipientNotFound('hash', $request->hash);
 
         $data = [
-            'id' => $recipient->getId(),
-            'status' => $recipient->getStatus(),
-            'confirmedAt' => $recipient->getConfirmedAt(),
-            'em' => $dataBag->get('em'),
+            'id' => $recipient->id,
+            'status' => $recipient->status->value,
+            'confirmedAt' => $recipient->confirmedAt,
+            'em' => $request->em,
         ];
 
-        $this->validator->validate($data, $this->getBeforeConfirmSubscribeValidation(Hasher::hash($recipient->getEmail(), 'sha1')));
+        $this->validator->validate($data, $this->getBeforeConfirmSubscribeValidation(Hasher::hash($recipient->email, 'sha1')));
 
-        $data['status'] = NewsletterSubscribeRoute::STATUS_OPT_IN;
-        $data['confirmedAt'] = $this->clock->now();
+        $this->storage->confirm($recipient->id, $this->clock->now(), $context->getContext());
 
-        $this->newsletterRecipientRepository->update([$data], $context->getContext());
-
-        $event = new NewsletterConfirmEvent($context->getContext(), $recipient, $context->getSalesChannelId());
+        $event = new NewsletterConfirmEvent($context->getContext(), NewsletterRecipientEntityFactory::create($recipient), $context->getSalesChannelId());
         $this->eventDispatcher->dispatch($event);
 
         return new SuccessResponse();
-    }
-
-    private function getNewsletterRecipient(string $identifier, string $value, Context $context): NewsletterRecipientEntity
-    {
-        $criteria = new Criteria();
-        $criteria->addFilter(new EqualsFilter($identifier, $value));
-        $criteria->addAssociation('salutation');
-        $criteria->setLimit(1);
-
-        $newsletterRecipient = $this->newsletterRecipientRepository->search($criteria, $context)->getEntities()->first();
-
-        if (!$newsletterRecipient) {
-            throw NewsletterException::recipientNotFound($identifier, $value);
-        }
-
-        return $newsletterRecipient;
     }
 
     private function getBeforeConfirmSubscribeValidation(string $emHash): DataValidationDefinition

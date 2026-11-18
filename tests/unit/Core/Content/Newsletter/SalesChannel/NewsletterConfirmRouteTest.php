@@ -5,6 +5,7 @@ namespace Shopware\Tests\Unit\Core\Content\Newsletter\SalesChannel;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Clock\ClockInterface;
+use Shopware\Core\Content\Newsletter\Domain\Dal\DalNewsletterRecipientStorage;
 use Shopware\Core\Content\Newsletter\Extension\NewsletterConfirmRouteExtension;
 use Shopware\Core\Content\Newsletter\SalesChannel\NewsletterConfirmRoute;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
@@ -39,7 +40,7 @@ class NewsletterConfirmRouteTest extends TestCase
         });
 
         $route = new NewsletterConfirmRoute(
-            static::createStub(EntityRepository::class),
+            new DalNewsletterRecipientStorage(static::createStub(EntityRepository::class), static::createStub(EntityRepository::class)),
             static::createStub(DataValidator::class),
             static::createStub(EventDispatcherInterface::class),
             static::createStub(ClockInterface::class),

@@ -8,6 +8,9 @@ use Shopware\Core\Content\Newsletter\Aggregate\NewsletterRecipient\NewsletterRec
 use Shopware\Core\Content\Newsletter\Aggregate\NewsletterRecipientTag\NewsletterRecipientTagDefinition;
 use Shopware\Core\Content\Newsletter\DataAbstractionLayer\Indexing\CustomerNewsletterSalesChannelsUpdater;
 use Shopware\Core\Content\Newsletter\DataAbstractionLayer\NewsletterRecipientIndexer;
+use Shopware\Core\Content\Newsletter\Domain\Dal\DalNewsletterRecipientStorage;
+use Shopware\Core\Content\Newsletter\Domain\NewsletterRecipientStorage;
+use Shopware\Core\Content\Newsletter\Domain\Sql\SqlNewsletterRecipientStorage;
 use Shopware\Core\Content\Newsletter\Event\Subscriber\NewsletterRecipientDeletedSubscriber;
 use Shopware\Core\Content\Newsletter\NewsletterExceptionHandler;
 use Shopware\Core\Content\Newsletter\SalesChannel\NewsletterConfirmRoute;
@@ -55,24 +58,34 @@ return static function (ContainerConfigurator $containerConfigurator): void {
     $services->set(NewsletterExceptionHandler::class)
         ->tag('shopware.dal.exception_handler');
 
+    $services->set(DalNewsletterRecipientStorage::class)
+        ->args([
+            service('newsletter_recipient.repository'),
+            service('customer.repository'),
+        ]);
+
+    $services->set(SqlNewsletterRecipientStorage::class)
+        ->args([service(Connection::class)]);
+
+    $services->alias(NewsletterRecipientStorage::class, DalNewsletterRecipientStorage::class);
+
     $services->set(NewsletterSubscribeRoute::class)
         ->public()
         ->args([
-            service('newsletter_recipient.repository'),
+            service(NewsletterRecipientStorage::class),
             service(DataValidator::class),
             service('event_dispatcher'),
             service(SystemConfigService::class),
             service('shopware.rate_limiter'),
             service(RequestStack::class),
             service(StoreApiCustomFieldMapper::class),
-            service('customer.repository'),
             service(ExtensionDispatcher::class),
         ]);
 
     $services->set(NewsletterConfirmRoute::class)
         ->public()
         ->args([
-            service('newsletter_recipient.repository'),
+            service(NewsletterRecipientStorage::class),
             service(DataValidator::class),
             service('event_dispatcher'),
             service(ClockInterface::class),
@@ -82,7 +95,7 @@ return static function (ContainerConfigurator $containerConfigurator): void {
     $services->set(NewsletterUnsubscribeRoute::class)
         ->public()
         ->args([
-            service('newsletter_recipient.repository'),
+            service(NewsletterRecipientStorage::class),
             service(DataValidator::class),
             service('event_dispatcher'),
             service(RateLimiter::class),

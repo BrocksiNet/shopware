@@ -9,6 +9,7 @@ use PHPUnit\Framework\TestCase;
 use Shopware\Core\Checkout\Customer\CustomerEntity;
 use Shopware\Core\Content\Newsletter\Aggregate\NewsletterRecipient\NewsletterRecipientCollection;
 use Shopware\Core\Content\Newsletter\Aggregate\NewsletterRecipient\NewsletterRecipientEntity;
+use Shopware\Core\Content\Newsletter\Domain\Dal\DalNewsletterRecipientStorage;
 use Shopware\Core\Content\Newsletter\Event\NewsletterConfirmEvent;
 use Shopware\Core\Content\Newsletter\Event\NewsletterRegisterEvent;
 use Shopware\Core\Content\Newsletter\Event\NewsletterSubscribeUrlEvent;
@@ -70,12 +71,15 @@ class NewsletterSubscribeRouteTest extends TestCase
         ]);
 
         $newsletterRecipientEntity = new NewsletterRecipientEntity();
+        $newsletterRecipientEntity->setEmail('recipient@example.com');
+        $newsletterRecipientEntity->setHash(Uuid::randomHex());
+        $newsletterRecipientEntity->setLanguageId(Uuid::randomHex());
+        $newsletterRecipientEntity->setSalesChannelId(TestDefaults::SALES_CHANNEL);
         $newsletterRecipientEntity->setId(Uuid::randomHex());
         $newsletterRecipientEntity->setConfirmedAt(new \DateTime());
         $newsletterRecipientEntity->setStatus(NewsletterSubscribeRoute::STATUS_OPT_IN);
 
         $entityRepository = new StaticEntityRepository([
-            [$newsletterRecipientEntity->getId()],
             new NewsletterRecipientCollection([$newsletterRecipientEntity]),
         ]);
 
@@ -96,14 +100,13 @@ class NewsletterSubscribeRouteTest extends TestCase
             );
 
         $newsletterSubscribeRoute = new NewsletterSubscribeRoute(
-            $entityRepository,
+            new DalNewsletterRecipientStorage($entityRepository, static::createStub(EntityRepository::class)),
             static::createStub(DataValidator::class),
             $eventDispatcher,
             $systemConfig,
             static::createStub(RateLimiter::class),
             static::createStub(RequestStack::class),
             static::createStub(StoreApiCustomFieldMapper::class),
-            static::createStub(EntityRepository::class),
             new ExtensionDispatcher(new EventDispatcher()),
         );
 
@@ -131,25 +134,26 @@ class NewsletterSubscribeRouteTest extends TestCase
         ]);
 
         $newsletterRecipientEntity = new NewsletterRecipientEntity();
+        $newsletterRecipientEntity->setHash(Uuid::randomHex());
+        $newsletterRecipientEntity->setLanguageId(Uuid::randomHex());
+        $newsletterRecipientEntity->setSalesChannelId(TestDefaults::SALES_CHANNEL);
         $newsletterRecipientEntity->setId(Uuid::randomHex());
         $newsletterRecipientEntity->setStatus(NewsletterSubscribeRoute::STATUS_DIRECT);
         $newsletterRecipientEntity->setEmail('test@example.com');
 
         $entityRepository = new StaticEntityRepository([
-            [$newsletterRecipientEntity->getId()],
             new NewsletterRecipientCollection([$newsletterRecipientEntity]),
             new NewsletterRecipientCollection([$newsletterRecipientEntity]),
         ]);
 
         $newsletterSubscribeRoute = new NewsletterSubscribeRoute(
-            $entityRepository,
+            new DalNewsletterRecipientStorage($entityRepository, static::createStub(EntityRepository::class)),
             static::createStub(DataValidator::class),
             static::createStub(EventDispatcherInterface::class),
             new StaticSystemConfigService([TestDefaults::SALES_CHANNEL => ['core.newsletter.doubleOptIn' => false]]),
             static::createStub(RateLimiter::class),
             static::createStub(RequestStack::class),
             static::createStub(StoreApiCustomFieldMapper::class),
-            static::createStub(EntityRepository::class),
             new ExtensionDispatcher(new EventDispatcher()),
         );
 
@@ -172,12 +176,15 @@ class NewsletterSubscribeRouteTest extends TestCase
         ]);
 
         $newsletterRecipientEntity = new NewsletterRecipientEntity();
+        $newsletterRecipientEntity->setEmail('recipient@example.com');
+        $newsletterRecipientEntity->setHash(Uuid::randomHex());
+        $newsletterRecipientEntity->setLanguageId(Uuid::randomHex());
+        $newsletterRecipientEntity->setSalesChannelId(TestDefaults::SALES_CHANNEL);
         $newsletterRecipientEntity->setId(Uuid::randomHex());
         $newsletterRecipientEntity->setConfirmedAt(new \DateTime());
         $newsletterRecipientEntity->setStatus(NewsletterSubscribeRoute::STATUS_DIRECT);
 
         $entityRepository = new StaticEntityRepository([
-            [$newsletterRecipientEntity->getId()],
             new NewsletterRecipientCollection([$newsletterRecipientEntity]),
         ]);
 
@@ -198,14 +205,13 @@ class NewsletterSubscribeRouteTest extends TestCase
             );
 
         $newsletterSubscribeRoute = new NewsletterSubscribeRoute(
-            $entityRepository,
+            new DalNewsletterRecipientStorage($entityRepository, static::createStub(EntityRepository::class)),
             static::createStub(DataValidator::class),
             $eventDispatcher,
             $systemConfig,
             static::createStub(RateLimiter::class),
             static::createStub(RequestStack::class),
             static::createStub(StoreApiCustomFieldMapper::class),
-            static::createStub(EntityRepository::class),
             new ExtensionDispatcher(new EventDispatcher()),
         );
 
@@ -226,12 +232,15 @@ class NewsletterSubscribeRouteTest extends TestCase
         ]);
 
         $recipient = new NewsletterRecipientEntity();
+        $recipient->setHash(Uuid::randomHex());
+        $recipient->setLanguageId(Uuid::randomHex());
+        $recipient->setSalesChannelId(TestDefaults::SALES_CHANNEL);
         $recipient->setId(Uuid::randomHex());
         $recipient->setEmail('confirm-subscribe-probe@example.com');
         $recipient->setStatus(NewsletterSubscribeRoute::STATUS_NOT_SET);
 
         $entityRepository = new StaticEntityRepository([
-            [],
+            new NewsletterRecipientCollection(),
             new NewsletterRecipientCollection([$recipient]),
         ]);
 
@@ -242,14 +251,13 @@ class NewsletterSubscribeRouteTest extends TestCase
         ]);
 
         $newsletterSubscribeRoute = new NewsletterSubscribeRoute(
-            $entityRepository,
+            new DalNewsletterRecipientStorage($entityRepository, static::createStub(EntityRepository::class)),
             static::createStub(DataValidator::class),
             static::createStub(EventDispatcherInterface::class),
             $systemConfig,
             static::createStub(RateLimiter::class),
             static::createStub(RequestStack::class),
             static::createStub(StoreApiCustomFieldMapper::class),
-            static::createStub(EntityRepository::class),
             new ExtensionDispatcher(new EventDispatcher()),
         );
 
@@ -273,11 +281,14 @@ class NewsletterSubscribeRouteTest extends TestCase
         $requestData->add($data);
 
         $newsletterRecipientEntity = new NewsletterRecipientEntity();
+        $newsletterRecipientEntity->setEmail('recipient@example.com');
+        $newsletterRecipientEntity->setHash(Uuid::randomHex());
+        $newsletterRecipientEntity->setLanguageId(Uuid::randomHex());
+        $newsletterRecipientEntity->setSalesChannelId(TestDefaults::SALES_CHANNEL);
         $newsletterRecipientEntity->setId(Uuid::randomHex());
         $newsletterRecipientEntity->setConfirmedAt(new \DateTime());
 
         $entityRepository = new StaticEntityRepository([
-            [$newsletterRecipientEntity->getId()],
             new NewsletterRecipientCollection([$newsletterRecipientEntity]),
         ]);
 
@@ -290,14 +301,13 @@ class NewsletterSubscribeRouteTest extends TestCase
         });
 
         $newsletterSubscribeRoute = new NewsletterSubscribeRoute(
-            $entityRepository,
+            new DalNewsletterRecipientStorage($entityRepository, static::createStub(EntityRepository::class)),
             $mock,
             static::createStub(EventDispatcherInterface::class),
             static::createStub(SystemConfigService::class),
             static::createStub(RateLimiter::class),
             static::createStub(RequestStack::class),
             static::createStub(StoreApiCustomFieldMapper::class),
-            static::createStub(EntityRepository::class),
             new ExtensionDispatcher(new EventDispatcher()),
         );
 
@@ -352,11 +362,14 @@ class NewsletterSubscribeRouteTest extends TestCase
         ]);
 
         $newsletterRecipientEntity = new NewsletterRecipientEntity();
+        $newsletterRecipientEntity->setEmail('recipient@example.com');
+        $newsletterRecipientEntity->setHash(Uuid::randomHex());
+        $newsletterRecipientEntity->setLanguageId(Uuid::randomHex());
+        $newsletterRecipientEntity->setSalesChannelId(TestDefaults::SALES_CHANNEL);
         $newsletterRecipientEntity->setId(Uuid::randomHex());
         $newsletterRecipientEntity->setConfirmedAt(new \DateTime());
 
         $entityRepository = new StaticEntityRepository([
-            [$newsletterRecipientEntity->getId()],
             new NewsletterRecipientCollection([$newsletterRecipientEntity]),
         ]);
 
@@ -375,14 +388,13 @@ class NewsletterSubscribeRouteTest extends TestCase
             });
 
         $newsletterSubscribeRoute = new NewsletterSubscribeRoute(
-            $entityRepository,
+            new DalNewsletterRecipientStorage($entityRepository, static::createStub(EntityRepository::class)),
             static::createStub(DataValidator::class),
             static::createStub(EventDispatcherInterface::class),
             static::createStub(SystemConfigService::class),
             $rateLimiterMock,
             $requestStack,
             static::createStub(StoreApiCustomFieldMapper::class),
-            static::createStub(EntityRepository::class),
             new ExtensionDispatcher(new EventDispatcher()),
         );
 
@@ -398,6 +410,10 @@ class NewsletterSubscribeRouteTest extends TestCase
         ]);
 
         $newsletterRecipientEntity = new NewsletterRecipientEntity();
+        $newsletterRecipientEntity->setEmail('recipient@example.com');
+        $newsletterRecipientEntity->setHash(Uuid::randomHex());
+        $newsletterRecipientEntity->setLanguageId(Uuid::randomHex());
+        $newsletterRecipientEntity->setSalesChannelId(TestDefaults::SALES_CHANNEL);
         $newsletterRecipientEntity->setId(Uuid::randomHex());
         $newsletterRecipientEntity->setConfirmedAt(new \DateTime());
 
@@ -413,14 +429,13 @@ class NewsletterSubscribeRouteTest extends TestCase
             ->willThrowException(new RateLimitExceededException(2));
 
         $newsletterSubscribeRoute = new NewsletterSubscribeRoute(
-            static::createStub(EntityRepository::class),
+            new DalNewsletterRecipientStorage(static::createStub(EntityRepository::class), static::createStub(EntityRepository::class)),
             static::createStub(DataValidator::class),
             static::createStub(EventDispatcherInterface::class),
             static::createStub(SystemConfigService::class),
             $rateLimiterMock,
             $requestStack,
             static::createStub(StoreApiCustomFieldMapper::class),
-            static::createStub(EntityRepository::class),
             new ExtensionDispatcher(new EventDispatcher()),
         );
 
@@ -477,6 +492,9 @@ class NewsletterSubscribeRouteTest extends TestCase
         $customerRepository->method('search')->willReturn($customerSearchResult);
 
         $newsletterRecipientEntity = new NewsletterRecipientEntity();
+        $newsletterRecipientEntity->setHash(Uuid::randomHex());
+        $newsletterRecipientEntity->setLanguageId(Uuid::randomHex());
+        $newsletterRecipientEntity->setSalesChannelId(TestDefaults::SALES_CHANNEL);
         $newsletterRecipientEntity->setId($recipientData['id']);
         $newsletterRecipientEntity->setEmail($recipientData['email']);
 
@@ -503,14 +521,13 @@ class NewsletterSubscribeRouteTest extends TestCase
             });
 
         $newsletterSubscribeRoute = new NewsletterSubscribeRoute(
-            $newsletterRecipientRepository,
+            new DalNewsletterRecipientStorage($newsletterRecipientRepository, $customerRepository),
             static::createStub(DataValidator::class),
             $eventDispatcher,
             $systemConfig,
             static::createStub(RateLimiter::class),
             static::createStub(RequestStack::class),
             static::createStub(StoreApiCustomFieldMapper::class),
-            $customerRepository,
             new ExtensionDispatcher(new EventDispatcher()),
         );
 
@@ -914,14 +931,13 @@ class NewsletterSubscribeRouteTest extends TestCase
         });
 
         $route = new NewsletterSubscribeRoute(
-            static::createStub(EntityRepository::class),
+            new DalNewsletterRecipientStorage(static::createStub(EntityRepository::class), static::createStub(EntityRepository::class)),
             static::createStub(DataValidator::class),
             static::createStub(EventDispatcherInterface::class),
             static::createStub(SystemConfigService::class),
             static::createStub(RateLimiter::class),
             static::createStub(RequestStack::class),
             static::createStub(StoreApiCustomFieldMapper::class),
-            static::createStub(EntityRepository::class),
             new ExtensionDispatcher($dispatcher),
         );
 
