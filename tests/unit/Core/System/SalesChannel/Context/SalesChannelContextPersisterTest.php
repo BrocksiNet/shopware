@@ -3,7 +3,10 @@
 namespace Shopware\Tests\Unit\Core\System\SalesChannel\Context;
 
 use Doctrine\DBAL\Connection;
+use Doctrine\DBAL\Driver\Exception as DriverException;
+use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\DBAL\Result;
+use Doctrine\DBAL\Statement;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\MockObject\Stub;
@@ -47,6 +50,63 @@ class SalesChannelContextPersisterTest extends TestCase
             new NativeClock(),
             'P1D', // 1 day expiration is the default value
         );
+    }
+
+    public function testSaveRetriesTheReplaceFallbackWhenAConcurrentRequestWinsTheRace(): void
+    {
+        $uniqueViolation = static fn (): UniqueConstraintViolationException => new UniqueConstraintViolationException(
+            new class('duplicate key') extends \Exception implements DriverException {
+                public function getSQLState(): ?string
+                {
+                    return '23505';
+                }
+            },
+            null
+        );
+
+        $result = static::createStub(Result::class);
+        $result->method('fetchAllAssociative')->willReturn([]);
+        $queryBuilder = static::createStub(QueryBuilder::class);
+        $queryBuilder->method('executeQuery')->willReturn($result);
+
+        // The upsert conflicts on the second unique key, which sends the persister into the delete and insert fallback.
+        $upsert = $this->createMock(Statement::class);
+        $upsert->method('executeStatement')->willThrowException($uniqueViolation());
+
+        $inserts = 0;
+        $deletes = 0;
+        $connection = $this->createMock(Connection::class);
+        $connection->method('createQueryBuilder')->willReturn($queryBuilder);
+        $connection->method('prepare')->willReturn($upsert);
+        $connection->method('transactional')->willReturnCallback(static fn (\Closure $closure) => $closure($connection));
+        $connection->method('executeStatement')->willReturnCallback(
+            static function (string $sql) use (&$inserts, &$deletes, $uniqueViolation): int {
+                if (str_starts_with($sql, 'DELETE')) {
+                    ++$deletes;
+
+                    return 0;
+                }
+
+                // The first two inserts lose against a concurrent request, the third one succeeds.
+                if (++$inserts < 3) {
+                    throw $uniqueViolation();
+                }
+
+                return 1;
+            }
+        );
+
+        $persister = new SalesChannelContextPersister(
+            $connection,
+            static::createStub(EventDispatcherInterface::class),
+            static::createStub(CartPersister::class),
+            new NativeClock(),
+        );
+
+        $persister->save(Random::getAlphanumericString(32), ['foo' => 'bar'], TestDefaults::SALES_CHANNEL, Uuid::randomHex());
+
+        static::assertSame(3, $inserts);
+        static::assertSame(3, $deletes);
     }
 
     public function testLoadWithNoContextFoundReturnsEmptyArray(): void

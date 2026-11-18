@@ -20,6 +20,8 @@ use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 #[Package('framework')]
 class SalesChannelContextPersister
 {
+    private const MAX_UNIQUE_RETRIES = 10;
+
     private readonly string $lifetimeInterval;
 
     /**
@@ -81,17 +83,32 @@ class SalesChannelContextPersister
         } catch (UniqueConstraintViolationException) {
             // The other unique key (sales channel and customer) conflicts, or both do: remove the conflicting rows and insert,
             // the same result as REPLACE. REPLACE itself is not an option, PostgreSQL can only resolve a conflict on one key.
-            RetryableTransaction::retryable($this->connection, function () use ($data): void {
-                $this->connection->executeStatement(
-                    'DELETE FROM sales_channel_api_context WHERE `token` = :token OR (`sales_channel_id` = :salesChannelId AND `customer_id` = :customerId)',
-                    ['token' => $data['token'], 'salesChannelId' => $data['salesChannelId'], 'customerId' => $data['customerId']]
-                );
-                $this->connection->executeStatement(
-                    'INSERT INTO sales_channel_api_context (`token`, `payload`, `sales_channel_id`, `customer_id`, `updated_at`)
-                    VALUES (:token, :payload, :salesChannelId, :customerId, :updatedAt)',
-                    $data
-                );
-            });
+            // Concurrent requests can insert the same token or sales channel and customer between our DELETE and INSERT.
+            // The loser sees a unique violation (PostgreSQL does not hide it like MySQL's gap locks do), so retry: the next DELETE removes the winner's row.
+            for ($attempt = 1;; ++$attempt) {
+                try {
+                    RetryableTransaction::retryable($this->connection, function () use ($data): void {
+                        $this->connection->executeStatement(
+                            'DELETE FROM sales_channel_api_context WHERE `token` = :token OR (`sales_channel_id` = :salesChannelId AND `customer_id` = :customerId)',
+                            ['token' => $data['token'], 'salesChannelId' => $data['salesChannelId'], 'customerId' => $data['customerId']]
+                        );
+                        $this->connection->executeStatement(
+                            'INSERT INTO sales_channel_api_context (`token`, `payload`, `sales_channel_id`, `customer_id`, `updated_at`)
+                        VALUES (:token, :payload, :salesChannelId, :customerId, :updatedAt)',
+                            $data
+                        );
+                    });
+
+                    return;
+                } catch (UniqueConstraintViolationException $e) {
+                    if ($attempt >= self::MAX_UNIQUE_RETRIES) {
+                        throw $e;
+                    }
+
+                    // Back off a little so that contending requests do not keep colliding in lockstep.
+                    usleep(random_int(1000, 20000) * $attempt);
+                }
+            }
         }
     }
 
