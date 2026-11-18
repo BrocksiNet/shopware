@@ -289,3 +289,8 @@ DO $$ BEGIN
     CREATE CAST (character varying AS bytea) WITH FUNCTION mysql_compat_text_to_bytea(text) AS ASSIGNMENT;
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
+
+-- JSON path with quoted keys ($."key", used for customer ids by PromotionRedemptionUpdater), replaces the plain version above
+CREATE OR REPLACE FUNCTION mysql_compat_json_path(text) RETURNS text[] LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE
+    AS $$ SELECT COALESCE(array_agg(COALESCE(m[1], m[2], m[3]) ORDER BY n), ARRAY[]::text[])
+          FROM regexp_matches(regexp_replace($1, '^\$', ''), '\."([^"]*)"|\[(\d+)\]|\.?([^.\[]+)', 'g') WITH ORDINALITY AS t(m, n) $$;
