@@ -131,7 +131,7 @@ final class DalNewsletterRecipientStorage implements NewsletterRecipientStorage
             confirmedAt: $confirmedAt === null ? null : \DateTimeImmutable::createFromInterface($confirmedAt),
             salutation: $salutation === null ? null : new NewsletterSalutation(
                 $salutation->getId(),
-                $salutation->getSalutationKey(),
+                $salutation->getSalutationKey() ?? '',
                 $salutation->getTranslation('displayName') ?? $salutation->getDisplayName(),
                 $salutation->getTranslation('letterName') ?? $salutation->getLetterName(),
             ),

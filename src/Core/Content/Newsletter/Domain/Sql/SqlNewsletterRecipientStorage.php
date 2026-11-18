@@ -4,6 +4,7 @@ namespace Shopware\Core\Content\Newsletter\Domain\Sql;
 
 use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
+use Psr\Clock\ClockInterface;
 use Shopware\Core\Content\Newsletter\Domain\NewsletterRecipient;
 use Shopware\Core\Content\Newsletter\Domain\NewsletterRecipientStorage;
 use Shopware\Core\Content\Newsletter\Domain\NewsletterRecipientWrite;
@@ -36,8 +37,10 @@ final class SqlNewsletterRecipientStorage implements NewsletterRecipientStorage
     /**
      * @internal
      */
-    public function __construct(private readonly Connection $connection)
-    {
+    public function __construct(
+        private readonly Connection $connection,
+        private readonly ClockInterface $clock,
+    ) {
     }
 
     public function findByEmail(string $email, string $salesChannelId, Context $context): ?NewsletterRecipient
@@ -78,7 +81,7 @@ final class SqlNewsletterRecipientStorage implements NewsletterRecipientStorage
 
         $values += array_filter($optional, static fn ($v) => $v !== null);
 
-        $now = (new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->format(Defaults::STORAGE_DATE_TIME_FORMAT);
+        $now = $this->now();
         $columns = array_keys($values);
         $updates = array_map(static fn (string $c) => \sprintf('`%1$s` = VALUES(`%1$s`)', $c), array_values(array_diff($columns, ['id'])));
         $updates[] = '`updated_at` = :updatedAt';
@@ -101,7 +104,7 @@ final class SqlNewsletterRecipientStorage implements NewsletterRecipientStorage
             [
                 'status' => NewsletterStatus::OptIn->value,
                 'confirmedAt' => $confirmedAt->setTimezone(new \DateTimeZone('UTC'))->format(Defaults::STORAGE_DATE_TIME_FORMAT),
-                'updatedAt' => self::now(),
+                'updatedAt' => $this->now(),
                 'id' => Uuid::fromHexToBytes($id),
             ],
         );
@@ -111,7 +114,7 @@ final class SqlNewsletterRecipientStorage implements NewsletterRecipientStorage
     {
         $this->connection->executeStatement(
             'UPDATE `newsletter_recipient` SET `status` = :status, `updated_at` = :updatedAt WHERE `id` = :id',
-            ['status' => NewsletterStatus::OptOut->value, 'updatedAt' => self::now(), 'id' => Uuid::fromHexToBytes($id)],
+            ['status' => NewsletterStatus::OptOut->value, 'updatedAt' => $this->now(), 'id' => Uuid::fromHexToBytes($id)],
         );
     }
 
@@ -193,8 +196,8 @@ final class SqlNewsletterRecipientStorage implements NewsletterRecipientStorage
         return \is_string($value) ? new \DateTimeImmutable($value, new \DateTimeZone('UTC')) : null;
     }
 
-    private static function now(): string
+    private function now(): string
     {
-        return (new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->format(Defaults::STORAGE_DATE_TIME_FORMAT);
+        return $this->clock->now()->setTimezone(new \DateTimeZone('UTC'))->format(Defaults::STORAGE_DATE_TIME_FORMAT);
     }
 }

@@ -65,7 +65,7 @@ return static function (ContainerConfigurator $containerConfigurator): void {
         ]);
 
     $services->set(SqlNewsletterRecipientStorage::class)
-        ->args([service(Connection::class)]);
+        ->args([service(Connection::class), service(ClockInterface::class)]);
 
     $services->alias(NewsletterRecipientStorage::class, DalNewsletterRecipientStorage::class);
 

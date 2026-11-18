@@ -19,6 +19,7 @@ use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Test\TestCaseBase\IntegrationTestBehaviour;
 use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\Test\TestDefaults;
+use Symfony\Component\Clock\NativeClock;
 
 /**
  * Both adapters must behave the same, on every database the project supports.
@@ -184,7 +185,7 @@ class NewsletterRecipientStorageTest extends TestCase
         $container = static::getContainer();
 
         if ($adapter === SqlNewsletterRecipientStorage::class) {
-            return new SqlNewsletterRecipientStorage($this->connection());
+            return new SqlNewsletterRecipientStorage($this->connection(), new NativeClock());
         }
 
         /** @var EntityRepository<*> $recipients */
