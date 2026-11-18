@@ -27,6 +27,9 @@ class IdCodecStatement extends AbstractStatementMiddleware
 
         if ($encoded !== $value) {
             $type = ParameterType::STRING;
+        } elseif ($type === ParameterType::STRING && \is_string($value) && (str_contains($value, "\0") || !mb_check_encoding($value, 'UTF-8'))) {
+            // A text parameter ends at the first NUL byte, the rest would be dropped without an error (e.g. PHP serialize() output)
+            $type = ParameterType::BINARY;
         }
 
         parent::bindValue($param, $encoded, $type);

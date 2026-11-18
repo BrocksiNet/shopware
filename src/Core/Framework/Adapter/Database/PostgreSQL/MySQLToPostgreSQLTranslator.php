@@ -13,6 +13,7 @@ use Shopware\Core\Framework\Log\Package;
  * - 'back\\slash' => E'back\\slash'
  * - # comment     => removed
  * - a <=> b        => a IS NOT DISTINCT FROM b
+ * - AS 'alias'     => AS "alias"
  * - AS mixedCase   => column name restored in the result, see translate()
  *
  * @internal
@@ -71,7 +72,9 @@ class MySQLToPostgreSQLTranslator
 
             if ($char === '\'' || $char === '"') {
                 [$content, $i] = $this->readString($sql, $i, $char);
-                $out .= $this->stringLiteral($content);
+                // MySQL accepts a string literal as column alias: SELECT x AS '0'
+                $isAlias = preg_match('/\bAS\s+$/i', substr($out, -12)) === 1;
+                $out .= $isAlias ? '"' . str_replace('"', '""', $content) . '"' : $this->stringLiteral($content);
 
                 continue;
             }
