@@ -25,6 +25,11 @@ class SqlTranslationMiddleware implements Middleware
             public function connect(#[\SensitiveParameter] array $params): Connection
             {
                 return new class(parent::connect($params), new MySQLToPostgreSQLTranslator()) extends AbstractConnectionMiddleware {
+                    /**
+                     * @var array<string, list<string>>
+                     */
+                    private array $primaryKeys = [];
+
                     public function __construct(Connection $connection, private readonly MySQLToPostgreSQLTranslator $translator)
                     {
                         parent::__construct($connection);
@@ -34,7 +39,7 @@ class SqlTranslationMiddleware implements Middleware
                     {
                         [$translated, $caseMap] = $this->translator->translate($sql);
 
-                        return new ColumnCaseStatement(parent::prepare($translated), $caseMap);
+                        return new ColumnCaseStatement(parent::prepare($this->rewriteUpsert($translated)), $caseMap);
                     }
 
                     public function query(string $sql): Result
@@ -47,7 +52,35 @@ class SqlTranslationMiddleware implements Middleware
 
                     public function exec(string $sql): int|string
                     {
-                        return parent::exec($this->translator->translate($sql)[0]);
+                        return parent::exec($this->rewriteUpsert($this->translator->translate($sql)[0]));
+                    }
+
+                    private function rewriteUpsert(string $sql): string
+                    {
+                        if (stripos($sql, 'IGNORE') === false && stripos($sql, 'REPLACE') === false && stripos($sql, 'DUPLICATE') === false) {
+                            return $sql;
+                        }
+
+                        return UpsertRewriter::rewrite($sql, $this->getPrimaryKey(...));
+                    }
+
+                    /**
+                     * @return list<string>
+                     */
+                    private function getPrimaryKey(string $table): array
+                    {
+                        if (isset($this->primaryKeys[$table])) {
+                            return $this->primaryKeys[$table];
+                        }
+
+                        $columns = parent::query(
+                            'SELECT a.attname FROM pg_index i'
+                            . ' JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)'
+                            . ' WHERE i.indisprimary AND i.indrelid = to_regclass(' . parent::quote('"' . $table . '"') . ')'
+                            . ' ORDER BY array_position(i.indkey::int[], a.attnum::int)'
+                        )->fetchFirstColumn();
+
+                        return $this->primaryKeys[$table] = array_map(strval(...), $columns);
                     }
                 };
             }

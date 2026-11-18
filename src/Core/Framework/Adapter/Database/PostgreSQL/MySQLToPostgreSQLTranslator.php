@@ -138,6 +138,13 @@ class MySQLToPostgreSQLTranslator
 
                     continue;
                 }
+                // `user` is a valid unquoted table name on MySQL and a reserved word on PostgreSQL
+                if ($lower === 'user' && ($i === 0 || $sql[$i - 1] !== ':') && (ltrim(substr($sql, $i + $wordLength, 8))[0] ?? '') !== '(') {
+                    $out .= '"user"';
+                    $i += $wordLength;
+
+                    continue;
+                }
                 if ($word !== $lower && $word !== strtoupper($word)) {
                     $caseMap[$lower] ??= $word;
                 }
