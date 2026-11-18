@@ -88,6 +88,10 @@ class DdlRewriterTest extends TestCase
      */
     public static function fragmentProvider(): iterable
     {
+        yield 'unnamed foreign keys are numbered like MySQL' => [
+            'CREATE TABLE `t` (`a` BINARY(16) NOT NULL, `b` BINARY(16) NOT NULL, FOREIGN KEY (`a`) REFERENCES `x` (`id`), FOREIGN KEY (`b`) REFERENCES `y` (`id`))',
+            ['CONSTRAINT "t_ibfk_1" FOREIGN KEY', 'CONSTRAINT "t_ibfk_2" FOREIGN KEY'],
+        ];
         yield 'binary 16 is uuid' => [
             'CREATE TABLE `t` (`id` BINARY(16) NOT NULL, PRIMARY KEY (`id`))',
             ['CREATE TABLE "t"', '"id" uuid NOT NULL', 'PRIMARY KEY ("id")'],

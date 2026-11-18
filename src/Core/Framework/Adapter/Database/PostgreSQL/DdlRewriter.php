@@ -195,6 +195,7 @@ class DdlRewriter
         $indexes = [];
         $indexedPrefixes = [];
         $foreignKeys = [];
+        $unnamedForeignKeys = 0;
         foreach ($items as $item) {
             $item = trim($item);
 
@@ -230,7 +231,8 @@ class DdlRewriter
                 continue;
             }
             if (preg_match('/^(?:CONSTRAINT\s+(' . self::IDENT . ')\s+)?FOREIGN\s+KEY\s*(?:' . self::IDENT . '\s*)?\(([^)]*)\)\s*(REFERENCES\s+.*)$/is', $item, $k) === 1) {
-                $name = $k[1] !== '' ? self::ident($k[1]) : $table . '_ibfk';
+                // MySQL names an unnamed foreign key <table>_ibfk_<n>, counted per table
+                $name = $k[1] !== '' ? self::ident($k[1]) : $table . '_ibfk_' . ++$unnamedForeignKeys;
                 $lines[] = 'CONSTRAINT ' . self::quote($name) . ' FOREIGN KEY (' . self::columnList($k[2], false) . ') ' . self::foreignKeyTarget($k[3]);
                 $foreignKeys[] = [$name, self::columnNames($k[2])];
 
@@ -352,7 +354,8 @@ class DdlRewriter
                 continue;
             }
             if (preg_match('/^ADD\s+(?:CONSTRAINT\s+(' . self::IDENT . ')\s+)?FOREIGN\s+KEY\s*(?:' . self::IDENT . '\s*)?\(([^)]*)\)\s*(REFERENCES\s+.*)$/is', $action, $m) === 1) {
-                $name = $m[1] !== '' ? self::ident($m[1]) : $table . '_ibfk';
+                // the number MySQL would pick depends on the existing constraints, the column names keep the name unique
+                $name = $m[1] !== '' ? self::ident($m[1]) : $table . '_ibfk_' . implode('_', self::columnNames($m[2]));
                 $columns = self::columnNames($m[2]);
                 $statements[] = $alter('ADD CONSTRAINT ' . self::quote($name) . ' FOREIGN KEY (' . self::columnList($m[2], false) . ') ' . self::foreignKeyTarget($m[3]));
                 // MySQL creates the index for the foreign key only when no index starts with its columns
