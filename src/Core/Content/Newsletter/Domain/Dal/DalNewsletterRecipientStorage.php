@@ -136,6 +136,8 @@ final class DalNewsletterRecipientStorage implements NewsletterRecipientStorage
                 $salutation->getTranslation('letterName') ?? $salutation->getLetterName(),
             ),
             customFields: $entity->getCustomFields(),
+            createdAt: $entity->getCreatedAt() === null ? null : \DateTimeImmutable::createFromInterface($entity->getCreatedAt()),
+            updatedAt: $entity->getUpdatedAt() === null ? null : \DateTimeImmutable::createFromInterface($entity->getUpdatedAt()),
         );
     }
 }

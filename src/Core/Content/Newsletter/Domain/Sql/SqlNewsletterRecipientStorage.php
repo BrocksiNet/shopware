@@ -2,6 +2,7 @@
 
 namespace Shopware\Core\Content\Newsletter\Domain\Sql;
 
+use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Content\Newsletter\Domain\NewsletterRecipient;
 use Shopware\Core\Content\Newsletter\Domain\NewsletterRecipientStorage;
@@ -26,14 +27,10 @@ final class SqlNewsletterRecipientStorage implements NewsletterRecipientStorage
         SELECT LOWER(HEX(r.`id`)) AS id, r.`email`, r.`status`, r.`hash`,
                LOWER(HEX(r.`language_id`)) AS language_id, LOWER(HEX(r.`sales_channel_id`)) AS sales_channel_id,
                r.`title`, r.`first_name`, r.`last_name`, r.`zip_code`, r.`city`, r.`street`,
-               LOWER(HEX(r.`salutation_id`)) AS salutation_id, r.`confirmed_at`, r.`custom_fields`,
-               s.`salutation_key`,
-               COALESCE(st.`display_name`, sd.`display_name`) AS display_name,
-               COALESCE(st.`letter_name`, sd.`letter_name`) AS letter_name
+               LOWER(HEX(r.`salutation_id`)) AS salutation_id, r.`confirmed_at`, r.`custom_fields`, r.`created_at`, r.`updated_at`,
+               s.`salutation_key`
         FROM `newsletter_recipient` r
         LEFT JOIN `salutation` s ON s.`id` = r.`salutation_id`
-        LEFT JOIN `salutation_translation` st ON st.`salutation_id` = s.`id` AND st.`language_id` = :languageId
-        LEFT JOIN `salutation_translation` sd ON sd.`salutation_id` = s.`id` AND sd.`language_id` = :defaultLanguageId
         SQL;
 
     /**
@@ -132,16 +129,14 @@ final class SqlNewsletterRecipientStorage implements NewsletterRecipientStorage
     {
         $row = $this->connection->fetchAssociative(
             self::SELECT . ' WHERE ' . $where . ' LIMIT 1',
-            $params + [
-                'languageId' => Uuid::fromHexToBytes($context->getLanguageId()),
-                'defaultLanguageId' => Uuid::fromHexToBytes(Defaults::LANGUAGE_SYSTEM),
-            ],
+            $params,
         );
 
         if ($row === false) {
             return null;
         }
 
+        $translation = $row['salutation_id'] === null ? null : $this->salutationTranslation($row['salutation_id'], $context);
         $custom = $row['custom_fields'] === null ? null : json_decode((string) $row['custom_fields'], true, 512, \JSON_THROW_ON_ERROR);
 
         return new NewsletterRecipient(
@@ -161,9 +156,41 @@ final class SqlNewsletterRecipientStorage implements NewsletterRecipientStorage
             confirmedAt: $row['confirmed_at'] === null ? null : new \DateTimeImmutable((string) $row['confirmed_at'], new \DateTimeZone('UTC')),
             salutation: $row['salutation_id'] === null || $row['salutation_key'] === null
                 ? null
-                : new NewsletterSalutation($row['salutation_id'], $row['salutation_key'], $row['display_name'], $row['letter_name']),
+                : new NewsletterSalutation($row['salutation_id'], $row['salutation_key'], $translation['display_name'] ?? null, $translation['letter_name'] ?? null),
             customFields: \is_array($custom) ? $custom : null,
+            createdAt: self::date($row['created_at']),
+            updatedAt: self::date($row['updated_at']),
         );
+    }
+
+    /**
+     * Follows the language chain (context language, parents, system language) like the DAL translation inheritance.
+     * The first language of the chain that has a translation wins, the fields are taken from it and filled up from the next ones.
+     *
+     * @return array{display_name: ?string, letter_name: ?string}
+     */
+    private function salutationTranslation(string $salutationId, Context $context): array
+    {
+        $chain = $context->getLanguageIdChain();
+        $rows = $this->connection->fetchAllAssociative(
+            'SELECT LOWER(HEX(`language_id`)) AS language_id, `display_name`, `letter_name` FROM `salutation_translation` WHERE `salutation_id` = :id AND `language_id` IN (:languages)',
+            ['id' => Uuid::fromHexToBytes($salutationId), 'languages' => array_map(Uuid::fromHexToBytes(...), $chain)],
+            ['languages' => ArrayParameterType::BINARY],
+        );
+        $byLanguage = array_column($rows, null, 'language_id');
+
+        $result = ['display_name' => null, 'letter_name' => null];
+        foreach ($chain as $languageId) {
+            $result['display_name'] ??= $byLanguage[$languageId]['display_name'] ?? null;
+            $result['letter_name'] ??= $byLanguage[$languageId]['letter_name'] ?? null;
+        }
+
+        return $result;
+    }
+
+    private static function date(mixed $value): ?\DateTimeImmutable
+    {
+        return \is_string($value) ? new \DateTimeImmutable($value, new \DateTimeZone('UTC')) : null;
     }
 
     private static function now(): string

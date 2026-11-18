@@ -12,6 +12,7 @@ use Shopware\Core\Content\Newsletter\Domain\NewsletterRecipientWrite;
 use Shopware\Core\Content\Newsletter\Domain\NewsletterStatus;
 use Shopware\Core\Content\Newsletter\Domain\Sql\SqlNewsletterRecipientStorage;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Api\Context\SystemSource;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\Log\Package;
@@ -64,6 +65,7 @@ class NewsletterRecipientStorageTest extends TestCase
         static::assertNotEmpty($found->salutation->displayName);
         static::assertSame($write->languageId, $found->languageId);
         static::assertSame(TestDefaults::SALES_CHANNEL, $found->salesChannelId);
+        static::assertNotNull($found->createdAt);
     }
 
     /**
@@ -124,6 +126,29 @@ class NewsletterRecipientStorageTest extends TestCase
         static::assertNotNull($optedOut);
         static::assertSame(NewsletterStatus::OptOut, $optedOut->status);
         static::assertNotNull($optedOut->confirmedAt);
+    }
+
+    public function testSalutationFollowsTheLanguageChain(): void
+    {
+        $parentLanguageId = $this->connection()->fetchOne(
+            'SELECT LOWER(HEX(`language_id`)) FROM `salutation_translation` WHERE `language_id` <> :system LIMIT 1',
+            ['system' => Uuid::fromHexToBytes(Defaults::LANGUAGE_SYSTEM)]
+        );
+        if (!\is_string($parentLanguageId)) {
+            static::markTestSkipped('The salutation has no translation besides the system language.');
+        }
+
+        $write = $this->write('chain@example.com', salutationId: $this->salutationId());
+        $this->storage(DalNewsletterRecipientStorage::class)->upsert($write, Context::createDefaultContext());
+
+        // a sub language without own translation that inherits from a parent which is not the system language
+        $context = new Context(new SystemSource(), [], Defaults::CURRENCY, [Uuid::randomHex(), $parentLanguageId, Defaults::LANGUAGE_SYSTEM]);
+
+        $viaDal = $this->storage(DalNewsletterRecipientStorage::class)->findByEmail('chain@example.com', TestDefaults::SALES_CHANNEL, $context);
+        $viaSql = $this->storage(SqlNewsletterRecipientStorage::class)->findByEmail('chain@example.com', TestDefaults::SALES_CHANNEL, $context);
+
+        static::assertNotNull($viaSql);
+        static::assertEquals($viaDal?->salutation, $viaSql->salutation);
     }
 
     /**

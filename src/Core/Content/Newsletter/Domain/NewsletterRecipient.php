@@ -32,6 +32,8 @@ final readonly class NewsletterRecipient
         public ?\DateTimeImmutable $confirmedAt = null,
         public ?NewsletterSalutation $salutation = null,
         public ?array $customFields = null,
+        public ?\DateTimeImmutable $createdAt = null,
+        public ?\DateTimeImmutable $updatedAt = null,
     ) {
     }
 }

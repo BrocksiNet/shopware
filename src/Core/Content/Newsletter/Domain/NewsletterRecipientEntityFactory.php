@@ -50,6 +50,12 @@ final class NewsletterRecipientEntityFactory
             $entity->setConfirmedAt($recipient->confirmedAt);
         }
         $entity->setCustomFields($recipient->customFields);
+        if ($recipient->createdAt !== null) {
+            $entity->setCreatedAt($recipient->createdAt);
+        }
+        if ($recipient->updatedAt !== null) {
+            $entity->setUpdatedAt($recipient->updatedAt);
+        }
 
         if ($recipient->salutation !== null) {
             $salutation = new SalutationEntity();
