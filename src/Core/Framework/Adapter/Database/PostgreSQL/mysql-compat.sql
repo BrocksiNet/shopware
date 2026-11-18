@@ -76,6 +76,15 @@ CREATE OR REPLACE FUNCTION mysql_compat_text_mul_int(text, integer) RETURNS nume
 DO $$ BEGIN
     CREATE OPERATOR * (LEFTARG = text, RIGHTARG = integer, FUNCTION = mysql_compat_text_mul_int);
 EXCEPTION WHEN duplicate_function THEN NULL; END $$;
+CREATE OR REPLACE FUNCTION mysql_compat_text_add_numeric(text, numeric) RETURNS numeric LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE
+    RETURN $1::numeric + $2;
+DO $$ BEGIN
+    CREATE OPERATOR + (LEFTARG = text, RIGHTARG = numeric, FUNCTION = mysql_compat_text_add_numeric);
+EXCEPTION WHEN duplicate_function THEN NULL; END $$;
+
+-- LOWER() on a JSON column returns the lower cased JSON text ---------------------------------------------------------------
+CREATE OR REPLACE FUNCTION lower(jsonb) RETURNS text LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE
+    RETURN lower($1::text);
 
 -- MIN() / MAX() / SUM() on booleans (TINYINT(1) on MySQL) -----------------------------------------------------------------
 CREATE OR REPLACE FUNCTION mysql_compat_bool_sum_step(bigint, boolean) RETURNS bigint LANGUAGE sql IMMUTABLE PARALLEL SAFE
