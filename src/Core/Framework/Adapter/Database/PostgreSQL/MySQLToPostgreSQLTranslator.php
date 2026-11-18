@@ -3,6 +3,7 @@
 namespace Shopware\Core\Framework\Adapter\Database\PostgreSQL;
 
 use Shopware\Core\Framework\Log\Package;
+use Shopware\Core\Framework\Util\Hasher;
 
 /**
  * Rewrites the lexical parts of MySQL flavoured SQL that PostgreSQL does not understand.
@@ -78,11 +79,13 @@ class MySQLToPostgreSQLTranslator
             }
 
             $body = substr($sql, $start, $end - $start);
-            $orderBy = $this->topLevelWord($body, '/\bORDER\s+BY\b/i');
+            preg_match_all('/\bORDER\s+BY\b/i', $body, $orderMatches, \PREG_OFFSET_CAPTURE);
+            $orderBy = $this->topLevelWord($body, $orderMatches[0]);
             if ($orderBy === null) {
                 continue;
             }
-            $separator = $this->topLevelWord($body, '/\bSEPARATOR\b/i');
+            preg_match_all('/\bSEPARATOR\b/i', $body, $separatorMatches, \PREG_OFFSET_CAPTURE);
+            $separator = $this->topLevelWord($body, $separatorMatches[0]);
 
             $expression = rtrim(substr($body, 0, $orderBy[0]));
             $order = trim(substr($body, $orderBy[0] + $orderBy[1], $separator === null || $separator[0] < $orderBy[0] ? null : $separator[0] - $orderBy[0] - $orderBy[1]));
@@ -117,21 +120,23 @@ class MySQLToPostgreSQLTranslator
     }
 
     /**
+     * @param array<int, array{string, int}> $candidates matches of a preg_match_all call with PREG_OFFSET_CAPTURE
+     *
      * @return array{int, int}|null position and length of the first match outside of strings and nested parentheses
      */
-    private function topLevelWord(string $body, string $pattern): ?array
+    private function topLevelWord(string $body, array $candidates): ?array
     {
-        if (preg_match_all($pattern, $body, $matches, \PREG_OFFSET_CAPTURE) < 1) {
-            return null;
-        }
-
-        foreach ($matches[0] as [$text, $position]) {
+        foreach ($candidates as [$text, $position]) {
             $depth = 0;
             $quote = null;
             for ($i = 0; $i < $position; ++$i) {
                 $char = $body[$i];
                 if ($quote !== null) {
-                    $quote = $char === $quote ? null : $quote;
+                    if ($char === '\\' && $quote === '\'') {
+                        ++$i;
+                    } elseif ($char === $quote) {
+                        $quote = null;
+                    }
                 } elseif ($char === '\'' || $char === '"' || $char === '`') {
                     $quote = $char;
                 } elseif ($char === '(') {
@@ -173,7 +178,7 @@ class MySQLToPostgreSQLTranslator
             if ($char === '\'' || $char === '"') {
                 [$content, $i] = $this->readString($sql, $i, $char);
                 // MySQL accepts a string literal as column alias: SELECT x AS '0'
-                $isAlias = preg_match('/\bAS\s+$/i', substr($out, -12)) === 1;
+                $isAlias = preg_match('/\bAS\s+$/iD', substr($out, -12)) === 1;
                 if ($isAlias) {
                     $out .= $this->identifier($content, $caseMap);
                 } elseif ($this->followsJsonExtract($out)) {
@@ -270,7 +275,7 @@ class MySQLToPostgreSQLTranslator
                 }
                 // x REGEXP y => x ~* y, x NOT REGEXP y => x !~* y (case insensitive like the MySQL default collation, COLLATE "C" because regular expressions reject the nondeterministic "ci" collation)
                 if ($lower === 'regexp' || $lower === 'rlike') {
-                    $out = preg_match('/\bNOT\s+$/i', $out, $not) === 1 ? substr($out, 0, -\strlen($not[0])) . ' COLLATE "C" !~* ' : $out . ' COLLATE "C" ~* ';
+                    $out = preg_match('/\bNOT\s+$/iD', $out, $not) === 1 ? substr($out, 0, -\strlen($not[0])) . ' COLLATE "C" !~* ' : $out . ' COLLATE "C" ~* ';
                     $i += $wordLength;
 
                     continue;
@@ -284,7 +289,7 @@ class MySQLToPostgreSQLTranslator
                     continue;
                 }
                 // CAST(x AS SIGNED [INTEGER]) / AS UNSIGNED => AS bigint
-                if (($lower === 'signed' || $lower === 'unsigned') && preg_match('/\bAS\s+$/i', substr($out, -12)) === 1) {
+                if (($lower === 'signed' || $lower === 'unsigned') && preg_match('/\bAS\s+$/iD', substr($out, -12)) === 1) {
                     $out .= 'bigint';
                     $i += $wordLength;
                     if (preg_match('/\G\s+INTEGER\b/i', $sql, $integer, 0, $i) === 1) {
@@ -309,7 +314,7 @@ class MySQLToPostgreSQLTranslator
                     continue;
                 }
                 // `user` is a valid unquoted table name on MySQL and a reserved word on PostgreSQL
-                if ($lower === 'user' && ($i === 0 || $sql[$i - 1] !== ':') && (ltrim(substr($sql, $i + $wordLength, 8))[0] ?? '') !== '(') {
+                if ($lower === 'user' && ($i === 0 || $sql[$i - 1] !== ':') && ((ltrim(substr($sql, $i + $wordLength, 8))[0] ?? '') !== '(' || preg_match('/\b(?:INTO|UPDATE|TABLE|JOIN)\s+$/iD', $out) === 1)) {
                     $out .= '"user"';
                     $i += $wordLength;
 
@@ -325,8 +330,13 @@ class MySQLToPostgreSQLTranslator
             }
 
             // JSON_EXTRACT(...) = :value, the bound value is a string
-            if (($char === '?' || ($char === ':' && preg_match('/\G:[A-Za-z_]\w*/', $sql, $named, 0, $i) === 1 && ($sql[$i - 1] ?? '') !== ':')) && $this->followsJsonExtract($out)) {
-                $name = $char === '?' ? '?' : $named[0];
+            $name = null;
+            if ($char === '?') {
+                $name = '?';
+            } elseif ($char === ':' && ($sql[$i - 1] ?? '') !== ':' && preg_match('/\G:[A-Za-z_]\w*/', $sql, $named, 0, $i) === 1) {
+                $name = $named[0];
+            }
+            if ($name !== null && $this->followsJsonExtract($out)) {
                 $out .= 'to_jsonb(' . $name . '::text)';
                 $i += \strlen($name);
 
@@ -406,7 +416,7 @@ class MySQLToPostgreSQLTranslator
     private function identifier(string $name, array &$caseMap): string
     {
         if (\strlen($name) > self::MAX_IDENTIFIER_LENGTH) {
-            $short = substr($name, 0, self::MAX_IDENTIFIER_LENGTH - 17) . '~' . substr(md5($name), 0, 16);
+            $short = substr($name, 0, self::MAX_IDENTIFIER_LENGTH - 17) . '~' . substr(Hasher::hash($name, 'md5'), 0, 16);
             $caseMap[$short] = $name;
             $name = $short;
         }
@@ -446,7 +456,7 @@ class MySQLToPostgreSQLTranslator
      */
     private function followsJsonExtract(string $out): bool
     {
-        if (preg_match('/\)\s*(?:=|!=|<>)\s*$/', $out, $m) !== 1) {
+        if (preg_match('/\)\s*(?:=|!=|<>)\s*$/D', $out, $m) !== 1) {
             return false;
         }
 
@@ -456,7 +466,7 @@ class MySQLToPostgreSQLTranslator
             if ($out[$i] === ')') {
                 ++$depth;
             } elseif ($out[$i] === '(' && --$depth === 0) {
-                return preg_match('/\bjson_extract\s*$/i', substr($out, 0, $i)) === 1;
+                return preg_match('/\bjson_extract\s*$/iD', substr($out, 0, $i)) === 1;
             }
         }
 

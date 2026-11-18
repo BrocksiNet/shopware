@@ -78,6 +78,13 @@ class MySQLToPostgreSQLTranslatorTest extends TestCase
         static::assertStringNotContainsString('"user"(', $sql);
     }
 
+    public function testUserTableWithColumnListIsQuoted(): void
+    {
+        [$sql] = (new MySQLToPostgreSQLTranslator())->translate('INSERT INTO user (id, username) VALUES (?, ?)');
+
+        static::assertSame('INSERT INTO "user" (id, username) VALUES (?, ?)', $sql);
+    }
+
     public function testLongIdentifierIsShortenedAndMapped(): void
     {
         $long = str_repeat('a', 70);
