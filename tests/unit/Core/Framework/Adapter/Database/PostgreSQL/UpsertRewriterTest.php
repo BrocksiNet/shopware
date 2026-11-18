@@ -59,7 +59,7 @@ class UpsertRewriterTest extends TestCase
         yield 'bare word that is an inserted column is qualified' => [
             'INSERT INTO "t" ("pk", "cnt") VALUES (1, 2) ON DUPLICATE KEY UPDATE "cnt" = cnt + 1',
             ['pk'],
-            ['"cnt" = "t".cnt + 1'],
+            ['"cnt" = "t"."cnt" + 1'],
         ];
 
         yield 'bare word that is no inserted column is untouched' => [
