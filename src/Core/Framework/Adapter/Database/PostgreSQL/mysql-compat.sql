@@ -92,3 +92,27 @@ CREATE OR REPLACE FUNCTION mysql_compat_bool_sum_step(bigint, boolean) RETURNS b
 CREATE OR REPLACE AGGREGATE max(boolean) (SFUNC = boolor_statefunc, STYPE = boolean);
 CREATE OR REPLACE AGGREGATE min(boolean) (SFUNC = booland_statefunc, STYPE = boolean);
 CREATE OR REPLACE AGGREGATE sum(boolean) (SFUNC = mysql_compat_bool_sum_step, STYPE = bigint);
+
+-- SHA2(text, 256) ----------------------------------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION sha2(text, integer) RETURNS text LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE
+    RETURN CASE $2
+        WHEN 224 THEN encode(sha224(convert_to($1, 'UTF8')), 'hex')
+        WHEN 256 THEN encode(sha256(convert_to($1, 'UTF8')), 'hex')
+        WHEN 384 THEN encode(sha384(convert_to($1, 'UTF8')), 'hex')
+        WHEN 512 THEN encode(sha512(convert_to($1, 'UTF8')), 'hex')
+    END;
+
+-- JSON_QUOTE('a"b') => "a\"b" ----------------------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION json_quote(text) RETURNS text LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE
+    RETURN to_json($1)::text;
+
+-- A JSON document built as text can be written to a jsonb column (UPDATE t SET json_column = CONCAT('[', ..., ']')) --------
+DO $$ BEGIN
+    CREATE CAST (text AS jsonb) WITH INOUT AS ASSIGNMENT;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- UPDATE t SET bool_column = 0 ---------------------------------------------------------------------------------------------
+-- The built in integer to boolean cast is explicit only and a second cast for the same pair can not be created.
+-- Changing the catalog needs a superuser and is not possible on most managed services, proof of concept only.
+UPDATE pg_cast SET castcontext = 'a'
+WHERE castsource = 'integer'::regtype AND casttarget = 'boolean'::regtype AND castcontext = 'e';

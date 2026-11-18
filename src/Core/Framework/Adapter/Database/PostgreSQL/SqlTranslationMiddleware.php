@@ -39,7 +39,7 @@ class SqlTranslationMiddleware implements Middleware
                     {
                         [$translated, $caseMap] = $this->translator->translate($sql);
 
-                        return new ColumnCaseStatement(parent::prepare($this->rewriteUpsert($translated)), $caseMap);
+                        return new ColumnCaseStatement(parent::prepare($this->rewriteStatement($translated)), $caseMap);
                     }
 
                     public function query(string $sql): Result
@@ -52,11 +52,15 @@ class SqlTranslationMiddleware implements Middleware
 
                     public function exec(string $sql): int|string
                     {
-                        return parent::exec($this->rewriteUpsert($this->translator->translate($sql)[0]));
+                        return parent::exec($this->rewriteStatement($this->translator->translate($sql)[0]));
                     }
 
-                    private function rewriteUpsert(string $sql): string
+                    private function rewriteStatement(string $sql): string
                     {
+                        if (stripos($sql, 'UPDATE') !== false) {
+                            $sql = UpdateRewriter::rewrite($sql);
+                        }
+
                         if (stripos($sql, 'IGNORE') === false && stripos($sql, 'REPLACE') === false && stripos($sql, 'DUPLICATE') === false) {
                             return $sql;
                         }
