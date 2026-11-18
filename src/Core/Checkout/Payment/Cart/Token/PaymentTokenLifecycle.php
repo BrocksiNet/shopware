@@ -21,7 +21,7 @@ class PaymentTokenLifecycle
     public function invalidateToken(string $tokenId): bool
     {
         if (Feature::isActive('REPEATED_PAYMENT_FINALIZE')) {
-            $this->connection->update('payment_token', ['consumed' => 1], ['token' => $tokenId]);
+            $this->connection->update('payment_token', ['consumed' => true], ['token' => $tokenId]);
         } else {
             $this->connection->delete('payment_token', ['token' => $tokenId]);
         }

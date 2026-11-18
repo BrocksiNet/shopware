@@ -115,12 +115,6 @@ DO $$ BEGIN
     CREATE CAST (text AS jsonb) WITH INOUT AS ASSIGNMENT;
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
--- UPDATE t SET bool_column = 0 ---------------------------------------------------------------------------------------------
--- The built in integer to boolean cast is explicit only and a second cast for the same pair can not be created.
--- Changing the catalog needs a superuser and is not possible on most managed services, proof of concept only.
-UPDATE pg_cast SET castcontext = 'a'
-WHERE castsource = 'integer'::regtype AND casttarget = 'boolean'::regtype AND castcontext = 'e';
-
 -- JSON_CONTAINS(doc, candidate) --------------------------------------------------------------------------------------------
 -- Only the two argument form (containment), the path argument is not supported.
 CREATE OR REPLACE FUNCTION json_contains(jsonb, jsonb) RETURNS boolean LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE

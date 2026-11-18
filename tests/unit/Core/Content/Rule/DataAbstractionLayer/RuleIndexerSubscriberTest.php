@@ -34,7 +34,7 @@ class RuleIndexerSubscriberTest extends TestCase
 
         $connection->expects($this->once())
             ->method('prepare')
-            ->with('UPDATE `rule` SET `payload` = null, `invalid` = 0, `updated_at` = :updatedAt')
+            ->with('UPDATE `rule` SET `payload` = null, `invalid` = FALSE, `updated_at` = :updatedAt')
             ->willReturn($statement);
 
         $subscriber = new RuleIndexerSubscriber($connection, $cartRuleLoader, $clock);

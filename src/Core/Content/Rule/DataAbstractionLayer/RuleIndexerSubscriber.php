@@ -50,7 +50,7 @@ class RuleIndexerSubscriber implements EventSubscriberInterface
         $now = $this->clock->now()->format(Defaults::STORAGE_DATE_TIME_FORMAT);
         $update = new RetryableQuery(
             $this->connection,
-            $this->connection->prepare('UPDATE `rule` SET `payload` = null, `invalid` = 0, `updated_at` = :updatedAt')
+            $this->connection->prepare('UPDATE `rule` SET `payload` = null, `invalid` = FALSE, `updated_at` = :updatedAt')
         );
         $update->execute([
             'updatedAt' => $now,

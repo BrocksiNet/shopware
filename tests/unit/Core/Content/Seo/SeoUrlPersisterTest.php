@@ -285,7 +285,7 @@ class SeoUrlPersisterTest extends TestCase
         $connection->expects($this->once())
             ->method('executeStatement')
             ->with(
-                'UPDATE seo_url SET is_canonical = 1, is_modified = 1 WHERE id IN (:ids)',
+                'UPDATE seo_url SET is_canonical = TRUE, is_modified = TRUE WHERE id IN (:ids)',
                 ['ids' => $expectedIds],
                 ['ids' => ArrayParameterType::BINARY]
             );

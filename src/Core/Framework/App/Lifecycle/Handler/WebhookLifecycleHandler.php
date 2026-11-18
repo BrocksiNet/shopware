@@ -22,7 +22,7 @@ use Shopware\Core\Framework\Webhook\WebhookCacheClearer;
  * @internal only for use by the app-system
  *
  * @phpstan-type WebhookFromXml array{name: string, eventName: string, url: string, appId: string, active?: bool, onlyLiveVersion?: bool, errorCount?: int}
- * @phpstan-type WebhookRecord array{name: string, event_name: string, url: string, only_live_version: int, app_id: string, active: int, error_count: int}
+ * @phpstan-type WebhookRecord array{name: string, event_name: string, url: string, only_live_version: bool, app_id: string, active: bool, error_count: int}
  */
 #[Package('framework')]
 class WebhookLifecycleHandler extends AbstractLifecycleHandler
@@ -149,9 +149,9 @@ class WebhookLifecycleHandler extends AbstractLifecycleHandler
             'name' => $webhook['name'],
             'event_name' => $webhook['eventName'],
             'url' => $webhook['url'],
-            'only_live_version' => \array_key_exists('onlyLiveVersion', $webhook) ? (int) $webhook['onlyLiveVersion'] : 0,
+            'only_live_version' => \array_key_exists('onlyLiveVersion', $webhook) ? (bool) $webhook['onlyLiveVersion'] : false,
             'error_count' => \array_key_exists('errorCount', $webhook) ? $webhook['errorCount'] : 0,
-            'active' => 1,
+            'active' => true,
             'app_id' => Uuid::fromHexToBytes($appId),
         ];
     }

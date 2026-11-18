@@ -116,7 +116,7 @@ class JWTFactoryV2 implements TokenFactoryInterfaceV2
         Feature::triggerDeprecationOrThrow('v6.8.0.0', Feature::deprecatedClassMessage(static::class, 'v6.8.0.0', PaymentTokenGenerator::class));
 
         if (Feature::isActive('REPEATED_PAYMENT_FINALIZE')) {
-            $this->connection->update('payment_token', ['consumed' => 1], ['token' => self::normalize($token)]);
+            $this->connection->update('payment_token', ['consumed' => true], ['token' => self::normalize($token)]);
         } else {
             $this->delete($token);
         }

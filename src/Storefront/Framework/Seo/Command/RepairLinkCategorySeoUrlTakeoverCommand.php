@@ -140,7 +140,7 @@ final readonly class RepairLinkCategorySeoUrlTakeoverCommand
 
         RetryableQuery::retryable($this->connection, function () use ($categories): void {
             $this->connection->executeStatement(
-                'UPDATE seo_url SET is_modified = 0 WHERE id IN (:ids)',
+                'UPDATE seo_url SET is_modified = FALSE WHERE id IN (:ids)',
                 ['ids' => Uuid::fromHexToBytesList(array_merge(...array_column($categories, 'lockedUrlIds')))],
                 ['ids' => ArrayParameterType::BINARY]
             );
