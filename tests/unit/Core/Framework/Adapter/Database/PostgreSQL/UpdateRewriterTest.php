@@ -34,9 +34,24 @@ class UpdateRewriterTest extends TestCase
             'UPDATE a SET x = b.y FROM b WHERE (c) AND (w)',
         ];
 
-        yield 'left join is unchanged' => [
+        yield 'left join keeps unmatched rows through a ctid subquery' => [
             'UPDATE a LEFT JOIN b ON c SET a.x = b.y WHERE w',
-            'UPDATE a LEFT JOIN b ON c SET a.x = b.y WHERE w',
+            'UPDATE a SET x = b.y FROM (SELECT a.ctid AS "__ctid", b.* FROM a LEFT JOIN b ON c) AS b WHERE a.ctid = b."__ctid" AND (w)',
+        ];
+
+        yield 'order by and limit become a ctid subquery' => [
+            'UPDATE "t" SET "a" = 1 WHERE "b" = 2 ORDER BY "c" LIMIT 5',
+            'UPDATE "t" SET "a" = 1 WHERE ctid IN (SELECT ctid FROM "t" WHERE "b" = 2 ORDER BY "c" LIMIT 5)',
+        ];
+
+        yield 'order by without limit is dropped' => [
+            'UPDATE "t" SET "a" = 1 ORDER BY "c"',
+            'UPDATE "t" SET "a" = 1 ',
+        ];
+
+        yield 'right join becomes inner join' => [
+            'UPDATE a RIGHT JOIN b ON c SET a.x = b.y WHERE w',
+            'UPDATE a SET x = b.y FROM b WHERE (c) AND (w)',
         ];
 
         yield 'plain update is unchanged' => [
