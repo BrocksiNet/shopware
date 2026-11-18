@@ -4,6 +4,7 @@ namespace Shopware\Core\System\NumberRange\ValueGenerator\Pattern\IncrementStora
 
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\ParameterType;
+use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use Psr\Clock\ClockInterface;
 use Shopware\Core\Defaults;
 use Shopware\Core\Framework\Log\Package;
@@ -32,6 +33,23 @@ class IncrementSqlStorage extends AbstractIncrementStorage
         $start = $config['start'] ?? 1;
         $varname = Uuid::randomHex();
         $stateId = Uuid::randomBytes();
+
+        if ($this->connection->getDatabasePlatform() instanceof PostgreSQLPlatform) {
+            // PostgreSQL has no user variables, the new value is read with RETURNING in the same statement
+            return (int) $this->connection->fetchOne(
+                'INSERT INTO number_range_state (id, last_value, number_range_id, created_at) VALUES (:stateId, :value, :id, :createdAt)
+                ON CONFLICT (number_range_id) DO UPDATE
+                SET last_value = GREATEST(number_range_state.last_value + 1, :value)
+                RETURNING last_value',
+                [
+                    'value' => $start,
+                    'id' => Uuid::fromHexToBytes($config['id']),
+                    'stateId' => $stateId,
+                    'createdAt' => $this->clock->now()->format(Defaults::STORAGE_DATE_TIME_FORMAT),
+                ]
+            );
+        }
+
         $this->connection->executeStatement(
             'INSERT `number_range_state` (`id`, `last_value`, `number_range_id`, `created_at`) VALUES (:stateId, :value, :id, :createdAt)
                 ON DUPLICATE KEY UPDATE

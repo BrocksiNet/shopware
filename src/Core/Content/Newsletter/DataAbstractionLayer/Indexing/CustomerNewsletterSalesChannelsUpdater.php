@@ -51,12 +51,12 @@ WHERE `newsletter_recipient`.`email` = `customer`.`email`
 AND #table#.`id` IN (:ids)
 SQL;
 
-        $resetTemplate = <<<'SQL'
-UPDATE `customer`
-LEFT JOIN `newsletter_recipient` ON `newsletter_recipient`.`email` = `customer`.`email`
-SET `customer`.`newsletter_sales_channel_ids` = NULL
-WHERE #table#.`id` IN (:ids)
-SQL;
+        // Written without a join in the UPDATE, so the statement is valid on every platform
+        $resetSql = 'UPDATE `customer` SET `newsletter_sales_channel_ids` = NULL WHERE `id` IN (:ids)';
+        if (!$reverseUpdate) {
+            $resetSql = 'UPDATE `customer` SET `newsletter_sales_channel_ids` = NULL
+                WHERE `email` IN (SELECT `email` FROM `newsletter_recipient` WHERE `id` IN (:ids))';
+        }
 
         $parameters = [
             'ids' => Uuid::fromHexToBytesList($ids),
@@ -71,12 +71,6 @@ SQL;
             array_keys($replacement),
             array_values($replacement),
             $tableTemplate
-        );
-
-        $resetSql = str_replace(
-            array_keys($replacement),
-            array_values($replacement),
-            $resetTemplate
         );
 
         RetryableQuery::retryable($this->connection, function () use ($resetSql, $parameters): void {

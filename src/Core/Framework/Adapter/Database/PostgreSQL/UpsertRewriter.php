@@ -60,7 +60,12 @@ class UpsertRewriter
             $assignments = substr($rest, $duplicatePosition + \strlen(self::ON_DUPLICATE));
             $assignments = (string) preg_replace('/\bVALUES\s*\(\s*("?[A-Za-z0-9_]+"?)\s*\)/i', 'EXCLUDED.$1', $assignments);
 
-            return $insert . substr($rest, 0, $duplicatePosition) . 'ON CONFLICT ' . $target . ' DO UPDATE SET' . $assignments;
+            $columns = [];
+            if (preg_match('/^\s*\(([^)]*)\)/', $rest, $columnMatch) === 1) {
+                $columns = array_map(static fn (string $column): string => strtolower(trim($column, " \t\n\r\"")), explode(',', $columnMatch[1]));
+            }
+
+            return $insert . substr($rest, 0, $duplicatePosition) . 'ON CONFLICT ' . $target . ' DO UPDATE SET' . self::qualify($assignments, $table, $columns);
         }
 
         if (preg_match('/^\s*\(([^)]*)\)/', $rest, $columnMatch) !== 1) {
@@ -78,6 +83,64 @@ class UpsertRewriter
         }
 
         return $insert . $rest . ' ON CONFLICT ' . $target . ' DO UPDATE SET ' . implode(', ', $update);
+    }
+
+    /**
+     * `count = count + 1` is ambiguous on PostgreSQL, the right side can mean the existing or the EXCLUDED row.
+     * MySQL reads the existing row, so the columns on the right side are qualified with the table.
+     * Quoted identifiers are always qualified, bare words only if they are one of the inserted columns.
+     *
+     * @param list<string> $columns lower cased
+     */
+    private static function qualify(string $assignments, string $table, array $columns): string
+    {
+        $parts = [];
+        $depth = 0;
+        $start = 0;
+        $quote = null;
+        $length = \strlen($assignments);
+        for ($i = 0; $i < $length; ++$i) {
+            $char = $assignments[$i];
+            if ($quote !== null) {
+                $quote = $char === $quote ? null : $quote;
+            } elseif ($char === '\'' || $char === '"') {
+                $quote = $char;
+            } elseif ($char === '(') {
+                ++$depth;
+            } elseif ($char === ')') {
+                --$depth;
+            } elseif ($char === ',' && $depth === 0) {
+                $parts[] = substr($assignments, $start, $i - $start);
+                $start = $i + 1;
+            }
+        }
+        $parts[] = substr($assignments, $start);
+
+        foreach ($parts as $index => $part) {
+            $equals = strpos($part, '=');
+            if ($equals === false) {
+                continue;
+            }
+
+            $right = preg_replace_callback(
+                '/\'(?:[^\']|\'\')*\'|(?<![.\w"$:])("?)([A-Za-z_][A-Za-z0-9_]*)\1(?!\s*[.(]|[\w"])/',
+                static function (array $match) use ($table, $columns): string {
+                    if (!isset($match[2])) {
+                        return $match[0];
+                    }
+                    if ($match[1] === '' && !\in_array(strtolower($match[2]), $columns, true)) {
+                        return $match[0];
+                    }
+
+                    return self::quote($table) . '.' . self::quote($match[2]);
+                },
+                substr($part, $equals + 1)
+            );
+
+            $parts[$index] = substr($part, 0, $equals + 1) . $right;
+        }
+
+        return implode(',', $parts);
     }
 
     private static function quote(string $identifier): string

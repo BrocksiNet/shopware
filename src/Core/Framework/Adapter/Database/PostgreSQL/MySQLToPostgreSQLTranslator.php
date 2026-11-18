@@ -15,6 +15,7 @@ use Shopware\Core\Framework\Log\Package;
  * - a <=> b        => a IS NOT DISTINCT FROM b
  * - AS 'alias'     => AS "alias"
  * - AS mixedCase   => column name restored in the result, see translate()
+ * - identifiers longer than 63 bytes => shortened, name restored in the result
  *
  * @internal
  */
@@ -22,6 +23,8 @@ use Shopware\Core\Framework\Log\Package;
 class MySQLToPostgreSQLTranslator
 {
     private const CACHE_LIMIT = 5000;
+
+    private const MAX_IDENTIFIER_LENGTH = 63;
 
     /**
      * Single words that are replaced, key in lower case.
@@ -74,7 +77,7 @@ class MySQLToPostgreSQLTranslator
                 [$content, $i] = $this->readString($sql, $i, $char);
                 // MySQL accepts a string literal as column alias: SELECT x AS '0'
                 $isAlias = preg_match('/\bAS\s+$/i', substr($out, -12)) === 1;
-                $out .= $isAlias ? '"' . str_replace('"', '""', $content) . '"' : $this->stringLiteral($content);
+                $out .= $isAlias ? $this->identifier($content, $caseMap) : $this->stringLiteral($content);
 
                 continue;
             }
@@ -92,7 +95,7 @@ class MySQLToPostgreSQLTranslator
                     $name .= $sql[$end];
                     ++$end;
                 }
-                $out .= '"' . str_replace('"', '""', $name) . '"';
+                $out .= $this->identifier($name, $caseMap);
                 $i = $end + 1;
 
                 continue;
@@ -201,6 +204,25 @@ class MySQLToPostgreSQLTranslator
         }
 
         return [$content, $length];
+    }
+
+    /**
+     * PostgreSQL cuts identifiers after 63 bytes, MySQL allows 256 characters for an alias.
+     * The DAL builds aliases like `order_delivery.shippingOrderAddress.country.translation.addressFormat`,
+     * cutting them could make two aliases equal, so a longer name is replaced by a prefix plus a hash.
+     * The replacement is the same everywhere in the statement and the map restores the name in the result.
+     *
+     * @param array<string, string> $caseMap
+     */
+    private function identifier(string $name, array &$caseMap): string
+    {
+        if (\strlen($name) > self::MAX_IDENTIFIER_LENGTH) {
+            $short = substr($name, 0, self::MAX_IDENTIFIER_LENGTH - 17) . '~' . substr(md5($name), 0, 16);
+            $caseMap[$short] = $name;
+            $name = $short;
+        }
+
+        return '"' . str_replace('"', '""', $name) . '"';
     }
 
     private function stringLiteral(string $content): string
