@@ -4,6 +4,7 @@ namespace Shopware\Core\Framework\DataAbstractionLayer\Doctrine;
 
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\ParameterType;
+use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use Shopware\Core\Framework\DataAbstractionLayer\DataAbstractionLayerException;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\EntityDefinitionQueryHelper;
 use Shopware\Core\Framework\Log\Package;
@@ -23,6 +24,11 @@ class MultiInsertQueryQueue
      * @var array<string, list<string>>
      */
     private array $updateFieldsOnDuplicateKey = [];
+
+    /**
+     * @var array<string, list<list<string>>>
+     */
+    private array $uniqueKeys = [];
 
     /**
      * @var int<1, max>
@@ -90,7 +96,7 @@ class MultiInsertQueryQueue
     }
 
     /**
-     * @return array<array{query: string, values: list<string>, types: list<ParameterType>}>
+     * @return array<array{query: string, values: list<mixed>, types: list<ParameterType>}>
      */
     private function prepareQueries(): array
     {
@@ -101,7 +107,10 @@ class MultiInsertQueryQueue
             $template = 'INSERT IGNORE INTO %s (%s) VALUES %s';
         }
 
-        if ($this->useReplace) {
+        // PostgreSQL has no REPLACE, the rows that collide with a unique key are deleted before a plain insert
+        $deleteBeforeInsert = $this->useReplace && $this->connection->getDatabasePlatform() instanceof PostgreSQLPlatform;
+
+        if ($this->useReplace && !$deleteBeforeInsert) {
             $template = 'REPLACE INTO %s (%s) VALUES %s';
         }
 
@@ -117,6 +126,10 @@ class MultiInsertQueryQueue
 
             $rowsChunks = array_chunk($rows, $this->chunkSize);
             foreach ($rowsChunks as $rowsChunk) {
+                if ($deleteBeforeInsert) {
+                    array_push($queries, ...$this->prepareDeletes($table, $columns, $rowsChunk));
+                }
+
                 $data = $this->prepareValues($columns, $rowsChunk);
                 $queries[] = [
                     'query' => \sprintf($tableTemplate, $escapedTable, $escapedColumns, implode(', ', $data['placeholders'])),
@@ -127,6 +140,83 @@ class MultiInsertQueryQueue
         }
 
         return $queries;
+    }
+
+    /**
+     * One DELETE per unique key of the table that is completely part of the inserted columns.
+     *
+     * @param list<string> $columns
+     * @param list<DataRow> $rows
+     *
+     * @return list<array{query: string, values: list<mixed>, types: list<ParameterType>}>
+     */
+    private function prepareDeletes(string $table, array $columns, array $rows): array
+    {
+        $queries = [];
+        foreach ($this->getUniqueKeys($table) as $key) {
+            if (array_diff($key, $columns) !== []) {
+                continue;
+            }
+
+            $tuples = [];
+            $values = [];
+            $types = [];
+            foreach ($rows as $row) {
+                foreach ($key as $column) {
+                    if (!isset($row['data'][$column])) {
+                        // DEFAULT or NULL, the row can not be matched by this key
+                        continue 2;
+                    }
+                }
+                foreach ($key as $column) {
+                    $values[] = $row['data'][$column];
+                    $types[] = $row['types'][$column] ?? ParameterType::STRING;
+                }
+                $tuples[] = '(' . implode(',', array_fill(0, \count($key), '?')) . ')';
+            }
+
+            if ($tuples === []) {
+                continue;
+            }
+
+            $queries[] = [
+                'query' => \sprintf(
+                    'DELETE FROM %s WHERE (%s) IN (%s);',
+                    EntityDefinitionQueryHelper::escape($table),
+                    implode(', ', array_map(EntityDefinitionQueryHelper::escape(...), $key)),
+                    implode(', ', $tuples)
+                ),
+                'values' => $values,
+                'types' => $types,
+            ];
+        }
+
+        return $queries;
+    }
+
+    /**
+     * @return list<list<string>> the columns of the primary key and of every unique index
+     */
+    private function getUniqueKeys(string $table): array
+    {
+        if (isset($this->uniqueKeys[$table])) {
+            return $this->uniqueKeys[$table];
+        }
+
+        $rows = $this->connection->fetchAllAssociative(
+            'SELECT i.indexrelid AS index_id, a.attname AS column_name
+             FROM pg_index i
+             JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
+             WHERE i.indrelid = to_regclass(:table) AND i.indisunique AND i.indpred IS NULL AND i.indexprs IS NULL',
+            ['table' => '"' . $table . '"']
+        );
+
+        $keys = [];
+        foreach ($rows as $row) {
+            $keys[(string) $row['index_id']][] = (string) $row['column_name'];
+        }
+
+        return $this->uniqueKeys[$table] = array_values($keys);
     }
 
     /**
