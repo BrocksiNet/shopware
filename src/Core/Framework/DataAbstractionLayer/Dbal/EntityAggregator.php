@@ -469,12 +469,19 @@ class EntityAggregator implements EntityAggregatorInterface
         // build SUM() with range criteria for each range and add it to select
         foreach ($aggregation->getRanges() as $range) {
             $id = $range['key'] ?? (($range['from'] ?? '*') . '-' . ($range['to'] ?? '*'));
-            $sum = '1';
+            $conditions = [];
             if (isset($range['from'])) {
-                $sum .= \sprintf(' AND %s >= %s', $accessor, (string) $range['from']);
+                $conditions[] = \sprintf('%s >= %s', $accessor, (string) $range['from']);
             }
             if (isset($range['to'])) {
-                $sum .= \sprintf(' AND %s < %s', $accessor, (string) $range['to']);
+                $conditions[] = \sprintf('%s < %s', $accessor, (string) $range['to']);
+            }
+
+            // `1 AND <condition>` is a boolean expression only in MySQL, the CASE keeps the result of the SUM the same (NULL values are skipped, false counts as 0) on every database
+            $sum = '1';
+            if ($conditions !== []) {
+                $condition = '(' . implode(' AND ', $conditions) . ')';
+                $sum = \sprintf('CASE WHEN %s IS NULL THEN NULL WHEN %s THEN 1 ELSE 0 END', $condition, $condition);
             }
 
             $query->addSelect(\sprintf('SUM(%s) as %s', $sum, EntityDefinitionQueryHelper::escape($aggregation->getName() . '.' . $id)));
