@@ -6,10 +6,10 @@ use Shopware\Core\Checkout\Customer\CustomerDefinition;
 use Shopware\Core\Checkout\Customer\Validation\Constraint\CustomerEmailUnique;
 use Shopware\Core\Checkout\Customer\Validation\CustomerEmailUniqueCheck;
 use Shopware\Core\Checkout\Customer\Validation\CustomerEmailUniqueChecker;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Validation\PreWriteValidationEvent;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Validation\WriteOutcome;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\Framework\Validation\WriteConstraintViolationException;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\Validator\ConstraintViolation;
@@ -51,13 +51,13 @@ class CustomerEmailUniqueSubscriber implements EventSubscriberInterface
                 continue;
             }
 
-            $customerId = Uuid::fromBytesToHex($customer->primaryKey['id']);
+            $customerId = IdBinding::toHex($customer->primaryKey['id']);
             $boundSalesChannelId = $customer->getResultingValue('bound_sales_channel_id');
 
             $checks[] = new CustomerEmailUniqueCheck(
                 email: $email,
                 customerId: $customerId,
-                boundSalesChannelId: \is_string($boundSalesChannelId) ? Uuid::fromBytesToHex($boundSalesChannelId) : null,
+                boundSalesChannelId: \is_string($boundSalesChannelId) ? IdBinding::toHex($boundSalesChannelId) : null,
                 guest: (bool) $customer->getResultingValue('guest'),
             );
             $paths[$customerId] = $customer->path;
