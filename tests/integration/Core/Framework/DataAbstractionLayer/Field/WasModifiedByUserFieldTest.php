@@ -57,7 +57,7 @@ class WasModifiedByUserFieldTest extends TestCase
         $this->connection->executeStatement('DROP TABLE IF EXISTS `_test_was_modified_by_user`');
         $this->connection->executeStatement(
             'CREATE TABLE `_test_was_modified_by_user` (
-                `id` VARBINARY(16) NOT NULL,
+                `id` BINARY(16) NOT NULL,
                 `name` VARCHAR(500) NULL,
                 `was_modified_by_user` TINYINT(1) NOT NULL DEFAULT 0,
                 `created_at` DATETIME(3) NOT NULL,
