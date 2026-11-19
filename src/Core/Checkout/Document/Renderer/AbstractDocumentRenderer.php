@@ -2,18 +2,17 @@
 
 namespace Shopware\Core\Checkout\Document\Renderer;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Checkout\Customer\CustomerEntity;
 use Shopware\Core\Checkout\Customer\Validation\Constraint\CustomerVatIdentification;
 use Shopware\Core\Checkout\Document\Struct\DocumentGenerateOperation;
 use Shopware\Core\Checkout\DocumentV2\Renderer\AbstractDocumentRenderer as DocumentV2Renderer;
 use Shopware\Core\Checkout\Order\OrderEntity;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\Deprecation\BCChange\ExperimentalReplacement;
 use Shopware\Core\Framework\Feature;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Symfony\Component\Validator\Constraints\NotBlank;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
 
@@ -44,14 +43,14 @@ abstract class AbstractDocumentRenderer
     {
         return $connection->fetchAllAssociative(
             '
-            SELECT LOWER(HEX(language_id)) as language_id, GROUP_CONCAT(DISTINCT LOWER(HEX(id))) as ids
+            SELECT ' . IdBinding::text('language_id') . ' as language_id, GROUP_CONCAT(DISTINCT ' . IdBinding::text('id') . ') as ids
             FROM `order`
             WHERE `id` IN (:ids)
             AND `version_id` = :versionId
             AND `language_id` IS NOT NULL
             GROUP BY `language_id`',
-            ['ids' => Uuid::fromHexToBytesList($ids), 'versionId' => Uuid::fromHexToBytes($versionId)],
-            ['ids' => ArrayParameterType::BINARY]
+            ['ids' => IdBinding::values($ids), 'versionId' => IdBinding::value($versionId)],
+            ['ids' => IdBinding::listType()]
         );
     }
 

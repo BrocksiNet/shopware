@@ -10,8 +10,8 @@ use Shopware\Core\Checkout\Order\Aggregate\OrderLineItem\OrderLineItemCollection
 use Shopware\Core\Checkout\Order\Aggregate\OrderLineItem\OrderLineItemEntity;
 use Shopware\Core\Checkout\Order\OrderEntity;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 
 /**
  * Selects the credit line items a new credit note may still bill: the order's credit items minus
@@ -93,12 +93,12 @@ final readonly class CreditItemResolver
          * which might be needed years later for a business case.
          */
         $binaryIds = $this->connection->fetchFirstColumn($sql, [
-            'referencedInvoiceId' => Uuid::fromHexToBytes($referencedInvoiceId),
+            'referencedInvoiceId' => IdBinding::value($referencedInvoiceId),
             'creditType' => LineItem::CREDIT_LINE_ITEM_TYPE,
-            'liveVersionId' => Uuid::fromHexToBytes(Defaults::LIVE_VERSION),
+            'liveVersionId' => IdBinding::value(Defaults::LIVE_VERSION),
         ]);
 
-        return array_map(static fn ($id): string => Uuid::fromBytesToHex($id), $binaryIds);
+        return array_map(static fn ($id): string => IdBinding::toHex($id), $binaryIds);
     }
 
     /**
@@ -120,13 +120,13 @@ final readonly class CreditItemResolver
         ';
 
         $binaryIds = $this->connection->fetchFirstColumn($sql, [
-            'referencedInvoiceId' => Uuid::fromHexToBytes($referencedInvoiceId),
+            'referencedInvoiceId' => IdBinding::value($referencedInvoiceId),
             'creditTechnicalName' => self::CREDIT_NOTE_TECHNICAL_NAMES,
             'creditType' => LineItem::CREDIT_LINE_ITEM_TYPE,
         ], [
             'creditTechnicalName' => ArrayParameterType::STRING,
         ]);
 
-        return array_map(static fn ($id): string => Uuid::fromBytesToHex($id), $binaryIds);
+        return array_map(static fn ($id): string => IdBinding::toHex($id), $binaryIds);
     }
 }

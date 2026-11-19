@@ -4,8 +4,8 @@ namespace Shopware\Core\Checkout\Customer\Validation\Constraint;
 
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Checkout\Customer\CustomerException;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Symfony\Component\Validator\Constraint;
 use Symfony\Component\Validator\ConstraintValidator;
 
@@ -53,7 +53,7 @@ class CustomerVatIdentificationValidator extends ConstraintValidator
     {
         $vatIdInformation = $this->connection->fetchAssociative(
             'SELECT check_vat_id_pattern, vat_id_pattern FROM `country` WHERE id = :id',
-            ['id' => Uuid::fromHexToBytes($constraint->getCountryId())]
+            ['id' => IdBinding::value($constraint->getCountryId())]
         );
 
         if ($vatIdInformation === false) {

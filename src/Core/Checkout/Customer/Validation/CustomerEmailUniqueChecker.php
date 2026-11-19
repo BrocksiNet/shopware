@@ -4,6 +4,7 @@ namespace Shopware\Core\Checkout\Customer\Validation;
 
 use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\System\SystemConfig\SystemConfigService;
 
@@ -192,7 +193,7 @@ class CustomerEmailUniqueChecker
 
         /** @var list<array{id: string, email: string, bound_sales_channel_id: string|null}> $customers */
         $customers = $this->connection->fetchAllAssociative(
-            'SELECT LOWER(HEX(`id`)) as `id`, `email`, LOWER(HEX(`bound_sales_channel_id`)) as `bound_sales_channel_id`
+            'SELECT ' . IdBinding::text('`id`') . ' as `id`, `email`, ' . IdBinding::text('`bound_sales_channel_id`') . ' as `bound_sales_channel_id`
              FROM `customer`
              WHERE `email` IN (:emails)
              AND `guest` = 0',

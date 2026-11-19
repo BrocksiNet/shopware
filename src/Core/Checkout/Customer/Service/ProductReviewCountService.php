@@ -2,10 +2,9 @@
 
 namespace Shopware\Core\Checkout\Customer\Service;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 
 #[Package('checkout')]
 /**
@@ -27,9 +26,9 @@ class ProductReviewCountService
     {
         /** @var list<string> $affectedCustomers */
         $affectedCustomers = array_filter($this->connection->fetchFirstColumn(
-            'SELECT DISTINCT(`customer_id`) FROM product_review WHERE id IN (:ids)',
-            ['ids' => Uuid::fromHexToBytesList($reviewIds)],
-            ['ids' => ArrayParameterType::BINARY]
+            'SELECT DISTINCT ' . IdBinding::text('`customer_id`') . ' FROM product_review WHERE id IN (:ids) AND `customer_id` IS NOT NULL',
+            ['ids' => IdBinding::values($reviewIds)],
+            ['ids' => IdBinding::listType()]
         ));
 
         foreach ($affectedCustomers as $customerId) {
@@ -43,7 +42,8 @@ class ProductReviewCountService
             'UPDATE `customer` SET review_count = (
                   SELECT COUNT(*) FROM `product_review` WHERE `customer_id` = :id AND `status` = 1
             ) WHERE id = :id',
-            ['id' => $customerId]
+            ['id' => IdBinding::value(IdBinding::toHex($customerId))],
+            ['id' => IdBinding::type()]
         );
     }
 }

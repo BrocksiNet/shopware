@@ -8,6 +8,7 @@ use Shopware\Core\Checkout\Document\Renderer\InvoiceRenderer;
 use Shopware\Core\Checkout\Document\Renderer\ZugferdEmbeddedRenderer;
 use Shopware\Core\Checkout\Document\Renderer\ZugferdRenderer;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Deprecation\BCChange\ClassMoved;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Uuid\Uuid;
@@ -34,10 +35,10 @@ final readonly class ReferenceInvoiceLoader
         $builder = $this->connection->createQueryBuilder();
 
         $builder->select(
-            'LOWER(HEX(`document`.`id`)) as id',
-            'LOWER(HEX(`document`.`order_id`)) as orderId',
-            'LOWER(HEX(`document`.`order_version_id`)) as orderVersionId',
-            'LOWER(HEX(`order`.`version_id`)) as versionId',
+            IdBinding::text('`document`.`id`') . ' as id',
+            IdBinding::text('`document`.`order_id`') . ' as orderId',
+            IdBinding::text('`document`.`order_version_id`') . ' as orderVersionId',
+            IdBinding::text('`order`.`version_id`') . ' as versionId',
             '`order`.`deep_link_code` as deepLinkCode',
             '`document`.`config` as config',
             '`document`.`document_number` as documentNumber',
@@ -49,14 +50,14 @@ final readonly class ReferenceInvoiceLoader
             ->andWhere('`document`.`order_id` = :orderId');
 
         $builder->setParameter('technicalNames', [InvoiceRenderer::TYPE, ZugferdRenderer::TYPE, ZugferdEmbeddedRenderer::TYPE], ArrayParameterType::STRING);
-        $builder->setParameter('orderId', Uuid::fromHexToBytes($orderId));
+        $builder->setParameter('orderId', IdBinding::value($orderId));
 
         $builder->orderBy('`document`.`sent`', 'DESC');
         $builder->addOrderBy('`document`.`created_at`', 'DESC');
 
         if ($referenceDocumentId && Uuid::isValid($referenceDocumentId)) {
             $builder->andWhere('`document`.`id` = :documentId');
-            $builder->setParameter('documentId', Uuid::fromHexToBytes($referenceDocumentId));
+            $builder->setParameter('documentId', IdBinding::value($referenceDocumentId));
         }
 
         $documents = $builder->executeQuery()->fetchAllAssociative();

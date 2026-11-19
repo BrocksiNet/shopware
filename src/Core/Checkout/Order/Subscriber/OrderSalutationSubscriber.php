@@ -4,9 +4,9 @@ namespace Shopware\Core\Checkout\Order\Subscriber;
 
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Checkout\Order\OrderEvents;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\Event\EntityWrittenEvent;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\System\Salutation\SalutationDefinition;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
@@ -60,7 +60,7 @@ class OrderSalutationSubscriber implements EventSubscriberInterface
                 )
                 WHERE `id` = :id AND `salutation_id` is NULL
             ',
-            ['id' => Uuid::fromHexToBytes($id), 'notSpecified' => SalutationDefinition::NOT_SPECIFIED]
+            ['id' => IdBinding::value($id), 'notSpecified' => SalutationDefinition::NOT_SPECIFIED]
         );
     }
 }

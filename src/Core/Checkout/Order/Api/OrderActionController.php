@@ -10,11 +10,11 @@ use Shopware\Core\Checkout\Payment\Cart\PaymentRefundProcessor;
 use Shopware\Core\Checkout\Payment\PaymentException;
 use Shopware\Core\Content\Flow\Dispatching\Action\SendMailAction;
 use Shopware\Core\Content\MailTemplate\Subscriber\MailSendSubscriberConfig;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\FetchModeHelper;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Routing\ApiRouteScope;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\PlatformRequest;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -192,8 +192,8 @@ class OrderActionController extends AbstractController
 
         $query = $this->connection->createQueryBuilder();
         $query->select(
-            'LOWER(hex(document.document_type_id)) as doc_type',
-            'LOWER(hex(document.id)) as doc_id',
+            IdBinding::text('document.document_type_id') . ' as doc_type',
+            IdBinding::text('document.id') . ' as doc_id',
             'document.created_at as newest_date',
             'document.sent as sent',
         );
@@ -202,12 +202,12 @@ class OrderActionController extends AbstractController
         $query->where('document.order_id = :orderId');
 
         if ($entity === 'order') {
-            $query->setParameter('orderId', Uuid::fromHexToBytes($referencedId));
+            $query->setParameter('orderId', IdBinding::value($referencedId));
         } else {
             $fetchOrder = $this->connection->createQueryBuilder();
             $fetchOrder->select('order_id')->from($entity)->where('id = :id');
 
-            $fetchOrder->setParameter('id', Uuid::fromHexToBytes($referencedId));
+            $fetchOrder->setParameter('id', IdBinding::value($referencedId));
 
             $orderId = $fetchOrder->executeQuery()->fetchOne();
 

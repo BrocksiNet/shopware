@@ -2,9 +2,9 @@
 
 namespace Shopware\Core\Checkout\Promotion\DataAbstractionLayer;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Checkout\Promotion\PromotionDefinition;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\RetryableQuery;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Uuid\Uuid;
@@ -78,7 +78,7 @@ class PromotionExclusionUpdater
                 }
 
                 // if our byte value could be found in our byte array we add hex value to our array
-                if (\in_array(Uuid::fromHexToBytes($excludedId), $resultValues, true)) {
+                if (\in_array(IdBinding::value($excludedId), $resultValues, true)) {
                     $onlyAddThisExistingIds[] = $excludedId;
                 }
             }
@@ -103,7 +103,7 @@ class PromotionExclusionUpdater
     {
         $affectedIds = [];
         $tags = [];
-        $sqlStatement = 'SELECT id from promotion WHERE JSON_CONTAINS(promotion.exclusion_ids, JSON_ARRAY(:value))';
+        $sqlStatement = 'SELECT ' . IdBinding::text('id') . ' AS id FROM promotion WHERE JSON_CONTAINS(promotion.exclusion_ids, JSON_ARRAY(:value))';
 
         $params = ['value' => $deleteId];
 
@@ -112,7 +112,7 @@ class PromotionExclusionUpdater
         if ($excludeThisIds !== []) {
             $sqlStatement .= ' AND id NOT IN (:excludedIds)';
             $params['excludedIds'] = $this->convertHexArrayToByteArray($excludeThisIds);
-            $types['excludedIds'] = ArrayParameterType::BINARY;
+            $types['excludedIds'] = IdBinding::listType();
         }
 
         $results = $this->connection->executeQuery($sqlStatement, $params, $types)->fetchAllAssociative();
@@ -122,9 +122,9 @@ class PromotionExclusionUpdater
         }
 
         foreach ($results as $row) {
-            $affectedIds[] = $row['id'];
+            $affectedIds[] = IdBinding::value($row['id']);
 
-            $tags[] = Uuid::fromBytesToHex($row['id']);
+            $tags[] = $row['id'];
         }
 
         RetryableQuery::retryable($this->connection, function () use ($affectedIds, $deleteId): void {
@@ -134,7 +134,7 @@ class PromotionExclusionUpdater
                 WHERE id IN(:affectedIds)
             ';
 
-            $this->connection->executeStatement($sqlStatement, ['value' => $deleteId, 'affectedIds' => $affectedIds], ['affectedIds' => ArrayParameterType::BINARY]);
+            $this->connection->executeStatement($sqlStatement, ['value' => $deleteId, 'affectedIds' => $affectedIds], ['affectedIds' => IdBinding::listType()]);
         });
 
         return $tags;
@@ -162,7 +162,7 @@ class PromotionExclusionUpdater
                     'addToTheseIds' => $this->convertHexArrayToByteArray($ids),
                 ],
                 [
-                    'addToTheseIds' => ArrayParameterType::BINARY,
+                    'addToTheseIds' => IdBinding::listType(),
                 ]
             );
         });
@@ -187,7 +187,7 @@ class PromotionExclusionUpdater
 
         $query->execute([
             'value' => $value,
-            'id' => Uuid::fromHexToBytes($id),
+            'id' => IdBinding::value($id),
         ]);
     }
 
@@ -198,13 +198,13 @@ class PromotionExclusionUpdater
      */
     private function getExistingIds(array $ids): array
     {
-        $sqlStatement = 'SELECT HEX(id) as uuid FROM promotion WHERE id IN (:ids)';
+        $sqlStatement = 'SELECT ' . IdBinding::text('id') . ' AS uuid FROM promotion WHERE id IN (:ids)';
 
         $bytes = $this->convertHexArrayToByteArray($ids);
 
         $params = ['ids' => $bytes];
 
-        $type = ['ids' => ArrayParameterType::BINARY];
+        $type = ['ids' => IdBinding::listType()];
 
         $rows = $this->connection
             ->executeQuery($sqlStatement, $params, $type)
@@ -232,7 +232,7 @@ class PromotionExclusionUpdater
         $query->from(PromotionDefinition::ENTITY_NAME);
         $query->andWhere($query->expr()->eq('id', ':id'));
 
-        $query->setParameter('id', Uuid::fromHexToBytes($id));
+        $query->setParameter('id', IdBinding::value($id));
 
         return $query->executeQuery()->fetchAllAssociative();
     }
@@ -254,7 +254,7 @@ class PromotionExclusionUpdater
             return [];
         }
 
-        $bytes = array_map(static fn (string $id) => Uuid::fromHexToBytes($id), $validValues);
+        $bytes = array_map(static fn (string $id) => IdBinding::value($id), $validValues);
 
         return $bytes;
     }

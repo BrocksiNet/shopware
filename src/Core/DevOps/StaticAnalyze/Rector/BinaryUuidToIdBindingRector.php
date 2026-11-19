@@ -47,7 +47,7 @@ use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
 #[Package('framework')]
 final class BinaryUuidToIdBindingRector extends AbstractRector
 {
-    private const LOWER_HEX = '/LOWER\(\s*HEX\(\s*([\w.`]+)\s*\)\s*\)/i';
+    private const LOWER_HEX = '/LOWER\(\s*HEX\(\s*([\w.`]+|\w+\([^()]*\))\s*\)\s*\)/i';
 
     private const BINDING_CALLS = ['fromHexToBytes', 'fromHexToBytesList'];
 

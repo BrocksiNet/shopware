@@ -24,6 +24,7 @@ use Shopware\Core\Checkout\DocumentV2\Struct\ResolvedDocumentFile;
 use Shopware\Core\Content\Media\MediaEntity;
 use Shopware\Core\Content\Media\MediaService;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
@@ -304,7 +305,7 @@ class DocumentGenerator
     private function getDocumentTypeByName(string $documentType): ?string
     {
         $id = $this->connection->fetchOne(
-            'SELECT LOWER(HEX(id)) as id FROM document_type WHERE technical_name = :technicalName',
+            'SELECT ' . IdBinding::text('id') . ' as id FROM document_type WHERE technical_name = :technicalName',
             ['technicalName' => $documentType]
         );
 
@@ -336,7 +337,7 @@ class DocumentGenerator
         ];
 
         if ($documentId !== null) {
-            $params['documentId'] = Uuid::fromHexToBytes($documentId);
+            $params['documentId'] = IdBinding::value($documentId);
         }
 
         $statement = $this->connection->executeQuery($sql, $params);
@@ -408,7 +409,7 @@ class DocumentGenerator
     private function getReferenceId(string $orderId, string $invoiceNumber): string
     {
         return (string) $this->connection->fetchOne('
-            SELECT LOWER(HEX(document.id))
+            SELECT ' . IdBinding::text('document.id') . '
             FROM document INNER JOIN document_type
                 ON document.document_type_id = document_type.id
             WHERE document_type.technical_name IN (:technicalNames)
@@ -421,7 +422,7 @@ class DocumentGenerator
                 ZugferdEmbeddedRenderer::TYPE,
             ],
             'invoiceNumber' => $invoiceNumber,
-            'orderId' => Uuid::fromHexToBytes($orderId),
+            'orderId' => IdBinding::value($orderId),
         ], [
             'technicalNames' => ArrayParameterType::STRING,
         ]);

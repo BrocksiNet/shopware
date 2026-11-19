@@ -6,12 +6,12 @@ use Doctrine\DBAL\Connection;
 use Shopware\Core\Checkout\Customer\CustomerEvents;
 use Shopware\Core\Checkout\Customer\DataAbstractionLayer\CustomerIndexingMessage;
 use Shopware\Core\Checkout\Customer\Event\CustomerRegisterEvent;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Api\Context\AdminApiSource;
 use Shopware\Core\Framework\Api\Context\SalesChannelApiSource;
 use Shopware\Core\Framework\DataAbstractionLayer\Event\EntityWrittenEvent;
 use Shopware\Core\Framework\DataAbstractionLayer\Indexing\EntityIndexer;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\System\SalesChannel\Context\SalesChannelContextRestorer;
 use Shopware\Core\System\SalesChannel\SalesChannelException;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
@@ -65,7 +65,7 @@ class CustomerFlowEventsSubscriber implements EventSubscriberInterface
                 }
 
                 if ($context->getSource() instanceof AdminApiSource && \is_string($payload['id'])) {
-                    $this->connection->delete('customer', ['id' => Uuid::fromHexToBytes($payload['id'])]);
+                    $this->connection->delete('customer', ['id' => IdBinding::value($payload['id'])]);
                 }
 
                 throw $exception;

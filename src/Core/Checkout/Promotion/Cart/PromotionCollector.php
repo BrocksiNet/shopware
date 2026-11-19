@@ -2,7 +2,6 @@
 
 namespace Shopware\Core\Checkout\Promotion\Cart;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Checkout\Cart\Cart;
 use Shopware\Core\Checkout\Cart\CartBehavior;
@@ -11,7 +10,6 @@ use Shopware\Core\Checkout\Cart\CartException;
 use Shopware\Core\Checkout\Cart\LineItem\CartDataCollection;
 use Shopware\Core\Checkout\Cart\LineItem\LineItem;
 use Shopware\Core\Checkout\Cart\LineItem\LineItemCollection;
-use Shopware\Core\Checkout\Cart\LineItemFactoryHandler\PromotionLineItemFactory;
 use Shopware\Core\Checkout\Cart\Order\IdStruct;
 use Shopware\Core\Checkout\Cart\Order\OrderConverter;
 use Shopware\Core\Checkout\CheckoutPermissions;
@@ -24,12 +22,12 @@ use Shopware\Core\Checkout\Promotion\Gateway\Template\PermittedIndividualCodePro
 use Shopware\Core\Checkout\Promotion\PromotionEntity;
 use Shopware\Core\Checkout\Promotion\PromotionException;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\Exception\InconsistentCriteriaIdsException;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\Feature;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Util\HtmlSanitizer;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\Profiling\Profiler;
 use Shopware\Core\System\SalesChannel\SalesChannelContext;
 
@@ -472,28 +470,26 @@ class PromotionCollector implements CartDataCollectorInterface
             return [];
         }
 
-        $sql = <<<'SQL'
-            SELECT LOWER(HEX(order_line_item.promotion_id)) as promotion_id,
-                   COUNT(DISTINCT order_line_item.order_id) as total
-            FROM order_customer
-                     INNER JOIN order_line_item
-                                ON (order_line_item.order_id = order_customer.order_id
-                                    AND order_line_item.order_version_id = order_customer.order_version_id)
-            WHERE order_customer.customer_id = :customerId
-              AND order_line_item.promotion_id IN (:promotionIds)
-              AND order_line_item.version_id = :versionId
-            GROUP BY order_line_item.promotion_id
-        SQL;
+        $sql = '    SELECT ' . IdBinding::text('order_line_item.promotion_id') . ' as promotion_id,
+           COUNT(DISTINCT order_line_item.order_id) as total
+    FROM order_customer
+             INNER JOIN order_line_item
+                        ON (order_line_item.order_id = order_customer.order_id
+                            AND order_line_item.order_version_id = order_customer.order_version_id)
+    WHERE order_customer.customer_id = :customerId
+      AND order_line_item.promotion_id IN (:promotionIds)
+      AND order_line_item.version_id = :versionId
+    GROUP BY order_line_item.promotion_id';
 
         /** @var array<string, numeric-string> $redemptions */
         $redemptions = $this->connection->fetchAllKeyValue(
             $sql,
             [
-                'customerId' => Uuid::fromHexToBytes($customerId),
-                'promotionIds' => Uuid::fromHexToBytesList(array_values(array_unique($promotionIds))),
-                'versionId' => Uuid::fromHexToBytes(Defaults::LIVE_VERSION),
+                'customerId' => IdBinding::value($customerId),
+                'promotionIds' => IdBinding::values(array_values(array_unique($promotionIds))),
+                'versionId' => IdBinding::value(Defaults::LIVE_VERSION),
             ],
-            ['promotionIds' => ArrayParameterType::BINARY]
+            ['promotionIds' => IdBinding::listType()]
         );
 
         return array_map(intval(...), $redemptions);
@@ -502,8 +498,8 @@ class PromotionCollector implements CartDataCollectorInterface
     private function isUsedInCurrentOrder(string $promotionId, string $orderId): bool
     {
         $foundPromotionInThisOrder = $this->connection->fetchOne('SELECT 1 FROM order_line_item WHERE order_id = :orderId AND promotion_id = :promotionId', [
-            'orderId' => Uuid::fromHexToBytes($orderId),
-            'promotionId' => Uuid::fromHexToBytes($promotionId),
+            'orderId' => IdBinding::value($orderId),
+            'promotionId' => IdBinding::value($promotionId),
         ]);
 
         return $foundPromotionInThisOrder === '1';

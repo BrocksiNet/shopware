@@ -9,9 +9,9 @@ use Shopware\Core\Checkout\Payment\Cart\PaymentHandler\AbstractPaymentHandler;
 use Shopware\Core\Checkout\Payment\Cart\PaymentHandler\PaymentHandlerRegistry;
 use Shopware\Core\Checkout\Payment\Cart\PaymentHandler\PaymentHandlerType;
 use Shopware\Core\Checkout\Payment\PaymentException;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 
 #[Package('checkout')]
 class PaymentRefundProcessor
@@ -38,7 +38,7 @@ class PaymentRefundProcessor
             ->innerJoin(self::TABLE_ALIAS, 'order_transaction_capture', 'capture', 'capture.id = refund.capture_id')
             ->innerJoin(self::TABLE_ALIAS, 'order_transaction', 'transaction', 'transaction.id = capture.order_transaction_id')
             ->andWhere('refund.id = :refundId')
-            ->setParameter('refundId', Uuid::fromHexToBytes($refundId))
+            ->setParameter('refundId', IdBinding::value($refundId))
             ->executeQuery()
             ->fetchAssociative();
 
@@ -50,8 +50,8 @@ class PaymentRefundProcessor
             throw PaymentException::refundInvalidTransition($refundId, $result['technical_name']);
         }
 
-        $orderTransactionId = Uuid::fromBytesToHex($result['transaction_id']);
-        $paymentMethodId = Uuid::fromBytesToHex($result['payment_method_id']);
+        $orderTransactionId = IdBinding::toHex($result['transaction_id']);
+        $paymentMethodId = IdBinding::toHex($result['payment_method_id']);
         $refundHandler = $this->paymentHandlerRegistry->getPaymentMethodHandler($paymentMethodId);
 
         if (!$refundHandler instanceof AbstractPaymentHandler || !$refundHandler->supports(PaymentHandlerType::REFUND, $paymentMethodId, $context)) {

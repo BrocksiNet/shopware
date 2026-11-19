@@ -2,11 +2,11 @@
 
 namespace Shopware\Core\Checkout\Promotion\DataAbstractionLayer;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\ParameterType;
 use Shopware\Core\Checkout\Order\OrderEvents;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\RetryableQuery;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityWriteResult;
@@ -16,7 +16,6 @@ use Shopware\Core\Framework\DataAbstractionLayer\Event\EntityWrittenEvent;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\DeleteCommand;
 use Shopware\Core\Framework\Feature;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
 /**
@@ -74,26 +73,24 @@ class PromotionRedemptionUpdater implements EventSubscriberInterface
             return;
         }
 
-        $sql = <<<'SQL'
-            SELECT LOWER(HEX(order_line_item.promotion_id)) as promotion_id,
-                   order_line_item.payload,
-                   LOWER(HEX(order_line_item.order_id)) as order_id,
-                   LOWER(HEX(order_customer.customer_id)) as customer_id
-            FROM order_line_item
-                     LEFT JOIN order_customer
-                               ON (order_customer.order_id = order_line_item.order_id
-                                   AND order_customer.order_version_id = order_line_item.order_version_id)
-            WHERE order_line_item.promotion_id IS NOT NULL AND order_line_item.id IN (:ids) AND order_line_item.version_id = :versionId
-        SQL;
+        $sql = '    SELECT ' . IdBinding::text('order_line_item.promotion_id') . ' as promotion_id,
+           order_line_item.payload,
+           ' . IdBinding::text('order_line_item.order_id') . ' as order_id,
+           ' . IdBinding::text('order_customer.customer_id') . ' as customer_id
+    FROM order_line_item
+             LEFT JOIN order_customer
+                       ON (order_customer.order_id = order_line_item.order_id
+                           AND order_customer.order_version_id = order_line_item.order_version_id)
+    WHERE order_line_item.promotion_id IS NOT NULL AND order_line_item.id IN (:ids) AND order_line_item.version_id = :versionId';
 
         /** @var list<array{promotion_id: string, payload: ?string, order_id: string, customer_id: ?string}> $lineItems */
         $lineItems = $this->connection->fetchAllAssociative(
             $sql,
             [
-                'ids' => Uuid::fromHexToBytesList($lineItemsIds),
-                'versionId' => Uuid::fromHexToBytes($event->getContext()->getVersionId()),
+                'ids' => IdBinding::values($lineItemsIds),
+                'versionId' => IdBinding::value($event->getContext()->getVersionId()),
             ],
-            ['ids' => ArrayParameterType::BINARY],
+            ['ids' => IdBinding::listType()],
         );
 
         $this->promotionIds = array_values(array_unique(array_column($lineItems, 'promotion_id')));
@@ -181,23 +178,21 @@ class PromotionRedemptionUpdater implements EventSubscriberInterface
 
         // @deprecated tag:v6.8.0 - remove the following recount of orders_per_customer_count, the branch above replaces it
         // promotion_id is ApiAware, so this counts every line item carrying one, not only the ones core writes
-        $sql = <<<'SQL'
-            SELECT LOWER(HEX(order_line_item.promotion_id)) as promotion_id,
-                   COUNT(DISTINCT order_line_item.order_id) as total,
-                   LOWER(HEX(order_customer.customer_id)) as customer_id
-            FROM order_line_item
-                     LEFT JOIN order_customer
-                               ON (order_customer.order_id = order_line_item.order_id
-                                   AND order_customer.order_version_id = order_line_item.order_version_id)
-            WHERE order_line_item.promotion_id IN (:ids) AND order_line_item.version_id = :versionId
-            GROUP BY order_line_item.promotion_id, order_customer.customer_id
-        SQL;
+        $sql = '    SELECT ' . IdBinding::text('order_line_item.promotion_id') . ' as promotion_id,
+           COUNT(DISTINCT order_line_item.order_id) as total,
+           ' . IdBinding::text('order_customer.customer_id') . ' as customer_id
+    FROM order_line_item
+             LEFT JOIN order_customer
+                       ON (order_customer.order_id = order_line_item.order_id
+                           AND order_customer.order_version_id = order_line_item.order_version_id)
+    WHERE order_line_item.promotion_id IN (:ids) AND order_line_item.version_id = :versionId
+    GROUP BY order_line_item.promotion_id, order_customer.customer_id';
 
         /** @var list<array{promotion_id: string, total: numeric-string, customer_id: ?string}> $promotions */
         $promotions = $this->connection->fetchAllAssociative(
             $sql,
-            ['ids' => Uuid::fromHexToBytesList($ids), 'versionId' => Uuid::fromHexToBytes(Defaults::LIVE_VERSION)],
-            ['ids' => ArrayParameterType::BINARY]
+            ['ids' => IdBinding::values($ids), 'versionId' => IdBinding::value(Defaults::LIVE_VERSION)],
+            ['ids' => IdBinding::listType()]
         );
 
         $update = new RetryableQuery(
@@ -215,7 +210,7 @@ class PromotionRedemptionUpdater implements EventSubscriberInterface
 
         foreach ($promotionsGrouped as $id => $totals) {
             $update->execute([
-                'id' => Uuid::fromHexToBytes($id),
+                'id' => IdBinding::value($id),
                 'count' => $orderCounts[$id] ?? 0,
                 'customerCount' => $totals !== [] ? json_encode($totals, \JSON_THROW_ON_ERROR) : null,
             ]);
@@ -236,18 +231,16 @@ class PromotionRedemptionUpdater implements EventSubscriberInterface
             return;
         }
 
-        $sql = <<<'SQL'
-            SELECT LOWER(HEX(promotion_id)) as promotion_id, COUNT(DISTINCT order_id) as total
-            FROM order_line_item
-            WHERE promotion_id IN (:ids) AND version_id = :versionId
-            GROUP BY promotion_id
-        SQL;
+        $sql = '    SELECT ' . IdBinding::text('promotion_id') . ' as promotion_id, COUNT(DISTINCT order_id) as total
+    FROM order_line_item
+    WHERE promotion_id IN (:ids) AND version_id = :versionId
+    GROUP BY promotion_id';
 
         /** @var array<string, numeric-string> $orderCounts */
         $orderCounts = $this->connection->fetchAllKeyValue(
             $sql,
-            ['ids' => Uuid::fromHexToBytesList($promotionIds), 'versionId' => Uuid::fromHexToBytes(Defaults::LIVE_VERSION)],
-            ['ids' => ArrayParameterType::BINARY]
+            ['ids' => IdBinding::values($promotionIds), 'versionId' => IdBinding::value(Defaults::LIVE_VERSION)],
+            ['ids' => IdBinding::listType()]
         );
 
         $customerCounts = $this->fetchCustomerCounts($promotionIds, array_values(array_unique(array_merge(...array_values($customerIds)))));
@@ -269,22 +262,20 @@ class PromotionRedemptionUpdater implements EventSubscriberInterface
      */
     private function fetchCustomerIds(array $lineItemIds): array
     {
-        $sql = <<<'SQL'
-            SELECT LOWER(HEX(order_line_item.promotion_id)) as promotion_id,
-                   LOWER(HEX(order_customer.customer_id)) as customer_id
-            FROM order_line_item
-                     INNER JOIN order_customer
-                                ON (order_customer.order_id = order_line_item.order_id
-                                    AND order_customer.order_version_id = order_line_item.order_version_id)
-            WHERE order_line_item.promotion_id IS NOT NULL AND order_line_item.id IN (:ids) AND order_line_item.version_id = :versionId
-              AND order_customer.customer_id IS NOT NULL
-        SQL;
+        $sql = '    SELECT ' . IdBinding::text('order_line_item.promotion_id') . ' as promotion_id,
+           ' . IdBinding::text('order_customer.customer_id') . ' as customer_id
+    FROM order_line_item
+             INNER JOIN order_customer
+                        ON (order_customer.order_id = order_line_item.order_id
+                            AND order_customer.order_version_id = order_line_item.order_version_id)
+    WHERE order_line_item.promotion_id IS NOT NULL AND order_line_item.id IN (:ids) AND order_line_item.version_id = :versionId
+      AND order_customer.customer_id IS NOT NULL';
 
         /** @var list<array{promotion_id: string, customer_id: string}> $lineItems */
         $lineItems = $this->connection->fetchAllAssociative(
             $sql,
-            ['ids' => Uuid::fromHexToBytesList($lineItemIds), 'versionId' => Uuid::fromHexToBytes(Defaults::LIVE_VERSION)],
-            ['ids' => ArrayParameterType::BINARY]
+            ['ids' => IdBinding::values($lineItemIds), 'versionId' => IdBinding::value(Defaults::LIVE_VERSION)],
+            ['ids' => IdBinding::listType()]
         );
 
         $customerIds = [];
@@ -307,29 +298,27 @@ class PromotionRedemptionUpdater implements EventSubscriberInterface
             return [];
         }
 
-        $sql = <<<'SQL'
-            SELECT LOWER(HEX(order_line_item.promotion_id)) as promotion_id,
-                   COUNT(DISTINCT order_line_item.order_id) as total,
-                   LOWER(HEX(order_customer.customer_id)) as customer_id
-            FROM order_customer
-                     INNER JOIN order_line_item
-                                ON (order_line_item.order_id = order_customer.order_id
-                                    AND order_line_item.order_version_id = order_customer.order_version_id)
-            WHERE order_customer.customer_id IN (:customerIds)
-              AND order_line_item.promotion_id IN (:ids)
-              AND order_line_item.version_id = :versionId
-            GROUP BY order_line_item.promotion_id, order_customer.customer_id
-        SQL;
+        $sql = '    SELECT ' . IdBinding::text('order_line_item.promotion_id') . ' as promotion_id,
+           COUNT(DISTINCT order_line_item.order_id) as total,
+           ' . IdBinding::text('order_customer.customer_id') . ' as customer_id
+    FROM order_customer
+             INNER JOIN order_line_item
+                        ON (order_line_item.order_id = order_customer.order_id
+                            AND order_line_item.order_version_id = order_customer.order_version_id)
+    WHERE order_customer.customer_id IN (:customerIds)
+      AND order_line_item.promotion_id IN (:ids)
+      AND order_line_item.version_id = :versionId
+    GROUP BY order_line_item.promotion_id, order_customer.customer_id';
 
         /** @var list<array{promotion_id: string, total: numeric-string, customer_id: ?string}> $promotions */
         $promotions = $this->connection->fetchAllAssociative(
             $sql,
             [
-                'customerIds' => Uuid::fromHexToBytesList($customerIds),
-                'ids' => Uuid::fromHexToBytesList($promotionIds),
-                'versionId' => Uuid::fromHexToBytes(Defaults::LIVE_VERSION),
+                'customerIds' => IdBinding::values($customerIds),
+                'ids' => IdBinding::values($promotionIds),
+                'versionId' => IdBinding::value(Defaults::LIVE_VERSION),
             ],
-            ['customerIds' => ArrayParameterType::BINARY, 'ids' => ArrayParameterType::BINARY]
+            ['customerIds' => IdBinding::listType(), 'ids' => IdBinding::listType()]
         );
 
         return $this->groupByPromotion($promotions);
@@ -372,8 +361,8 @@ class PromotionRedemptionUpdater implements EventSubscriberInterface
             $set .= ', orders_per_customer_count = ' . $ordersPerCustomerCount;
         }
 
-        $params[] = Uuid::fromHexToBytes($promotionId);
-        $types[] = ParameterType::BINARY;
+        $params[] = IdBinding::value($promotionId);
+        $types[] = IdBinding::type();
 
         RetryableQuery::retryable($this->connection, function () use ($set, $params, $types): void {
             $this->connection->executeStatement('UPDATE promotion SET ' . $set . ' WHERE id = ?', $params, $types);
@@ -386,7 +375,7 @@ class PromotionRedemptionUpdater implements EventSubscriberInterface
         RetryableQuery::retryable($this->connection, function () use ($promotionId): void {
             $this->connection->executeStatement(
                 'UPDATE promotion SET orders_per_customer_count = NULL WHERE id = :id AND JSON_LENGTH(orders_per_customer_count) = 0',
-                ['id' => Uuid::fromHexToBytes($promotionId)]
+                ['id' => IdBinding::value($promotionId)]
             );
         });
     }

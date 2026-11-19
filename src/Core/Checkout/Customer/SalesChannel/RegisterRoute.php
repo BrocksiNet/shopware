@@ -21,6 +21,7 @@ use Shopware\Core\Checkout\Customer\Validation\Constraint\CustomerVatIdentificat
 use Shopware\Core\Checkout\Customer\Validation\Constraint\CustomerZipCode;
 use Shopware\Core\Checkout\Order\SalesChannel\OrderService;
 use Shopware\Core\Content\Newsletter\DataAbstractionLayer\Indexing\CustomerNewsletterSalesChannelsUpdater;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Indexing\EntityIndexerRegistry;
@@ -565,7 +566,7 @@ class RegisterRoute extends AbstractRegisterRoute
         $query = $this->connection->createQueryBuilder();
 
         $results = $query
-            ->select('LOWER(HEX(bound_sales_channel_id)) as bound_sales_channel_id')
+            ->select(IdBinding::text('bound_sales_channel_id') . ' as bound_sales_channel_id')
             ->from('customer')
             ->where($query->expr()->eq('email', $query->createPositionalParameter($email)))
             ->executeQuery()

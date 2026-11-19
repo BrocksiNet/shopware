@@ -7,6 +7,7 @@ use Shopware\Core\Checkout\Promotion\Aggregate\PromotionIndividualCode\Promotion
 use Shopware\Core\Checkout\Promotion\Exception\PatternNotComplexEnoughException;
 use Shopware\Core\Checkout\Promotion\PromotionCollection;
 use Shopware\Core\Checkout\Promotion\PromotionException;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
@@ -14,7 +15,6 @@ use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsFilter;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\NotEqualsFilter;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Util\Random;
-use Shopware\Core\Framework\Uuid\Uuid;
 
 /**
  * @phpstan-type CodePattern array{prefix?: string, replacement: string, suffix?: string, replacementString: string, replacementArray: array<string>}
@@ -142,7 +142,7 @@ class PromotionCodeService
 
     public function resetPromotionCodes(string $promotionId, Context $context): void
     {
-        $this->connection->executeStatement('DELETE FROM promotion_individual_code WHERE promotion_id = :id', ['id' => Uuid::fromHexToBytes($promotionId)]);
+        $this->connection->executeStatement('DELETE FROM promotion_individual_code WHERE promotion_id = :id', ['id' => IdBinding::value($promotionId)]);
     }
 
     /**

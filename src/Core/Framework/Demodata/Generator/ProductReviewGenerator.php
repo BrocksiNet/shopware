@@ -94,7 +94,7 @@ class ProductReviewGenerator implements DemodataGeneratorInterface
         }
 
         foreach ($customerIdsWithReviews as $customerId => $_) {
-            $this->productReviewCountService->updateReviewCountForCustomer(Uuid::fromHexToBytes($customerId));
+            $this->productReviewCountService->updateReviewCountForCustomer($customerId);
         }
 
         $context->getConsole()->progressFinish();

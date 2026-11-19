@@ -4,8 +4,8 @@ namespace Shopware\Core\Checkout\Customer\Subscriber;
 
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Checkout\Customer\Event\CustomerLoginEvent;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\System\SystemConfig\SystemConfigService;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\HttpFoundation\IpUtils;
@@ -58,7 +58,7 @@ readonly class CustomerRemoteAddressSubscriber implements EventSubscriberInterfa
         $this->connection->update('customer', [
             'remote_address' => $clientIp,
         ], [
-            'id' => Uuid::fromHexToBytes($event->getCustomerId()),
+            'id' => IdBinding::value($event->getCustomerId()),
         ]);
     }
 }

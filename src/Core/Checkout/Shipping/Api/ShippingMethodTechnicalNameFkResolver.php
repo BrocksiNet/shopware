@@ -4,6 +4,7 @@ namespace Shopware\Core\Checkout\Shipping\Api;
 
 use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Api\Sync\AbstractFkResolver;
 use Shopware\Core\Framework\Api\Sync\FkReference;
 use Shopware\Core\Framework\Log\Package;
@@ -39,7 +40,7 @@ class ShippingMethodTechnicalNameFkResolver extends AbstractFkResolver
         }
 
         $hash = $this->connection->fetchAllKeyValue(
-            'SELECT technical_name, LOWER(HEX(id)) FROM shipping_method WHERE technical_name IN (:names)',
+            'SELECT technical_name, ' . IdBinding::text('id') . ' FROM shipping_method WHERE technical_name IN (:names)',
             ['names' => $names],
             ['names' => ArrayParameterType::STRING]
         );

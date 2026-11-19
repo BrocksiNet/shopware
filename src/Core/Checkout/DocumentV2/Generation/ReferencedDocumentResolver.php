@@ -7,6 +7,7 @@ use Shopware\Core\Checkout\DocumentV2\DocumentV2Exception;
 use Shopware\Core\Checkout\DocumentV2\Service\ReferenceInvoiceLoader;
 use Shopware\Core\Checkout\DocumentV2\Struct\ReferencedDocument;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Uuid\Uuid;
 
@@ -64,14 +65,14 @@ final readonly class ReferencedDocumentResolver
 
         $storedOrderVersionId = $this->connection->fetchOne(
             'SELECT `order_version_id` FROM `document` WHERE `id` = :id',
-            ['id' => Uuid::fromHexToBytes($documentId)],
+            ['id' => IdBinding::value($documentId)],
         );
 
         if (!\is_string($storedOrderVersionId)) {
             return true;
         }
 
-        return Uuid::fromBytesToHex($storedOrderVersionId) !== Defaults::LIVE_VERSION;
+        return IdBinding::toHex($storedOrderVersionId) !== Defaults::LIVE_VERSION;
     }
 
     /**

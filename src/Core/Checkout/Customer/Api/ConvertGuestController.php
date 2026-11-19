@@ -8,13 +8,13 @@ use Shopware\Core\Checkout\Customer\CustomerEntity;
 use Shopware\Core\Checkout\Customer\CustomerException;
 use Shopware\Core\Checkout\Customer\SalesChannel\AbstractConvertGuestRoute;
 use Shopware\Core\Checkout\Customer\SalesChannel\AbstractSendPasswordRecoveryMailRoute;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Routing\ApiRouteScope;
 use Shopware\Core\Framework\Util\Random;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\Framework\Validation\DataBag\RequestDataBag;
 use Shopware\Core\PlatformRequest;
 use Shopware\Core\SalesChannelRequest;
@@ -61,8 +61,8 @@ class ConvertGuestController
         $token = $this->connection->fetchOne(
             'SELECT token FROM sales_channel_api_context WHERE customer_id = :customerId  AND sales_channel_id = :salesChannelId',
             [
-                'customerId' => Uuid::fromHexToBytes($customerId),
-                'salesChannelId' => Uuid::fromHexToBytes($customer->getSalesChannelId()),
+                'customerId' => IdBinding::value($customerId),
+                'salesChannelId' => IdBinding::value($customer->getSalesChannelId()),
             ]
         ) ?: Random::getAlphanumericString(32);
 

@@ -13,6 +13,7 @@ use Shopware\Core\Checkout\Cart\Price\Struct\QuantityPriceDefinition;
 use Shopware\Core\Checkout\Cart\Price\Struct\SelectedPrice;
 use Shopware\Core\Checkout\Cart\Tax\Struct\TaxRuleCollection;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\Pricing\Price;
 use Shopware\Core\Framework\DataAbstractionLayer\Pricing\PriceCollection;
 use Shopware\Core\Framework\Log\Package;
@@ -131,7 +132,7 @@ class ScriptPriceStubs implements ResetInterface
     private function resolveIsoCodes(array $prices): array
     {
         if ($this->currencies === null) {
-            $currencies = $this->connection->fetchAllKeyValue('SELECT iso_code, LOWER(HEX(id)) FROM currency');
+            $currencies = $this->connection->fetchAllKeyValue('SELECT iso_code, ' . IdBinding::text('id') . ' FROM currency');
             $this->currencies = $currencies;
         }
 

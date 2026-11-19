@@ -21,13 +21,13 @@ use Shopware\Core\Checkout\Order\Aggregate\OrderLineItem\OrderLineItemEntity;
 use Shopware\Core\Checkout\Order\OrderCollection;
 use Shopware\Core\Checkout\Order\OrderEntity;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsFilter;
 use Shopware\Core\Framework\Deprecation\BCChange\ExperimentalReplacement;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Plugin\Exception\DecorationPatternException;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\System\NumberRange\ValueGenerator\NumberRangeValueGeneratorInterface;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
@@ -372,12 +372,12 @@ final class CreditNoteRenderer extends AbstractDocumentRenderer
          * which might be needed years later for a business case.
          */
         $binaryIds = $this->connection->fetchFirstColumn($sql, [
-            'referencedInvoiceId' => Uuid::fromHexToBytes($referencedInvoiceId),
+            'referencedInvoiceId' => IdBinding::value($referencedInvoiceId),
             'creditType' => LineItem::CREDIT_LINE_ITEM_TYPE,
-            'liveVersionId' => Uuid::fromHexToBytes(Defaults::LIVE_VERSION),
+            'liveVersionId' => IdBinding::value(Defaults::LIVE_VERSION),
         ]);
 
-        return array_map(static fn ($id): string => Uuid::fromBytesToHex($id), $binaryIds);
+        return array_map(static fn ($id): string => IdBinding::toHex($id), $binaryIds);
     }
 
     /**
@@ -403,13 +403,13 @@ final class CreditNoteRenderer extends AbstractDocumentRenderer
         ';
 
         $binaryIds = $this->connection->fetchFirstColumn($sql, [
-            'referencedInvoiceId' => Uuid::fromHexToBytes($referencedInvoiceId),
+            'referencedInvoiceId' => IdBinding::value($referencedInvoiceId),
             'creditTechnicalName' => [self::TYPE, ZugferdCreditNoteRenderer::TYPE, ZugferdEmbeddedCreditNoteRenderer::TYPE],
             'creditType' => LineItem::CREDIT_LINE_ITEM_TYPE,
         ], [
             'creditTechnicalName' => ArrayParameterType::STRING,
         ]);
 
-        return array_map(static fn ($id): string => Uuid::fromBytesToHex($id), $binaryIds);
+        return array_map(static fn ($id): string => IdBinding::toHex($id), $binaryIds);
     }
 }

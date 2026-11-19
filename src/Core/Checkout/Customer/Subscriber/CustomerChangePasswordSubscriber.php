@@ -4,9 +4,9 @@ namespace Shopware\Core\Checkout\Customer\Subscriber;
 
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Checkout\Customer\CustomerEvents;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\Event\EntityWrittenEvent;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
 /**
@@ -47,7 +47,7 @@ class CustomerChangePasswordSubscriber implements EventSubscriberInterface
         $this->connection->executeStatement(
             'UPDATE `customer` SET `legacy_password` = null, `legacy_encoder` = null WHERE id = :id',
             [
-                'id' => Uuid::fromHexToBytes($customerId),
+                'id' => IdBinding::value($customerId),
             ]
         );
     }
