@@ -64,10 +64,11 @@ class ManyToManyIdFieldUpdater
             return;
         }
 
+        // CASE keeps NULL for an empty set: CONCAT returns NULL on MySQL but ignores the NULL aggregate on PostgreSQL ('[]')
         $template = <<<'SQL'
 UPDATE #table#
 SET #table#.#storage_name# = (
-    SELECT CONCAT('[', GROUP_CONCAT(JSON_QUOTE(LOWER(HEX(#mapping_table#.#reference_column#)))), ']')
+    SELECT CASE WHEN COUNT(*) = 0 THEN NULL ELSE CONCAT('[', GROUP_CONCAT(JSON_QUOTE(LOWER(HEX(#mapping_table#.#reference_column#)))), ']') END
     FROM #mapping_table#
     WHERE #mapping_table#.#mapping_column# = #table#.#join_column#
     #mapping_version_aware#
