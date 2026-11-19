@@ -4,13 +4,13 @@ namespace Shopware\Core\Content\Seo;
 
 use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
-use Doctrine\DBAL\ParameterType;
 use Psr\Clock\ClockInterface;
 use Shopware\Core\Content\Seo\Event\SeoUrlUpdateEvent;
 use Shopware\Core\Content\Seo\SeoUrl\SeoUrlCollection;
 use Shopware\Core\Content\Seo\SeoUrl\SeoUrlEntity;
 use Shopware\Core\Content\Seo\Validation\Constraint\ValidSeoPathInfo;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\MultiInsertQueryQueue;
 use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\RetryableQuery;
@@ -155,13 +155,13 @@ class SeoUrlPersister
             $seoPathInfos[] = $seoPathInfo;
 
             $insert = [];
-            $insert['id'] = Uuid::randomBytes();
+            $insert['id'] = IdBinding::value(Uuid::randomHex());
 
             if ($salesChannelId) {
-                $insert['sales_channel_id'] = Uuid::fromHexToBytes($salesChannelId);
+                $insert['sales_channel_id'] = IdBinding::value($salesChannelId);
             }
-            $insert['language_id'] = Uuid::fromHexToBytes($languageId);
-            $insert['foreign_key'] = Uuid::fromHexToBytes($fk);
+            $insert['language_id'] = IdBinding::value($languageId);
+            $insert['foreign_key'] = IdBinding::value($fk);
 
             $insert['path_info'] = $seoUrl['pathInfo'];
             $insert['seo_path_info'] = $seoPathInfo;
@@ -173,8 +173,7 @@ class SeoUrlPersister
 
             $insert['created_at'] = $dateTime;
 
-            // bound as binary, so the PostgreSQL id codec converts every 16 byte id; as a string a random id that happens to be valid UTF-8 stays raw and fails as uuid
-            $insertQuery->addInsert($table, $insert, array_fill_keys(array_intersect(['id', 'sales_channel_id', 'language_id', 'foreign_key'], array_keys($insert)), ParameterType::BINARY));
+            $insertQuery->addInsert($table, $insert, array_fill_keys(array_intersect(['id', 'sales_channel_id', 'language_id', 'foreign_key'], array_keys($insert)), IdBinding::type()));
         }
 
         $inuseSeoUrls = $this->findInUseCanonicalSeoUrls($seoPathInfos, $languageId, $salesChannelId);
@@ -240,14 +239,14 @@ class SeoUrlPersister
             return [];
         }
 
-        $fks = Uuid::fromHexToBytesList($foreignKeys);
-        $languageId = Uuid::fromHexToBytes($languageId);
+        $fks = IdBinding::values($foreignKeys);
+        $languageId = IdBinding::value($languageId);
 
         $query = $this->connection->createQueryBuilder();
         $query->select(
-            'LOWER(HEX(seo_url.id)) as id',
-            'LOWER(HEX(seo_url.foreign_key)) foreignKey',
-            'LOWER(HEX(seo_url.sales_channel_id)) salesChannelId',
+            IdBinding::text('seo_url.id') . ' as id',
+            IdBinding::text('seo_url.foreign_key') . ' foreignKey',
+            IdBinding::text('seo_url.sales_channel_id') . ' salesChannelId',
             'seo_url.is_modified as isModified',
             'seo_url.seo_path_info seoPathInfo',
             'seo_url.path_info pathInfo',
@@ -260,10 +259,10 @@ class SeoUrlPersister
         $query->andWhere('seo_url.foreign_key IN (:foreign_keys)');
 
         $query->setParameter('routeName', $routeName);
-        $query->setParameter('language_id', $languageId);
-        $query->setParameter('foreign_keys', $fks, ArrayParameterType::BINARY);
+        $query->setParameter('language_id', $languageId, IdBinding::type());
+        $query->setParameter('foreign_keys', $fks, IdBinding::listType());
 
-        $salesChannelIdBytes = Uuid::fromHexToBytesList(array_values(array_filter($salesChannelIds, static fn (?string $id): bool => $id !== null)));
+        $salesChannelIdBytes = IdBinding::values(array_values(array_filter($salesChannelIds, static fn (?string $id): bool => $id !== null)));
         if ($salesChannelIdBytes === []) {
             $query->andWhere('seo_url.sales_channel_id IS NULL');
         } else {
@@ -273,7 +272,7 @@ class SeoUrlPersister
             }
 
             $query->andWhere($salesChannelCondition);
-            $query->setParameter('sales_channel_ids', $salesChannelIdBytes, ArrayParameterType::BINARY);
+            $query->setParameter('sales_channel_ids', $salesChannelIdBytes, IdBinding::listType());
         }
 
         $rows = $query->executeQuery()->fetchAllAssociative();
@@ -304,19 +303,28 @@ class SeoUrlPersister
             return [];
         }
 
-        $query = 'SELECT id, sales_channel_id salesChannelId, foreign_key foreignKey, route_name routeName
+        $query = 'SELECT ' . IdBinding::selectText('id') . ' id, ' . IdBinding::selectText('sales_channel_id') . ' salesChannelId, ' . IdBinding::selectText('foreign_key') . ' foreignKey, route_name routeName
         FROM seo_url
         WHERE is_canonical = 1 AND language_id = :languageId AND seo_path_info IN (:seoPathInfos)';
 
-        $params = ['seoPathInfos' => $seoPathInfos, 'languageId' => Uuid::fromHexToBytes($languageId)];
-        $types = ['seoPathInfos' => ArrayParameterType::BINARY];
+        $params = ['seoPathInfos' => $seoPathInfos, 'languageId' => IdBinding::value($languageId)];
+        $types = ['seoPathInfos' => ArrayParameterType::BINARY, 'languageId' => IdBinding::type()];
 
         if ($salesChannelId !== null) {
             $query .= ' AND sales_channel_id = :salesChannelId';
-            $params['salesChannelId'] = Uuid::fromHexToBytes($salesChannelId);
+            $params['salesChannelId'] = IdBinding::value($salesChannelId);
+            $types['salesChannelId'] = IdBinding::type();
         }
 
-        return $this->connection->fetchAllAssociative($query, $params, $types);
+        $rows = $this->connection->fetchAllAssociative($query, $params, $types);
+        foreach ($rows as &$row) {
+            foreach (['id', 'salesChannelId', 'foreignKey'] as $column) {
+                $row[$column] = $row[$column] === null ? null : IdBinding::toHex((string) $row[$column]);
+            }
+        }
+        unset($row);
+
+        return $rows;
     }
 
     /**
@@ -330,12 +338,12 @@ class SeoUrlPersister
             return;
         }
 
-        $languageId = Uuid::fromHexToBytes($languageId);
+        $languageId = IdBinding::value($languageId);
 
         $ids = [];
         foreach ($seoUrls as $seoUrl) {
             $id = $this->connection->fetchOne(
-                'SELECT id
+                'SELECT ' . IdBinding::selectText('id') . '
                  FROM seo_url
                  WHERE language_id = :languageId
                    AND foreign_key = :foreignKey
@@ -354,14 +362,19 @@ class SeoUrlPersister
                  LIMIT 1',
                 [
                     'languageId' => $languageId,
-                    'foreignKey' => $seoUrl['foreignKey'],
-                    'salesChannelId' => $seoUrl['salesChannelId'],
+                    'foreignKey' => IdBinding::value($seoUrl['foreignKey']),
+                    'salesChannelId' => IdBinding::value($seoUrl['salesChannelId']),
                     'routeName' => (string) $seoUrl['routeName'],
+                ],
+                [
+                    'languageId' => IdBinding::type(),
+                    'foreignKey' => IdBinding::type(),
+                    'salesChannelId' => IdBinding::type(),
                 ]
             );
 
             if ($id !== false) {
-                $ids[] = $id;
+                $ids[] = IdBinding::toHex((string) $id);
             }
         }
 
@@ -372,8 +385,8 @@ class SeoUrlPersister
         RetryableQuery::retryable($this->connection, function () use ($ids): void {
             $this->connection->executeStatement(
                 'UPDATE seo_url SET is_canonical = 1, is_modified = 1 WHERE id IN (:ids)',
-                ['ids' => $ids],
-                ['ids' => ArrayParameterType::BINARY]
+                ['ids' => IdBinding::values($ids)],
+                ['ids' => IdBinding::listType()]
             );
         });
     }
@@ -387,17 +400,15 @@ class SeoUrlPersister
             return;
         }
 
-        $ids = Uuid::fromHexToBytesList($ids);
-
         $query = $this->connection->createQueryBuilder()
             ->update('seo_url')
             ->set('is_canonical', 'NULL')
             ->where('id IN (:ids)')
-            ->setParameter('ids', $ids, ArrayParameterType::BINARY);
+            ->setParameter('ids', IdBinding::values($ids), IdBinding::listType());
 
         if ($salesChannelId) {
             $query->andWhere('sales_channel_id = :salesChannelId');
-            $query->setParameter('salesChannelId', Uuid::fromHexToBytes($salesChannelId));
+            $query->setParameter('salesChannelId', IdBinding::value($salesChannelId), IdBinding::type());
         }
 
         RetryableQuery::retryable($this->connection, static function () use ($query): void {
@@ -414,7 +425,6 @@ class SeoUrlPersister
             return;
         }
 
-        $ids = Uuid::fromHexToBytesList($ids);
         $query = $this->connection->createQueryBuilder()
             ->update('seo_url')
             ->set('is_deleted', $deleted ? '1' : '0')
@@ -423,12 +433,12 @@ class SeoUrlPersister
             // skip rows that already hold the target value to reduce write amplification
             // and lock contention between concurrent url generations (see NEXT-22174)
             ->andWhere('is_deleted != ' . ($deleted ? '1' : '0'))
-            ->setParameter('fks', $ids, ArrayParameterType::BINARY)
+            ->setParameter('fks', IdBinding::values($ids), IdBinding::listType())
             ->setParameter('routeName', $routeName);
 
         if ($salesChannelId) {
             $query->andWhere('sales_channel_id = :salesChannelId');
-            $query->setParameter('salesChannelId', Uuid::fromHexToBytes($salesChannelId));
+            $query->setParameter('salesChannelId', IdBinding::value($salesChannelId), IdBinding::type());
         }
 
         $query->executeStatement();
@@ -447,13 +457,13 @@ class SeoUrlPersister
                 ->andWhere('route_name = :routeName')
                 ->andWhere('language_id = :languageId')
                 ->setParameter('pathInfo', $pathInfo)
-                ->setParameter('foreignKey', Uuid::fromHexToBytes($foreignKey))
+                ->setParameter('foreignKey', IdBinding::value($foreignKey), IdBinding::type())
                 ->setParameter('routeName', $routeName)
-                ->setParameter('languageId', Uuid::fromHexToBytes($languageId));
+                ->setParameter('languageId', IdBinding::value($languageId), IdBinding::type());
 
             if ($salesChannelId) {
                 $query->andWhere('sales_channel_id = :salesChannelId');
-                $query->setParameter('salesChannelId', Uuid::fromHexToBytes($salesChannelId));
+                $query->setParameter('salesChannelId', IdBinding::value($salesChannelId), IdBinding::type());
             } else {
                 $query->andWhere('sales_channel_id IS NULL');
             }
