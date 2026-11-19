@@ -20,6 +20,7 @@ use Shopware\Core\Content\Newsletter\SalesChannel\SalesChannelNewsletterRecipien
 use Shopware\Core\Content\Newsletter\ScheduledTask\NewsletterRecipientTask;
 use Shopware\Core\Content\Newsletter\ScheduledTask\NewsletterRecipientTaskHandler;
 use Shopware\Core\Content\Newsletter\Subscriber\NewsletterRecipientSalutationSubscriber;
+use Shopware\Core\DevOps\Environment\EnvironmentHelper;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\Common\IteratorFactory;
 use Shopware\Core\Framework\Extensions\ExtensionDispatcher;
 use Shopware\Core\Framework\RateLimiter\RateLimiter;
@@ -67,7 +68,12 @@ return static function (ContainerConfigurator $containerConfigurator): void {
     $services->set(SqlNewsletterRecipientStorage::class)
         ->args([service(Connection::class), service(ClockInterface::class)]);
 
-    $services->alias(NewsletterRecipientStorage::class, DalNewsletterRecipientStorage::class);
+    // Opt-in switch, evaluated when the container is compiled (clear the cache after changing it): SHOPWARE_NEWSLETTER_RECIPIENT_STORAGE=sql
+    // routes the newsletter routes through the SQL adapter, every other value keeps the DAL adapter.
+    $services->alias(
+        NewsletterRecipientStorage::class,
+        EnvironmentHelper::getVariable('SHOPWARE_NEWSLETTER_RECIPIENT_STORAGE', 'dal') === 'sql' ? SqlNewsletterRecipientStorage::class : DalNewsletterRecipientStorage::class
+    );
 
     $services->set(NewsletterSubscribeRoute::class)
         ->public()
