@@ -5,9 +5,9 @@ namespace Shopware\Storefront\Theme;
 use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\RetryableQuery;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 
 /**
  * @internal
@@ -66,7 +66,7 @@ class ThemeRuntimeConfigStorage
                 FROM `theme_runtime_config`
                 WHERE `theme_id` = :themeId
             SQL,
-            ['themeId' => Uuid::fromHexToBytes($themeId)],
+            ['themeId' => IdBinding::value($themeId)],
         );
 
         if (!$record) {
@@ -79,7 +79,7 @@ class ThemeRuntimeConfigStorage
     public function save(ThemeRuntimeConfig $config): void
     {
         $parameters = [
-            'themeId' => Uuid::fromHexToBytes($config->themeId),
+            'themeId' => IdBinding::value($config->themeId),
             'technicalName' => $config->technicalName,
             'resolvedConfig' => json_encode($config->resolvedConfig, \JSON_THROW_ON_ERROR),
             'viewInheritance' => json_encode($config->viewInheritance, \JSON_THROW_ON_ERROR),
@@ -129,12 +129,10 @@ class ThemeRuntimeConfigStorage
     public function getCopiesIds(string $themeId): array
     {
         return $this->connection->fetchFirstColumn(
-            <<<'SQL'
-                SELECT LOWER(HEX(`id`)) AS id
-                FROM `theme`
-                WHERE `parent_theme_id` = :themeId AND `technical_name` IS NULL
-            SQL,
-            ['themeId' => Uuid::fromHexToBytes($themeId)],
+            '    SELECT ' . IdBinding::text('`id`') . ' AS id
+    FROM `theme`
+    WHERE `parent_theme_id` = :themeId AND `technical_name` IS NULL',
+            ['themeId' => IdBinding::value($themeId)],
         );
     }
 
@@ -151,10 +149,8 @@ class ThemeRuntimeConfigStorage
 
         while ($pendingParentIds !== []) {
             $directChildren = $this->connection->fetchFirstColumn(
-                <<<'SQL'
-                    SELECT LOWER(HEX(id)) as id FROM theme WHERE parent_theme_id IN (:parentIds)
-                SQL,
-                ['parentIds' => array_map(static fn ($id) => Uuid::fromHexToBytes($id), $pendingParentIds)],
+                '    SELECT ' . IdBinding::text('id') . ' as id FROM theme WHERE parent_theme_id IN (:parentIds)',
+                ['parentIds' => array_map(static fn ($id) => IdBinding::value($id), $pendingParentIds)],
                 [
                     'parentIds' => ArrayParameterType::STRING,
                 ]
@@ -186,7 +182,7 @@ class ThemeRuntimeConfigStorage
                 LEFT JOIN theme AS parentTheme ON parentTheme.id = theme.parent_theme_id
             WHERE theme.id = :id
         ', [
-            'id' => Uuid::fromHexToBytes($themeId),
+            'id' => IdBinding::value($themeId),
         ]);
 
         if ($names === false) {
@@ -199,7 +195,7 @@ class ThemeRuntimeConfigStorage
     public function getThemeIdByTechnicalName(string $technicalName): ?string
     {
         $themeId = $this->connection->fetchOne('
-            SELECT LOWER(HEX(id)) FROM theme WHERE technical_name = :technicalName
+            SELECT ' . IdBinding::text('id') . ' FROM theme WHERE technical_name = :technicalName
         ', [
             'technicalName' => $technicalName,
         ]);
@@ -215,7 +211,7 @@ class ThemeRuntimeConfigStorage
     {
         $technicalName = $this->connection->fetchOne(
             'SELECT technical_name FROM theme WHERE id = :id',
-            ['id' => Uuid::fromHexToBytes($themeId)]
+            ['id' => IdBinding::value($themeId)]
         );
 
         return $technicalName === false ? null : $technicalName;
@@ -227,7 +223,7 @@ class ThemeRuntimeConfigStorage
     private function hydrateRecord(array $record): ThemeRuntimeConfig
     {
         return ThemeRuntimeConfig::fromArray([
-            'themeId' => Uuid::fromBytesToHex($record['theme_id']),
+            'themeId' => IdBinding::toHex($record['theme_id']),
             'technicalName' => $record['technical_name'] !== null ? (string) $record['technical_name'] : null,
             'resolvedConfig' => json_decode($record['resolved_config'], true, 512, \JSON_THROW_ON_ERROR),
             'viewInheritance' => json_decode($record['view_inheritance'], true, 512, \JSON_THROW_ON_ERROR),

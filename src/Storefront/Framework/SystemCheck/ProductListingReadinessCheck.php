@@ -2,9 +2,9 @@
 
 namespace Shopware\Storefront\Framework\SystemCheck;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Content\Category\CategoryCollection;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsFilter;
 use Shopware\Core\Framework\Log\Package;
@@ -13,7 +13,6 @@ use Shopware\Core\Framework\SystemCheck\Check\Category;
 use Shopware\Core\Framework\SystemCheck\Check\Result;
 use Shopware\Core\Framework\SystemCheck\Check\Status;
 use Shopware\Core\Framework\SystemCheck\Check\SystemCheckExecutionContext;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\System\SalesChannel\Entity\SalesChannelRepository;
 use Shopware\Storefront\Framework\Seo\SeoUrlRoute\NavigationPageSeoUrlRoute;
 use Shopware\Storefront\Framework\SystemCheck\Util\AbstractSalesChannelDomainProvider;
@@ -172,45 +171,43 @@ class ProductListingReadinessCheck extends BaseCheck
      */
     private function fetchNavigationIds(array $salesChannelIds): array
     {
-        $sql = <<<'SQL'
-            SELECT LOWER(HEX(`sales_channel`.`id`)) AS `sales_channel_id`,
-                   LOWER(HEX(`category_child`.`id`)) AS `category_id`,
-                   0 AS `is_navigation_category`
-            FROM `category` `category_root`
-            INNER JOIN `sales_channel`
-                ON `sales_channel`.`navigation_category_id` = `category_root`.`id`
-                AND `sales_channel`.`navigation_category_version_id` = `category_root`.`version_id`
-            INNER JOIN `category` `category_child`
-                ON `category_root`.`id` = `category_child`.`parent_id`
-                AND `category_root`.`version_id` = `category_child`.`version_id`
-                AND `category_child`.`active` = 1
-            INNER JOIN `cms_page` `cms_page_child`
-                ON `category_child`.`cms_page_id` = `cms_page_child`.`id`
-                AND `category_child`.`version_id` = `cms_page_child`.`version_id`
-                AND `cms_page_child`.`type` = 'product_list'
-            WHERE `category_root`.`active` = 1
-                AND `sales_channel`.`id` IN (:salesChannelIds)
-            UNION ALL
-            SELECT LOWER(HEX(`sales_channel`.`id`)) AS `sales_channel_id`,
-                   LOWER(HEX(`category_root`.`id`)) AS `category_id`,
-                   1 AS `is_navigation_category`
-            FROM `category` `category_root`
-            INNER JOIN `sales_channel`
-                ON `sales_channel`.`navigation_category_id` = `category_root`.`id`
-                AND `sales_channel`.`navigation_category_version_id` = `category_root`.`version_id`
-            INNER JOIN `cms_page` `cms_page_root`
-                ON `category_root`.`cms_page_id` = `cms_page_root`.`id`
-                AND `category_root`.`version_id` = `cms_page_root`.`version_id`
-                AND `cms_page_root`.`type` = 'product_list'
-            WHERE `category_root`.`active` = 1
-                AND `sales_channel`.`id` IN (:salesChannelIds)
-            ORDER BY `sales_channel_id`, `is_navigation_category`, `category_id`
-        SQL;
+        $sql = '    SELECT ' . IdBinding::text('`sales_channel`.`id`') . ' AS `sales_channel_id`,
+           ' . IdBinding::text('`category_child`.`id`') . ' AS `category_id`,
+           0 AS `is_navigation_category`
+    FROM `category` `category_root`
+    INNER JOIN `sales_channel`
+        ON `sales_channel`.`navigation_category_id` = `category_root`.`id`
+        AND `sales_channel`.`navigation_category_version_id` = `category_root`.`version_id`
+    INNER JOIN `category` `category_child`
+        ON `category_root`.`id` = `category_child`.`parent_id`
+        AND `category_root`.`version_id` = `category_child`.`version_id`
+        AND `category_child`.`active` = 1
+    INNER JOIN `cms_page` `cms_page_child`
+        ON `category_child`.`cms_page_id` = `cms_page_child`.`id`
+        AND `category_child`.`version_id` = `cms_page_child`.`version_id`
+        AND `cms_page_child`.`type` = \'product_list\'
+    WHERE `category_root`.`active` = 1
+        AND `sales_channel`.`id` IN (:salesChannelIds)
+    UNION ALL
+    SELECT ' . IdBinding::text('`sales_channel`.`id`') . ' AS `sales_channel_id`,
+           ' . IdBinding::text('`category_root`.`id`') . ' AS `category_id`,
+           1 AS `is_navigation_category`
+    FROM `category` `category_root`
+    INNER JOIN `sales_channel`
+        ON `sales_channel`.`navigation_category_id` = `category_root`.`id`
+        AND `sales_channel`.`navigation_category_version_id` = `category_root`.`version_id`
+    INNER JOIN `cms_page` `cms_page_root`
+        ON `category_root`.`cms_page_id` = `cms_page_root`.`id`
+        AND `category_root`.`version_id` = `cms_page_root`.`version_id`
+        AND `cms_page_root`.`type` = \'product_list\'
+    WHERE `category_root`.`active` = 1
+        AND `sales_channel`.`id` IN (:salesChannelIds)
+    ORDER BY `sales_channel_id`, `is_navigation_category`, `category_id`';
 
         $result = $this->connection->fetchAllAssociative(
             $sql,
-            ['salesChannelIds' => Uuid::fromHexToBytesList($salesChannelIds)],
-            ['salesChannelIds' => ArrayParameterType::BINARY]
+            ['salesChannelIds' => IdBinding::values($salesChannelIds)],
+            ['salesChannelIds' => IdBinding::listType()]
         );
 
         $navigationIds = [];

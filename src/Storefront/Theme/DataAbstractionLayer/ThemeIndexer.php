@@ -2,8 +2,8 @@
 
 namespace Shopware\Storefront\Theme\DataAbstractionLayer;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\Common\IterableQuery;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\Common\IteratorFactory;
 use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\RetryableTransaction;
@@ -13,7 +13,6 @@ use Shopware\Core\Framework\DataAbstractionLayer\Indexing\EntityIndexer;
 use Shopware\Core\Framework\DataAbstractionLayer\Indexing\EntityIndexingMessage;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Plugin\Exception\DecorationPatternException;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Storefront\Theme\Event\ThemeIndexerEvent;
 use Shopware\Storefront\Theme\ThemeCollection;
 use Shopware\Storefront\Theme\ThemeDefinition;
@@ -81,8 +80,8 @@ class ThemeIndexer extends EntityIndexer
         RetryableTransaction::retryable($this->connection, function () use ($ids): void {
             $this->connection->executeStatement(
                 'DELETE FROM theme_child WHERE parent_id IN (:ids)',
-                ['ids' => Uuid::fromHexToBytesList($ids)],
-                ['ids' => ArrayParameterType::BINARY]
+                ['ids' => IdBinding::values($ids)],
+                ['ids' => IdBinding::listType()]
             );
 
             $this->connection->executeStatement(
@@ -92,8 +91,8 @@ class ThemeIndexer extends EntityIndexer
                         WHERE parent_theme_id IS NOT NULL AND id IN (:ids) AND technical_name IS NULL
                     )
                 ',
-                ['ids' => Uuid::fromHexToBytesList($ids)],
-                ['ids' => ArrayParameterType::BINARY]
+                ['ids' => IdBinding::values($ids)],
+                ['ids' => IdBinding::listType()]
             );
         });
 

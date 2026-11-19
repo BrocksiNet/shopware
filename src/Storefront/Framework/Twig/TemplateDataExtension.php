@@ -3,11 +3,11 @@
 namespace Shopware\Storefront\Framework\Twig;
 
 use Doctrine\DBAL\Connection;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Adapter\Request\RequestParamHelper;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Term\Filter\AbstractTokenFilter;
 use Shopware\Core\Framework\Feature;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\PlatformRequest;
 use Shopware\Core\SalesChannelRequest;
 use Shopware\Core\System\SalesChannel\SalesChannelContext;
@@ -119,7 +119,7 @@ class TemplateDataExtension extends AbstractExtension implements GlobalsInterfac
     {
         $min = (int) $this->connection->fetchOne(
             'SELECT `min_search_length` FROM `product_search_config` WHERE `language_id` = :id',
-            ['id' => Uuid::fromHexToBytes($context->getLanguageId())]
+            ['id' => IdBinding::value($context->getLanguageId())]
         );
 
         return $min ?: AbstractTokenFilter::DEFAULT_MIN_SEARCH_TERM_LENGTH;
@@ -128,14 +128,14 @@ class TemplateDataExtension extends AbstractExtension implements GlobalsInterfac
     private function resolveNavigationIdForLandingPage(string $landingPageId): string
     {
         $categoryId = $this->connection->fetchOne(
-            'SELECT LOWER(HEX(ct.category_id))
+            'SELECT ' . IdBinding::text('ct.category_id') . '
              FROM category_translation ct
              WHERE ct.link_type = :linkType
                AND ct.internal_link = :landingPageId
              LIMIT 1',
             [
                 'linkType' => 'landing_page',
-                'landingPageId' => Uuid::fromHexToBytes($landingPageId),
+                'landingPageId' => IdBinding::value($landingPageId),
             ]
         );
 
@@ -149,7 +149,7 @@ class TemplateDataExtension extends AbstractExtension implements GlobalsInterfac
     {
         $path = $this->connection->fetchOne(
             'SELECT path FROM category WHERE id = :id',
-            ['id' => Uuid::fromHexToBytes($activeNavigationId)]
+            ['id' => IdBinding::value($activeNavigationId)]
         ) ?: '';
 
         $navigationPathIdList = array_filter(explode('|', $path));

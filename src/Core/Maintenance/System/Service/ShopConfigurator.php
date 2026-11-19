@@ -6,6 +6,7 @@ use Doctrine\DBAL\Connection;
 use Psr\Clock\ClockInterface;
 use Psr\EventDispatcher\EventDispatcherInterface;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\RetryableTransaction;
 use Shopware\Core\Framework\DataAbstractionLayer\Util\StatementHelper;
 use Shopware\Core\Framework\Log\Package;
@@ -68,7 +69,7 @@ class ShopConfigurator
             SELECT short_code, name FROM country_state_translation
             INNER JOIN country_state ON country_state.id = country_state_translation.country_state_id
             WHERE country_state_translation.language_id = :languageId', [
-                'languageId' => Uuid::fromHexToBytes(Defaults::LANGUAGE_SYSTEM),
+                'languageId' => IdBinding::value(Defaults::LANGUAGE_SYSTEM),
             ]);
 
             if ($defaultCountryStateTranslations !== []) {
@@ -107,7 +108,7 @@ class ShopConfigurator
         }
 
         $this->eventDispatcher->dispatch(new SystemLanguageChangeEvent(
-            Uuid::fromBytesToHex($newDefaultLanguageId),
+            IdBinding::toHex($newDefaultLanguageId),
             $currentLocale['code'],
             $locale,
         ));
@@ -117,7 +118,7 @@ class ShopConfigurator
     {
         $currentCurrencyIso = $this->connection->fetchOne(
             'SELECT iso_code FROM currency WHERE id = :currencyId',
-            ['currencyId' => Uuid::fromHexToBytes(Defaults::CURRENCY)]
+            ['currencyId' => IdBinding::value(Defaults::CURRENCY)]
         );
 
         if (!$currentCurrencyIso) {
@@ -139,12 +140,12 @@ class ShopConfigurator
             // assign new uuid to old DEFAULT
             StatementHelper::executeStatement($stmt, [
                 'newId' => Uuid::randomBytes(),
-                'oldId' => Uuid::fromHexToBytes(Defaults::CURRENCY),
+                'oldId' => IdBinding::value(Defaults::CURRENCY),
             ]);
 
             // change id to DEFAULT
             StatementHelper::executeStatement($stmt, [
-                'newId' => Uuid::fromHexToBytes(Defaults::CURRENCY),
+                'newId' => IdBinding::value(Defaults::CURRENCY),
                 'oldId' => $newDefaultCurrencyId,
             ]);
 
@@ -171,7 +172,7 @@ class ShopConfigurator
             WHERE id NOT IN (
                 SELECT country_state_id FROM country_state_translation WHERE language_id = :languageId GROUP BY country_state_id
             )', [
-            'languageId' => Uuid::fromHexToBytes(Defaults::LANGUAGE_SYSTEM),
+            'languageId' => IdBinding::value(Defaults::LANGUAGE_SYSTEM),
         ]);
 
         if ($missingTranslations === []) {
@@ -186,7 +187,7 @@ class ShopConfigurator
             }
 
             $this->connection->insert('country_state_translation', [
-                'language_id' => Uuid::fromHexToBytes(Defaults::LANGUAGE_SYSTEM),
+                'language_id' => IdBinding::value(Defaults::LANGUAGE_SYSTEM),
                 'country_state_id' => $stateId,
                 'name' => $defaultTranslations[$shortCode],
                 'created_at' => $storageDate,
@@ -274,19 +275,19 @@ class ShopConfigurator
 
             // new default language does not exist -> just set to name
             if (!$newDefaultLanguageId) {
-                StatementHelper::executeStatement($updLang, ['name' => $name, 'languageId' => Uuid::fromHexToBytes(Defaults::LANGUAGE_SYSTEM)]);
+                StatementHelper::executeStatement($updLang, ['name' => $name, 'languageId' => IdBinding::value(Defaults::LANGUAGE_SYSTEM)]);
 
                 return;
             }
 
             $langName = $connection->prepare('SELECT name FROM language WHERE id = :languageId');
 
-            $current = StatementHelper::executeQuery($langName, ['languageId' => Uuid::fromHexToBytes(Defaults::LANGUAGE_SYSTEM)])->fetchOne();
+            $current = StatementHelper::executeQuery($langName, ['languageId' => IdBinding::value(Defaults::LANGUAGE_SYSTEM)])->fetchOne();
 
             $new = StatementHelper::executeQuery($langName, ['languageId' => $newDefaultLanguageId])->fetchOne();
 
             // swap name
-            StatementHelper::executeStatement($updLang, ['name' => $new, 'languageId' => Uuid::fromHexToBytes(Defaults::LANGUAGE_SYSTEM)]);
+            StatementHelper::executeStatement($updLang, ['name' => $new, 'languageId' => IdBinding::value(Defaults::LANGUAGE_SYSTEM)]);
             StatementHelper::executeStatement($updLang, ['name' => $current, 'languageId' => $newDefaultLanguageId]);
         });
     }
@@ -386,12 +387,12 @@ class ShopConfigurator
             // assign new uuid to old DEFAULT
             StatementHelper::executeStatement($stmt, [
                 'newId' => Uuid::randomBytes(),
-                'oldId' => Uuid::fromHexToBytes(Defaults::LANGUAGE_SYSTEM),
+                'oldId' => IdBinding::value(Defaults::LANGUAGE_SYSTEM),
             ]);
 
             // change id to DEFAULT
             StatementHelper::executeStatement($stmt, [
-                'newId' => Uuid::fromHexToBytes(Defaults::LANGUAGE_SYSTEM),
+                'newId' => IdBinding::value(Defaults::LANGUAGE_SYSTEM),
                 'oldId' => $newLanguageId,
             ]);
         });
@@ -438,7 +439,7 @@ class ShopConfigurator
             VALUES (:currencyId, :languageId, :currency, :name, NOW())
         ', [
             'currencyId' => $id,
-            'languageId' => Uuid::fromHexToBytes(Defaults::LANGUAGE_SYSTEM),
+            'languageId' => IdBinding::value(Defaults::LANGUAGE_SYSTEM),
             'currency' => $currencyCode,
             'name' => Currencies::getName($currencyCode, $locale),
         ]);
@@ -456,7 +457,7 @@ class ShopConfigurator
              FROM language
              INNER JOIN locale ON translation_code_id = locale.id
              WHERE language.id = :languageId',
-            ['languageId' => Uuid::fromHexToBytes(Defaults::LANGUAGE_SYSTEM)]
+            ['languageId' => IdBinding::value(Defaults::LANGUAGE_SYSTEM)]
         ) ?: null;
     }
 }

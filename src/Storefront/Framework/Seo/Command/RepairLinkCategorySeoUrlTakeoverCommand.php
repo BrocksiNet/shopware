@@ -2,11 +2,11 @@
 
 namespace Shopware\Storefront\Framework\Seo\Command;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Content\Category\CategoryDefinition;
 use Shopware\Core\Content\Seo\SeoUrlUpdater;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\RetryableQuery;
 use Shopware\Core\Framework\Feature;
 use Shopware\Core\Framework\Log\Package;
@@ -141,8 +141,8 @@ final readonly class RepairLinkCategorySeoUrlTakeoverCommand
         RetryableQuery::retryable($this->connection, function () use ($categories): void {
             $this->connection->executeStatement(
                 'UPDATE seo_url SET is_modified = 0 WHERE id IN (:ids)',
-                ['ids' => Uuid::fromHexToBytesList(array_merge(...array_column($categories, 'lockedUrlIds')))],
-                ['ids' => ArrayParameterType::BINARY]
+                ['ids' => IdBinding::values(array_merge(...array_column($categories, 'lockedUrlIds')))],
+                ['ids' => IdBinding::listType()]
             );
         });
 
@@ -195,9 +195,9 @@ final readonly class RepairLinkCategorySeoUrlTakeoverCommand
         // while a manual change creates a new URL
         $query = $this->connection->createQueryBuilder()
             ->select(
-                'LOWER(HEX(target.id)) AS category_id',
+                IdBinding::text('target.id') . ' AS category_id',
                 'COALESCE(target_translation.name, target_default.name) AS name',
-                'LOWER(HEX(target_url.id)) AS locked_url_id',
+                IdBinding::text('target_url.id') . ' AS locked_url_id',
                 'target_url.seo_path_info AS locked_url',
                 'target_url.created_at AS locked_url_created_at',
                 'link_url.seo_path_info AS link_url',
@@ -224,12 +224,12 @@ final readonly class RepairLinkCategorySeoUrlTakeoverCommand
             ->setParameter('routeName', NavigationPageSeoUrlRoute::ROUTE_NAME)
             ->setParameter('linkType', CategoryDefinition::TYPE_LINK)
             ->setParameter('linkTypeCategory', CategoryDefinition::LINK_TYPE_CATEGORY)
-            ->setParameter('versionId', Uuid::fromHexToBytes(Defaults::LIVE_VERSION))
-            ->setParameter('systemLanguageId', Uuid::fromHexToBytes(Defaults::LANGUAGE_SYSTEM));
+            ->setParameter('versionId', IdBinding::value(Defaults::LIVE_VERSION))
+            ->setParameter('systemLanguageId', IdBinding::value(Defaults::LANGUAGE_SYSTEM));
 
         if ($categoryIds !== []) {
             $query->andWhere('target.id IN (:categoryIds)')
-                ->setParameter('categoryIds', Uuid::fromHexToBytesList($categoryIds), ArrayParameterType::BINARY);
+                ->setParameter('categoryIds', IdBinding::values($categoryIds), IdBinding::listType());
         }
 
         /** @var list<array{category_id: string, name: string, locked_url_id: string, locked_url: string, locked_url_created_at: string, link_url: string, link_url_created_at: string, caused_by_indexing: string}> $affected */

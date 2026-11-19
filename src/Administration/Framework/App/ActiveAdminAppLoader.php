@@ -3,6 +3,7 @@
 namespace Shopware\Administration\Framework\App;
 
 use Doctrine\DBAL\Connection;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Log\Package;
 
 /**
@@ -24,7 +25,7 @@ readonly class ActiveAdminAppLoader
         $apps = $this->connection->fetchAllAssociative('SELECT
     app.name,
     app.active,
-    LOWER(HEX(app.integration_id)) as integrationId,
+    ' . IdBinding::text('app.integration_id') . ' as integrationId,
     app.base_app_url as baseUrl,
     app.version,
     app.source_type as sourceType,

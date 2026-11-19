@@ -4,6 +4,7 @@ namespace Shopware\Storefront\Theme;
 
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Exception\ConnectionException;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\RetryableTransaction;
 use Shopware\Core\Framework\DataAbstractionLayer\Entity;
@@ -463,11 +464,11 @@ class ThemeService implements ResetInterface
                 FROM theme AS child
                 INNER JOIN dependent_themes AS parent ON child.parent_theme_id = parent.id
             )
-            SELECT LOWER(HEX(dependent_themes.id)) AS id,
-                   LOWER(HEX(tsc.sales_channel_id)) AS saleschannelId
+            SELECT ' . IdBinding::text('dependent_themes.id') . ' AS id,
+                   ' . IdBinding::text('tsc.sales_channel_id') . ' AS saleschannelId
             FROM dependent_themes
             INNER JOIN theme_sales_channel AS tsc ON tsc.theme_id = dependent_themes.id',
-            ['id' => Uuid::fromHexToBytes($themeId)]
+            ['id' => IdBinding::value($themeId)]
         );
 
         foreach ($themeData as $data) {

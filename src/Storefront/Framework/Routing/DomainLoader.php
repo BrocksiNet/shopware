@@ -4,6 +4,7 @@ namespace Shopware\Storefront\Framework\Routing;
 
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\FetchModeHelper;
 use Shopware\Core\Framework\Feature;
 use Shopware\Core\Framework\Log\Package;
@@ -58,13 +59,13 @@ class DomainLoader extends AbstractDomainLoader
         $query->select(
             'CONCAT(TRIM(TRAILING \'/\' FROM domain.url), \'/\') `key`',
             'CONCAT(TRIM(TRAILING \'/\' FROM domain.url), \'/\') url',
-            'LOWER(HEX(domain.id)) id',
-            'LOWER(HEX(sales_channel.id)) salesChannelId',
-            'LOWER(HEX(sales_channel.type_id)) typeId',
-            'LOWER(HEX(domain.snippet_set_id)) snippetSetId',
-            'LOWER(HEX(domain.currency_id)) currencyId',
-            'LOWER(HEX(domain.language_id)) languageId',
-            'LOWER(HEX(theme.id)) themeId',
+            IdBinding::text('domain.id') . ' id',
+            IdBinding::text('sales_channel.id') . ' salesChannelId',
+            IdBinding::text('sales_channel.type_id') . ' typeId',
+            IdBinding::text('domain.snippet_set_id') . ' snippetSetId',
+            IdBinding::text('domain.currency_id') . ' currencyId',
+            IdBinding::text('domain.language_id') . ' languageId',
+            IdBinding::text('theme.id') . ' themeId',
             'sales_channel.maintenance maintenance',
             // @deprecated tag:v6.8.0 - remove the COALESCE fallback to the deprecated `maintenance_ip_whitelist` column
             'COALESCE(sales_channel.maintenance_ip_allowlist, sales_channel.maintenance_ip_whitelist) maintenanceIpAllowlist',
@@ -79,9 +80,9 @@ class DomainLoader extends AbstractDomainLoader
         $query->leftJoin('sales_channel', 'theme_sales_channel', 'theme_sales_channel', 'sales_channel.id = theme_sales_channel.sales_channel_id');
         $query->leftJoin('theme_sales_channel', 'theme', 'theme', 'theme_sales_channel.theme_id = theme.id');
         $query->leftJoin('theme', 'theme', 'parentTheme', 'theme.parent_theme_id = parentTheme.id');
-        $query->where('sales_channel.type_id = UNHEX(:typeId)');
+        $query->where('sales_channel.type_id = :typeId');
         $query->andWhere('sales_channel.active');
-        $query->setParameter('typeId', Defaults::SALES_CHANNEL_TYPE_STOREFRONT);
+        $query->setParameter('typeId', IdBinding::value(Defaults::SALES_CHANNEL_TYPE_STOREFRONT), IdBinding::type());
 
         /** @var array<string, Domain> $domains */
         $domains = FetchModeHelper::groupUnique($query->executeQuery()->fetchAllAssociative());

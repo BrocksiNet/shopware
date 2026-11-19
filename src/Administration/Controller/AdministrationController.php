@@ -15,6 +15,7 @@ use Shopware\Core\Checkout\Customer\CustomerEntity;
 use Shopware\Core\Checkout\Customer\Validation\CustomerEmailUniqueCheck;
 use Shopware\Core\Checkout\Customer\Validation\CustomerEmailUniqueChecker;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Adapter\Twig\TemplateFinderInterface;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\DefinitionInstanceRegistry;
@@ -27,7 +28,6 @@ use Shopware\Core\Framework\Routing\RoutingException;
 use Shopware\Core\Framework\Store\Services\FirstRunWizardService;
 use Shopware\Core\Framework\Util\Hasher;
 use Shopware\Core\Framework\Util\HtmlSanitizer;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\Framework\Validation\Exception\ConstraintViolationException;
 use Shopware\Core\PlatformRequest;
 use Shopware\Core\System\Currency\CurrencyCollection;
@@ -260,7 +260,7 @@ class AdministrationController extends AbstractController
     )]
     public function resetExcludedSearchTerm(Context $context): JsonResponse
     {
-        $searchConfigId = $this->connection->fetchOne('SELECT id FROM product_search_config WHERE language_id = :language_id', ['language_id' => Uuid::fromHexToBytes($context->getLanguageId())]);
+        $searchConfigId = $this->connection->fetchOne('SELECT id FROM product_search_config WHERE language_id = :language_id', ['language_id' => IdBinding::value($context->getLanguageId())]);
 
         if ($searchConfigId === false) {
             throw RoutingException::languageNotFound($context->getLanguageId());
@@ -414,7 +414,7 @@ class AdministrationController extends AbstractController
             ['codes' => ArrayParameterType::STRING]
         );
 
-        return array_map(Uuid::fromBytesToHex(...), $rows);
+        return array_map(IdBinding::toHex(...), $rows);
     }
 
     private function getLatestApiVersion(): ?int

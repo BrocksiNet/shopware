@@ -6,6 +6,7 @@ use Doctrine\DBAL\Connection;
 use League\Flysystem\FilesystemOperator;
 use League\Flysystem\FilesystemReader;
 use Psr\Clock\ClockInterface;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Log\Package;
 
 /**
@@ -90,7 +91,7 @@ class UnusedThemeDirectoryDeleter
     private function getUsedThemePaths(): array
     {
         $salesChannelThemeMappings = $this->connection->fetchAllAssociative(
-            'SELECT LOWER(HEX(sales_channel_id)) AS salesChannelId, LOWER(HEX(theme_id)) AS themeId
+            'SELECT ' . IdBinding::text('sales_channel_id') . ' AS salesChannelId, ' . IdBinding::text('theme_id') . ' AS themeId
              FROM theme_sales_channel'
         );
 

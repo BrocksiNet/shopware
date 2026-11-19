@@ -2,15 +2,14 @@
 
 namespace Shopware\Storefront\Theme;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\App\Lifecycle\AbstractAppLifecycle;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Exception\InconsistentCriteriaIdsException;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Storefront\Theme\Exception\ThemeAssignmentException;
 use Shopware\Storefront\Theme\Exception\ThemeException;
 use Shopware\Storefront\Theme\StorefrontPluginConfiguration\StorefrontPluginConfiguration;
@@ -72,7 +71,7 @@ class ThemeLifecycleHandler
     {
         // Recompile all themes as the extension generally extends the storefront
         $mappings = $this->connection->fetchAllAssociative(
-            'SELECT LOWER(HEX(sales_channel_id)) as sales_channel_id, LOWER(HEX(theme_id)) as theme_id
+            'SELECT ' . IdBinding::text('sales_channel_id') . ' as sales_channel_id, ' . IdBinding::text('theme_id') . ' as theme_id
              FROM theme_sales_channel'
         );
 
@@ -93,7 +92,7 @@ class ThemeLifecycleHandler
     public function refreshAllActiveThemeImportMaps(Context $context, ?StorefrontPluginConfigurationCollection $configurationCollection = null): void
     {
         $mappings = $this->connection->fetchAllAssociative(
-            'SELECT LOWER(HEX(sales_channel_id)) as sales_channel_id, LOWER(HEX(theme_id)) as theme_id
+            'SELECT ' . IdBinding::text('sales_channel_id') . ' as sales_channel_id, ' . IdBinding::text('theme_id') . ' as theme_id
              FROM theme_sales_channel'
         );
 
@@ -196,7 +195,7 @@ class ThemeLifecycleHandler
     private function getThemeDataByTechnicalName(string $technicalName): ThemeDependencies
     {
         $themeData = $this->connection->fetchAllAssociative(
-            'SELECT LOWER(HEX(theme.id)) as id, LOWER(HEX(childTheme.id)) as dependentId FROM theme
+            'SELECT ' . IdBinding::text('theme.id') . ' as id, ' . IdBinding::text('childTheme.id') . ' as dependentId FROM theme
                 LEFT JOIN theme as childTheme ON childTheme.parent_theme_id = theme.id
                 WHERE theme.technical_name = :technicalName',
             ['technicalName' => $technicalName]
@@ -231,18 +230,18 @@ class ThemeLifecycleHandler
 
             /** @var array<string, string> $themeNames */
             $themeNames = $this->connection->fetchAllKeyValue(
-                'SELECT LOWER(HEX(id)), name FROM theme WHERE id IN (:themeIds)',
-                ['themeIds' => Uuid::fromHexToBytesList(array_unique($themeIds))],
-                ['themeIds' => ArrayParameterType::BINARY],
+                'SELECT ' . IdBinding::text('id') . ', name FROM theme WHERE id IN (:themeIds)',
+                ['themeIds' => IdBinding::values(array_unique($themeIds))],
+                ['themeIds' => IdBinding::listType()],
             );
             $salesChannels = $this->connection->fetchAllKeyValue(
-                'SELECT LOWER(HEX(sales_channel_id)), name FROM sales_channel_translation
+                'SELECT ' . IdBinding::text('sales_channel_id') . ', name FROM sales_channel_translation
                  WHERE sales_channel_id IN (:salesChannelIds) AND language_id = :langId',
                 [
-                    'salesChannelIds' => Uuid::fromHexToBytesList(array_unique($salesChannelIds)),
-                    'langId' => Uuid::fromHexToBytes(Defaults::LANGUAGE_SYSTEM),
+                    'salesChannelIds' => IdBinding::values(array_unique($salesChannelIds)),
+                    'langId' => IdBinding::value(Defaults::LANGUAGE_SYSTEM),
                 ],
-                ['salesChannelIds' => ArrayParameterType::BINARY],
+                ['salesChannelIds' => IdBinding::listType()],
             );
 
             $themeName = $themeNames[$themeId] ?? $themeId;

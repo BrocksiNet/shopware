@@ -7,10 +7,10 @@ use Shopware\Core\Checkout\Cart\Price\CashRounding;
 use Shopware\Core\Checkout\Order\Aggregate\OrderTransaction\OrderTransactionStates;
 use Shopware\Core\Checkout\Order\OrderStates;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\Feature;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 
 /**
  * @internal
@@ -76,7 +76,7 @@ readonly class OrderAmountService
         }
 
         $query->setParameter('since', $since);
-        $query->setParameter('version', Uuid::fromHexToBytes(Defaults::LIVE_VERSION));
+        $query->setParameter('version', IdBinding::value(Defaults::LIVE_VERSION));
 
         $query->orderBy('`date`', 'ASC');
 

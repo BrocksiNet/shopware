@@ -6,6 +6,7 @@ use Doctrine\DBAL\Connection;
 use Mcp\Capability\Attribute\McpTool;
 use Mcp\Capability\Attribute\Schema;
 use Mcp\Schema\ToolAnnotations;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Mcp\Attribute\McpToolGroup;
@@ -208,15 +209,13 @@ class ThemeConfigTool extends McpToolResponse
         return array_map(
             static fn (mixed $id): string => (string) $id,
             $this->connection->fetchFirstColumn(
-                <<<'SQL'
-                    SELECT DISTINCT LOWER(HEX(`sc`.`id`))
-                    FROM `sales_channel` `sc`
-                    LEFT JOIN `sales_channel_translation` `sct` ON `sct`.`sales_channel_id` = `sc`.`id`
-                    WHERE `sc`.`id` = :id OR `sct`.`name` = :name
-                    SQL,
+                'SELECT DISTINCT ' . IdBinding::text('`sc`.`id`') . '
+FROM `sales_channel` `sc`
+LEFT JOIN `sales_channel_translation` `sct` ON `sct`.`sales_channel_id` = `sc`.`id`
+WHERE `sc`.`id` = :id OR `sct`.`name` = :name',
                 [
                     // A non-UUID input binds NULL, which no ID can equal.
-                    'id' => Uuid::isValid($uuid) ? Uuid::fromHexToBytes($uuid) : null,
+                    'id' => Uuid::isValid($uuid) ? IdBinding::value($uuid) : null,
                     'name' => $input,
                 ],
             ),
@@ -239,8 +238,8 @@ class ThemeConfigTool extends McpToolResponse
     private function resolveThemeId(string $salesChannelId): ?string
     {
         $result = $this->connection->fetchOne(
-            'SELECT LOWER(HEX(theme_id)) FROM theme_sales_channel WHERE sales_channel_id = :id',
-            ['id' => Uuid::fromHexToBytes($salesChannelId)],
+            'SELECT ' . IdBinding::text('theme_id') . ' FROM theme_sales_channel WHERE sales_channel_id = :id',
+            ['id' => IdBinding::value($salesChannelId)],
         );
 
         return $result !== false ? (string) $result : null;

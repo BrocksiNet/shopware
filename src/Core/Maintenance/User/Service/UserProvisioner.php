@@ -5,6 +5,7 @@ namespace Shopware\Core\Maintenance\User\Service;
 use Doctrine\DBAL\Connection;
 use Psr\Clock\ClockInterface;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\PasswordField;
 use Shopware\Core\Framework\DataAbstractionLayer\FieldSerializer\PasswordFieldSerializer;
 use Shopware\Core\Framework\Log\Package;
@@ -86,7 +87,7 @@ class UserProvisioner
                 ->from('language', 'language')
                 ->innerJoin('language', 'locale', 'locale', 'language.locale_id = locale.id')
                 ->where('language.id = :id')
-                ->setParameter('id', Uuid::fromHexToBytes(Defaults::LANGUAGE_SYSTEM))
+                ->setParameter('id', IdBinding::value(Defaults::LANGUAGE_SYSTEM))
                 ->executeQuery()
                 ->fetchOne();
     }

@@ -6,6 +6,7 @@ use Doctrine\DBAL\Connection;
 use Psr\Clock\ClockInterface;
 use Shopware\Administration\Framework\Routing\AdministrationRouteScope;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Api\ApiException;
 use Shopware\Core\Framework\Api\Context\AdminApiSource;
 use Shopware\Core\Framework\Context;
@@ -116,13 +117,13 @@ class UserConfigController extends AbstractController
         foreach ($postUpdateConfigs as $key => $value) {
             $data = [
                 'value' => Json::encode($value),
-                'user_id' => Uuid::fromHexToBytes($userId),
+                'user_id' => IdBinding::value($userId),
                 'key' => $key,
                 'id' => Uuid::randomBytes(),
                 'created_at' => $this->clock->now()->format(Defaults::STORAGE_DATE_TIME_FORMAT),
             ];
             if (\array_key_exists($key, $userConfigsGroupByKey)) {
-                $data['id'] = Uuid::fromHexToBytes($userConfigsGroupByKey[$key]);
+                $data['id'] = IdBinding::value($userConfigsGroupByKey[$key]);
             }
 
             $queue->addInsert(UserConfigDefinition::ENTITY_NAME, $data);

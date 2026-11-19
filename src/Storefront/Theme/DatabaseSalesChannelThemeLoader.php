@@ -3,8 +3,8 @@
 namespace Shopware\Storefront\Theme;
 
 use Doctrine\DBAL\Connection;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Symfony\Contracts\Service\ResetInterface;
 
 #[Package('discovery')]
@@ -50,9 +50,9 @@ class DatabaseSalesChannelThemeLoader implements ResetInterface
     private function readFromDB(string $salesChannelId): array
     {
         $rows = $this->connection->fetchAllAssociative(
-            'SELECT LOWER(HEX(theme.id)) AS themeId,
+            'SELECT ' . IdBinding::text('theme.id') . ' AS themeId,
                     theme.technical_name AS technicalName,
-                    LOWER(HEX(theme.parent_theme_id)) AS parentThemeId,
+                    ' . IdBinding::text('theme.parent_theme_id') . ' AS parentThemeId,
                     JSON_EXTRACT(theme.base_config, \'$.configInheritance\') AS configInheritance,
                     theme_sales_channel.sales_channel_id IS NOT NULL AS assigned
             FROM theme
@@ -60,7 +60,7 @@ class DatabaseSalesChannelThemeLoader implements ResetInterface
                     ON theme_sales_channel.theme_id = theme.id
                     AND theme_sales_channel.sales_channel_id = :salesChannelId',
             [
-                'salesChannelId' => Uuid::fromHexToBytes($salesChannelId),
+                'salesChannelId' => IdBinding::value($salesChannelId),
             ]
         );
 
