@@ -167,6 +167,7 @@ class EntitySearcherTest extends TestCase
 
         $criteria = new Criteria();
         $criteria->addFilter(new ContainsFilter('name', 'Deutscher Name'));
+        $criteria->addSorting(new FieldSorting('productNumber'));
 
         $productIds = $this->entitySearcher->search(
             static::getContainer()->get(ProductDefinition::class),
