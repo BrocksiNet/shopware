@@ -2,11 +2,10 @@
 
 namespace Shopware\Core\Content\Product\Subscriber;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\Event\EntityWrittenContainerEvent;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\System\CustomField\CustomFieldDefinition;
 use Symfony\Component\DependencyInjection\ParameterBag\ParameterBagInterface;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
@@ -60,8 +59,8 @@ class CustomFieldSearchableSubscriber implements EventSubscriberInterface
         $this->connection->executeStatement(
             'DELETE FROM product_search_config_field
             WHERE custom_field_id IN (:customFieldIds)',
-            ['customFieldIds' => Uuid::fromHexToBytesList($customFieldIds)],
-            ['customFieldIds' => ArrayParameterType::BINARY]
+            ['customFieldIds' => IdBinding::values($customFieldIds)],
+            ['customFieldIds' => IdBinding::listType()]
         );
     }
 }

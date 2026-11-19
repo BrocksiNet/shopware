@@ -2,12 +2,11 @@
 
 namespace Shopware\Core\Content\Product\DataAbstractionLayer;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\RetryableQuery;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 
 #[Package('framework')]
 class RatingAverageUpdater
@@ -28,13 +27,13 @@ class RatingAverageUpdater
             return;
         }
 
-        $versionId = Uuid::fromHexToBytes($context->getVersionId());
+        $versionId = IdBinding::value($context->getVersionId());
 
         RetryableQuery::retryable($this->connection, function () use ($ids, $versionId): void {
             $this->connection->executeStatement(
                 'UPDATE product SET rating_average = NULL WHERE (parent_id IN (:ids) OR id IN (:ids)) AND version_id = :version',
-                ['ids' => Uuid::fromHexToBytesList($ids), 'version' => $versionId],
-                ['ids' => ArrayParameterType::BINARY]
+                ['ids' => IdBinding::values($ids), 'version' => $versionId],
+                ['ids' => IdBinding::listType()]
             );
         });
 
@@ -49,7 +48,7 @@ class RatingAverageUpdater
         $query->andWhere('product.id IN (:ids) OR product.parent_id IN (:ids)');
         $query->andWhere('product.version_id = :version');
         $query->setParameter('version', $versionId);
-        $query->setParameter('ids', Uuid::fromHexToBytesList($ids), ArrayParameterType::BINARY);
+        $query->setParameter('ids', IdBinding::values($ids), IdBinding::listType());
         $query->addGroupBy('IFNULL(product.parent_id, product.id)');
 
         $averages = $query->executeQuery()->fetchAllAssociative();

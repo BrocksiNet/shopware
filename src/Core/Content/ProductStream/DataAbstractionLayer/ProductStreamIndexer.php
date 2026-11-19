@@ -2,12 +2,12 @@
 
 namespace Shopware\Core\Content\ProductStream\DataAbstractionLayer;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Content\Product\ProductDefinition;
 use Shopware\Core\Content\ProductStream\Event\ProductStreamIndexerEvent;
 use Shopware\Core\Content\ProductStream\ProductStreamCollection;
 use Shopware\Core\Content\ProductStream\ProductStreamDefinition;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\Common\IteratorFactory;
 use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\FetchModeHelper;
 use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\RetryableQuery;
@@ -20,7 +20,6 @@ use Shopware\Core\Framework\DataAbstractionLayer\Indexing\EntityIndexingMessage;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Parser\QueryStringParser;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Plugin\Exception\DecorationPatternException;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Symfony\Component\Serializer\SerializerInterface;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
@@ -93,13 +92,13 @@ class ProductStreamIndexer extends EntityIndexer
 
         $filters = $this->connection->fetchAllAssociative(
             'SELECT
-                LOWER(HEX(product_stream_id)) as array_key,
+                ' . IdBinding::text('product_stream_id') . ' as array_key,
                 product_stream_filter.*
              FROM product_stream_filter
              WHERE product_stream_id IN (:ids)
              ORDER BY product_stream_id',
-            ['ids' => Uuid::fromHexToBytesList($ids)],
-            ['ids' => ArrayParameterType::BINARY]
+            ['ids' => IdBinding::values($ids)],
+            ['ids' => IdBinding::listType()]
         );
 
         /** @var array<string, list<array<string, string>>> */
@@ -119,7 +118,7 @@ class ProductStreamIndexer extends EntityIndexer
                 $update->execute([
                     'serialized' => null,
                     'invalid' => 1,
-                    'id' => Uuid::fromHexToBytes($id),
+                    'id' => IdBinding::value($id),
                 ]);
 
                 continue;
@@ -137,7 +136,7 @@ class ProductStreamIndexer extends EntityIndexer
                 $update->execute([
                     'serialized' => $serialized,
                     'invalid' => (int) $invalid,
-                    'id' => Uuid::fromHexToBytes($id),
+                    'id' => IdBinding::value($id),
                 ]);
             }
         }

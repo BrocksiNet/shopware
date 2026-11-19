@@ -4,6 +4,7 @@ namespace Shopware\Core\Content\Flow\Dispatching;
 
 use Doctrine\DBAL\Connection;
 use Psr\Log\LoggerInterface;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\FetchModeHelper;
 use Shopware\Core\Framework\Log\Package;
 
@@ -24,7 +25,7 @@ class FlowLoader extends AbstractFlowLoader
     public function load(): array
     {
         $flows = $this->connection->fetchAllAssociative(
-            'SELECT `event_name`, LOWER(HEX(`id`)) as `id`, `name`, `payload` FROM `flow`
+            'SELECT `event_name`, ' . IdBinding::text('`id`') . ' as `id`, `name`, `payload` FROM `flow`
                 WHERE `active` = 1 AND `invalid` = 0 AND `payload` IS NOT NULL
                 ORDER BY `priority` DESC',
         );

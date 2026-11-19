@@ -6,9 +6,9 @@ use Doctrine\DBAL\Connection;
 use Shopware\Core\Content\Category\Aggregate\CategoryTranslation\CategoryTranslationEntity;
 use Shopware\Core\Content\LandingPage\Aggregate\LandingPageTranslation\LandingPageTranslationEntity;
 use Shopware\Core\Content\Product\Aggregate\ProductTranslation\ProductTranslationEntity;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityCollection;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\System\SalesChannel\SalesChannelContext;
 
 #[Package('discovery')]
@@ -110,10 +110,10 @@ readonly class EntityCmsSlotConfigInheritanceBuilder
     private function getParentLanguageId(string $languageId): ?string
     {
         $parentId = $this->connection->createQueryBuilder()
-            ->select('LOWER(HEX(language.parent_id))')
+            ->select(IdBinding::text('language.parent_id'))
             ->from('language', 'language')
             ->where('language.id = :id')
-            ->setParameter('id', Uuid::fromHexToBytes($languageId))
+            ->setParameter('id', IdBinding::value($languageId))
             ->executeQuery()
             ->fetchOne();
 

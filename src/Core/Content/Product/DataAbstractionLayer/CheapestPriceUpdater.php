@@ -192,10 +192,10 @@ class CheapestPriceUpdater
     {
         $query = $this->connection->createQueryBuilder();
         $query->select(
-            'LOWER(HEX(IFNULL(product.parent_id, product.id))) as parent_id',
+            IdBinding::text('IFNULL(product.parent_id, product.id)') . ' as parent_id',
             IdBinding::text('product.id') . ' as variant_id',
             IdBinding::text('price.rule_id') . ' as rule_id',
-            'LOWER(HEX(IFNULL(product.unit_id, parent.unit_id))) as unit_id',
+            IdBinding::text('IFNULL(product.unit_id, parent.unit_id)') . ' as unit_id',
             'IFNULL(product.purchase_unit, parent.purchase_unit) as purchase_unit',
             'IFNULL(product.reference_unit, parent.reference_unit) as reference_unit',
             'IFNULL(product.min_purchase, parent.min_purchase) as min_purchase',
@@ -223,13 +223,13 @@ class CheapestPriceUpdater
 
         $query = $this->connection->createQueryBuilder();
         $query->select(
-            'LOWER(HEX(IFNULL(product.parent_id, product.id))) as parent_id',
+            IdBinding::text('IFNULL(product.parent_id, product.id)') . ' as parent_id',
             IdBinding::text('product.id') . ' as variant_id',
             'NULL as rule_id',
             '0 AS is_ranged',
             'product.price as price',
             'IFNULL(product.min_purchase, parent.min_purchase) as min_purchase',
-            'LOWER(HEX(IFNULL(product.unit_id, parent.unit_id))) as unit_id',
+            IdBinding::text('IFNULL(product.unit_id, parent.unit_id)') . ' as unit_id',
             'IFNULL(product.purchase_unit, parent.purchase_unit) as purchase_unit',
             'IFNULL(product.reference_unit, parent.reference_unit) as reference_unit',
             'product.child_count as child_count',

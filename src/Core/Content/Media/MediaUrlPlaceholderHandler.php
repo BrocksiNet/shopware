@@ -2,14 +2,13 @@
 
 namespace Shopware\Core\Content\Media;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Content\Media\Core\Application\AbstractMediaUrlGenerator;
 use Shopware\Core\Content\Media\Core\Params\UrlParams;
 use Shopware\Core\Content\Media\Core\Params\UrlParamsSource;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\QueryBuilder;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\Profiling\Profiler;
 
 #[Package('discovery')]
@@ -58,20 +57,20 @@ class MediaUrlPlaceholderHandler implements MediaUrlPlaceholderHandlerInterface
 
         $mediaIds = [];
         foreach ($matches as $item) {
-            $mediaIds[] = Uuid::fromHexToBytes(substr($item, \strlen(self::DOMAIN_PLACEHOLDER) + \strlen(self::PREFIX), -1));
+            $mediaIds[] = IdBinding::value(substr($item, \strlen(self::DOMAIN_PLACEHOLDER) + \strlen(self::PREFIX), -1));
         }
         $query = new QueryBuilder($this->connection);
         $query->setTitle('media_url::replacement');
         $query->addSelect('id', 'path', 'updated_at', 'created_at', 'mime_type');
         $query->from('media');
         $query->andWhere('id IN (:mediaIds)');
-        $query->setParameter('mediaIds', $mediaIds, ArrayParameterType::BINARY);
+        $query->setParameter('mediaIds', $mediaIds, IdBinding::listType());
 
         $mediaUrls = $query->executeQuery()->fetchAllAssociative();
 
         $urlParams = [];
         foreach ($mediaUrls as $record) {
-            $id = Uuid::fromBytesToHex($record['id']);
+            $id = IdBinding::toHex($record['id']);
             $urlParams[$id] = new UrlParams(
                 $id,
                 UrlParamsSource::MEDIA,

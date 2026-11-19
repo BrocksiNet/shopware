@@ -7,6 +7,7 @@ use Psr\Clock\ClockInterface;
 use Shopware\Core\Content\Media\Event\UnusedMediaSearchEvent;
 use Shopware\Core\Content\Media\Event\UnusedMediaSearchStartEvent;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\Common\RepositoryIterator;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityDefinition;
@@ -26,7 +27,6 @@ use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\OrFilter;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\RangeFilter;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Sorting\FieldSorting;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 
 /**
@@ -212,7 +212,7 @@ class UnusedMediaPurger
         while ($lastId !== false) {
             $iterationCriteria = clone $criteria;
             if ($lastId !== null) {
-                $iterationCriteria->addFilter(new RangeFilter('id', ['gt' => Uuid::fromHexToBytes($lastId)]));
+                $iterationCriteria->addFilter(new RangeFilter('id', ['gt' => IdBinding::value($lastId)]));
             }
 
             $ids = $this->mediaRepo->searchIds($iterationCriteria, $context)->getIds();

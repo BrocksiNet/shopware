@@ -5,6 +5,7 @@ namespace Shopware\Core\Content\Media\Subscriber;
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Content\Media\Aggregate\MediaFolder\MediaFolderDefinition;
 use Shopware\Core\Content\Media\MediaDefinition;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\Event\BeforeEntityAggregationEvent;
 use Shopware\Core\Framework\DataAbstractionLayer\Event\EntitySearchedEvent;
@@ -161,13 +162,11 @@ class MediaVisibilityRestrictionSubscriber implements EventSubscriberInterface, 
         }
 
         $folderId = $this->connection->fetchOne(
-            <<<'SQL'
-                SELECT LOWER(HEX(`media_folder`.`id`))
-                FROM `media_folder`
-                INNER JOIN `media_default_folder`
-                    ON `media_default_folder`.`id` = `media_folder`.`default_folder_id`
-                WHERE `media_default_folder`.`entity` = :entity
-            SQL,
+            '    SELECT ' . IdBinding::text('`media_folder`.`id`') . '
+    FROM `media_folder`
+    INNER JOIN `media_default_folder`
+        ON `media_default_folder`.`id` = `media_folder`.`default_folder_id`
+    WHERE `media_default_folder`.`entity` = :entity',
             ['entity' => self::PRODUCT_DOWNLOAD_ENTITY]
         );
 

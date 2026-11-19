@@ -6,11 +6,11 @@ use Doctrine\DBAL\Connection;
 use Shopware\Core\Checkout\Customer\CustomerCollection;
 use Shopware\Core\Content\Flow\Dispatching\DelayableAction;
 use Shopware\Core\Content\Flow\Dispatching\StorableFlow;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\Event\CustomerAware;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 
 /**
  * @internal
@@ -59,7 +59,7 @@ class AddCustomerAffiliateAndCampaignCodeAction extends FlowAction implements De
         $data = $this->connection->fetchAssociative(
             'SELECT affiliate_code, campaign_code FROM customer WHERE id = :id',
             [
-                'id' => Uuid::fromHexToBytes($customerId),
+                'id' => IdBinding::value($customerId),
             ]
         );
 

@@ -14,12 +14,12 @@ use Shopware\Core\Content\Flow\Dispatching\TransactionalAction;
 use Shopware\Core\Content\Flow\Dispatching\TransactionFailedException;
 use Shopware\Core\Content\Flow\FlowException;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\EntityDefinitionQueryHelper;
 use Shopware\Core\Framework\Event\OrderAware;
 use Shopware\Core\Framework\Feature;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\System\StateMachine\Exception\IllegalTransitionException;
 use Symfony\Component\HttpFoundation\ParameterBag;
 
@@ -164,10 +164,10 @@ class SetOrderStateAction extends FlowAction implements DelayableAction, Transac
     private function getMachineId(string $machine, string $orderId): ?string
     {
         return $this->connection->fetchOne(
-            'SELECT LOWER(HEX(id)) FROM ' . $machine . ' WHERE order_id = :id AND version_id = :version ORDER BY created_at DESC',
+            'SELECT ' . IdBinding::text('id') . ' FROM ' . $machine . ' WHERE order_id = :id AND version_id = :version ORDER BY created_at DESC',
             [
-                'id' => Uuid::fromHexToBytes($orderId),
-                'version' => Uuid::fromHexToBytes(Defaults::LIVE_VERSION),
+                'id' => IdBinding::value($orderId),
+                'version' => IdBinding::value(Defaults::LIVE_VERSION),
             ]
         ) ?: null;
     }
@@ -195,14 +195,14 @@ class SetOrderStateAction extends FlowAction implements DelayableAction, Transac
     private function getPrimaryMachineId(string $machine, string $orderId, Context $context): ?string
     {
         return $this->connection->fetchOne(
-            'SELECT LOWER(HEX(machine.id)) FROM `order`
+            'SELECT ' . IdBinding::text('machine.id') . ' FROM `order`
             INNER JOIN ' . $machine . ' machine ON machine.id = `order`.primary_' . $machine . '_id
                 AND machine.order_id = `order`.id
                 AND machine.version_id = `order`.version_id
             WHERE `order`.id = :id AND `order`.version_id = :version',
             [
-                'id' => Uuid::fromHexToBytes($orderId),
-                'version' => Uuid::fromHexToBytes($context->getVersionId()),
+                'id' => IdBinding::value($orderId),
+                'version' => IdBinding::value($context->getVersionId()),
             ],
         ) ?: null;
     }
@@ -210,10 +210,10 @@ class SetOrderStateAction extends FlowAction implements DelayableAction, Transac
     private function getMachineIdFromOrderDelivery(string $orderId, Context $context): ?string
     {
         return $this->connection->fetchOne(
-            'SELECT LOWER(HEX(id)) FROM ' . self::ORDER_DELIVERY . ' WHERE order_id = :id AND version_id = :version ORDER BY JSON_EXTRACT(shipping_costs, \'$.totalPrice\') DESC',
+            'SELECT ' . IdBinding::text('id') . ' FROM ' . self::ORDER_DELIVERY . ' WHERE order_id = :id AND version_id = :version ORDER BY JSON_EXTRACT(shipping_costs, \'$.totalPrice\') DESC',
             [
-                'id' => Uuid::fromHexToBytes($orderId),
-                'version' => Uuid::fromHexToBytes($context->getVersionId()),
+                'id' => IdBinding::value($orderId),
+                'version' => IdBinding::value($context->getVersionId()),
             ],
         ) ?: null;
     }
@@ -250,8 +250,8 @@ class SetOrderStateAction extends FlowAction implements DelayableAction, Transac
         $id = $this->connection->fetchOne(
             'SELECT state_id FROM ' . $escaped . 'WHERE id = :id AND version_id = :version',
             [
-                'id' => Uuid::fromHexToBytes($machineId),
-                'version' => Uuid::fromHexToBytes(Defaults::LIVE_VERSION),
+                'id' => IdBinding::value($machineId),
+                'version' => IdBinding::value(Defaults::LIVE_VERSION),
             ]
         );
 
@@ -273,10 +273,10 @@ class SetOrderStateAction extends FlowAction implements DelayableAction, Transac
     private function getMachineIdFromOrderTransaction(string $orderId, Context $context): ?string
     {
         return $this->connection->fetchOne(
-            'SELECT LOWER(HEX(id)) FROM ' . self::ORDER_TRANSACTION . ' WHERE order_id = :id AND version_id = :version ORDER BY created_at DESC',
+            'SELECT ' . IdBinding::text('id') . ' FROM ' . self::ORDER_TRANSACTION . ' WHERE order_id = :id AND version_id = :version ORDER BY created_at DESC',
             [
-                'id' => Uuid::fromHexToBytes($orderId),
-                'version' => Uuid::fromHexToBytes($context->getVersionId()),
+                'id' => IdBinding::value($orderId),
+                'version' => IdBinding::value($context->getVersionId()),
             ]
         ) ?: null;
     }

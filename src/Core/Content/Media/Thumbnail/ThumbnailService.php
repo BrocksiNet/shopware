@@ -2,7 +2,6 @@
 
 namespace Shopware\Core\Content\Media\Thumbnail;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use League\Flysystem\FilesystemOperator;
 use Psr\Log\LoggerInterface;
@@ -22,6 +21,7 @@ use Shopware\Core\Content\Media\MediaType\ImageType;
 use Shopware\Core\Content\Media\Subscriber\MediaDeletionSubscriber;
 use Shopware\Core\Content\Media\Thumbnail\Processor\ThumbnailProcessorInterface;
 use Shopware\Core\Content\Media\Upload\MediaUploadService;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\RetryableTransaction;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
@@ -267,8 +267,8 @@ class ThumbnailService
                 FROM `media_thumbnail`
                 WHERE `id` IN (:ids)
                 SQL,
-                ['ids' => Uuid::fromHexToBytesList($ids)],
-                ['ids' => ArrayParameterType::BINARY]
+                ['ids' => IdBinding::values($ids)],
+                ['ids' => IdBinding::listType()]
             );
         }
 
@@ -335,9 +335,9 @@ class ThumbnailService
 
         // create hash map for easy path access
         $paths = $this->connection->fetchAllKeyValue(
-            'SELECT LOWER(HEX(id)), path FROM media_thumbnail WHERE id IN (:ids)',
-            ['ids' => Uuid::fromHexToBytesList($ids)],
-            ['ids' => ArrayParameterType::BINARY]
+            'SELECT ' . IdBinding::text('id') . ', path FROM media_thumbnail WHERE id IN (:ids)',
+            ['ids' => IdBinding::values($ids)],
+            ['ids' => IdBinding::listType()]
         );
 
         $writtenPaths = [];

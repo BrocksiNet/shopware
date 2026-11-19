@@ -2,8 +2,8 @@
 
 namespace Shopware\Core\Content\Flow\Dispatching\Action;
 
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 
 #[Package('after-sales')]
 trait CustomFieldActionTrait
@@ -95,7 +95,7 @@ trait CustomFieldActionTrait
             'SELECT name FROM custom_field INNER JOIN custom_field_set_relation ON  custom_field.set_id = custom_field_set_relation.set_id WHERE custom_field_set_relation.entity_name = :entity AND custom_field.id = :id',
             [
                 'entity' => $entity,
-                'id' => Uuid::fromHexToBytes($customFieldId),
+                'id' => IdBinding::value($customFieldId),
             ]
         );
 

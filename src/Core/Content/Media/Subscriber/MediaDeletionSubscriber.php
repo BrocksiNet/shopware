@@ -2,7 +2,6 @@
 
 namespace Shopware\Core\Content\Media\Subscriber;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use League\Flysystem\Visibility;
 use Shopware\Core\Content\Media\Aggregate\MediaFolder\MediaFolderDefinition;
@@ -14,13 +13,13 @@ use Shopware\Core\Content\Media\MediaDefinition;
 use Shopware\Core\Content\Media\Message\DeleteFileHandler;
 use Shopware\Core\Content\Media\Message\DeleteFileMessage;
 use Shopware\Core\Content\Media\Upload\MediaUploadService;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Event\EntityDeleteEvent;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsAnyFilter;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\Messenger\MessageBusInterface;
@@ -137,9 +136,9 @@ class MediaDeletionSubscriber implements EventSubscriberInterface
     private function handleFolderDeletion(array $folderIds, Context $context): void
     {
         $media = $this->connection->fetchAllAssociative(
-            'SELECT LOWER(HEX(id)) as id FROM media WHERE media_folder_id IN (:ids)',
-            ['ids' => Uuid::fromHexToBytesList($folderIds)],
-            ['ids' => ArrayParameterType::BINARY]
+            'SELECT ' . IdBinding::text('id') . ' as id FROM media WHERE media_folder_id IN (:ids)',
+            ['ids' => IdBinding::values($folderIds)],
+            ['ids' => IdBinding::listType()]
         );
 
         if ($media === []) {
@@ -158,9 +157,9 @@ class MediaDeletionSubscriber implements EventSubscriberInterface
     {
         $ids = \array_values($ids);
         $children = $this->connection->fetchFirstColumn(
-            'SELECT LOWER(HEX(id)) FROM media_folder WHERE parent_id IN (:ids)',
-            ['ids' => Uuid::fromHexToBytesList($ids)],
-            ['ids' => ArrayParameterType::BINARY]
+            'SELECT ' . IdBinding::text('id') . ' FROM media_folder WHERE parent_id IN (:ids)',
+            ['ids' => IdBinding::values($ids)],
+            ['ids' => IdBinding::listType()]
         );
 
         if ($children === []) {

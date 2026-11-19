@@ -13,7 +13,6 @@ use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\DeleteCommand;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\InsertCommand;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\WriteCommand;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\System\StateMachine\Event\StateMachineTransitionEvent;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
@@ -212,8 +211,8 @@ final readonly class OrderStockSubscriber implements EventSubscriberInterface
      */
     private function fetchOrderLineItemsForOrder(string $orderId): array
     {
-        $orderIdBytes = Uuid::fromHexToBytes($orderId);
-        $versionBytes = Uuid::fromHexToBytes(Defaults::LIVE_VERSION);
+        $orderIdBytes = IdBinding::value($orderId);
+        $versionBytes = IdBinding::value(Defaults::LIVE_VERSION);
 
         $sql = <<<'SQL'
             SELECT id, referenced_id as product_id, quantity

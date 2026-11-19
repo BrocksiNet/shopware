@@ -7,12 +7,12 @@ use Shopware\Core\Content\Seo\SeoUrlRoute\EntitySeoUrlRouteInterface;
 use Shopware\Core\Content\Seo\SeoUrlRoute\SeoUrlRouteInterface;
 use Shopware\Core\Content\Seo\SeoUrlRoute\SeoUrlRouteRegistry;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Api\Context\SystemSource;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\System\Language\LanguageCollection;
 use Shopware\Core\System\SalesChannel\SalesChannelCollection;
 
@@ -229,8 +229,8 @@ class SeoUrlUpdater
     private function loadUrlTemplate(string $routeName, bool $isHeadless, bool $onlyChangedTemplate, ?string $templateSalesChannelId): array
     {
         $query = 'SELECT DISTINCT
-               LOWER(HEX(sales_channel.id)) as salesChannelId,
-               LOWER(HEX(domains.language_id)) as languageId
+               ' . IdBinding::text('sales_channel.id') . ' as salesChannelId,
+               ' . IdBinding::text('domains.language_id') . ' as languageId
              FROM sales_channel_domain as domains
              INNER JOIN sales_channel
                ON domains.sales_channel_id = sales_channel.id
@@ -239,7 +239,7 @@ class SeoUrlUpdater
         $query .= $isHeadless
             ? ' AND sales_channel.type_id = :apiTypeId AND domains.is_external_storefront = 1'
             : ' AND sales_channel.type_id != :apiTypeId';
-        $parameters = ['apiTypeId' => Uuid::fromHexToBytes(Defaults::SALES_CHANNEL_TYPE_API)];
+        $parameters = ['apiTypeId' => IdBinding::value(Defaults::SALES_CHANNEL_TYPE_API)];
 
         $domains = $this->connection->fetchAllAssociative($query, $parameters);
 
@@ -248,7 +248,7 @@ class SeoUrlUpdater
         }
 
         $salesChannelTemplates = $this->connection->fetchAllKeyValue(
-            'SELECT LOWER(HEX(sales_channel_id)) as sales_channel_id, template
+            'SELECT ' . IdBinding::text('sales_channel_id') . ' as sales_channel_id, template
              FROM seo_url_template
              WHERE route_name LIKE :route
                AND is_headless = :isHeadless',

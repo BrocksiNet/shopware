@@ -8,11 +8,11 @@ use Shopware\Core\Content\Mail\MailException;
 use Shopware\Core\Content\MailTemplate\MailTemplateCollection;
 use Shopware\Core\Content\MailTemplate\MailTemplateEntity;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\Framework\Validation\DataBag\DataBag;
 
 /**
@@ -105,8 +105,8 @@ class SendMailTemplate
     private function buildContext(string $languageId, Context $context): Context
     {
         $parent = $this->connection->fetchOne(
-            'SELECT LOWER(HEX(language.parent_id)) FROM language WHERE language.id = :languageId',
-            ['languageId' => Uuid::fromHexToBytes($languageId)]
+            'SELECT ' . IdBinding::text('language.parent_id') . ' FROM language WHERE language.id = :languageId',
+            ['languageId' => IdBinding::value($languageId)]
         );
 
         $chain = array_filter(array_unique([$languageId, $parent, Defaults::LANGUAGE_SYSTEM]));

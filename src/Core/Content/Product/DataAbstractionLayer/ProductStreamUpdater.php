@@ -2,13 +2,13 @@
 
 namespace Shopware\Core\Content\Product\DataAbstractionLayer;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Content\Product\ProductCollection;
 use Shopware\Core\Content\Product\ProductDefinition;
 use Shopware\Core\Content\ProductStream\Aggregate\ProductStreamFilter\ProductStreamFilterDefinition;
 use Shopware\Core\Content\ProductStream\DataAbstractionLayer\ProductStreamWriteResultHelper;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\Exception\UnmappedFieldException as DeprecatedUnmappedFieldException;
 use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\RetryableTransaction;
@@ -25,7 +25,6 @@ use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\NotEqualsFilter;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Parser\QueryStringParser;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Plugin\Exception\DecorationPatternException;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\System\Language\LanguageCollection;
 use Shopware\Core\System\Language\LanguageEntity;
 use Symfony\Component\Messenger\MessageBusInterface;
@@ -77,7 +76,7 @@ class ProductStreamUpdater extends AbstractProductStreamUpdater
         /** @var array{invalid: int|string, api_filter: string|null}|false $stream */
         $stream = $this->connection->fetchAssociative(
             'SELECT invalid, api_filter FROM product_stream WHERE id = :id',
-            ['id' => Uuid::fromHexToBytes($streamId)]
+            ['id' => IdBinding::value($streamId)]
         );
         // the stream is gone, its mappings went with it through the foreign key
         if ($stream === false) {
@@ -96,11 +95,11 @@ class ProductStreamUpdater extends AbstractProductStreamUpdater
 
         $criteria?->addState(Criteria::STATE_ELASTICSEARCH_AWARE);
 
-        $binaryStreamId = Uuid::fromHexToBytes($streamId);
+        $binaryStreamId = IdBinding::value($streamId);
 
         /** @var list<string> $oldMatches */
         $oldMatches = $this->connection->fetchFirstColumn(
-            'SELECT LOWER(HEX(product_id)) FROM product_stream_mapping WHERE product_stream_id = :id',
+            'SELECT ' . IdBinding::text('product_id') . ' FROM product_stream_mapping WHERE product_stream_id = :id',
             ['id' => $binaryStreamId],
         );
 
@@ -131,10 +130,10 @@ class ProductStreamUpdater extends AbstractProductStreamUpdater
                 $this->connection->executeStatement(
                     'DELETE FROM product_stream_mapping WHERE product_id IN (:ids) AND product_stream_id = :streamId',
                     [
-                        'ids' => Uuid::fromHexToBytesList($toBeDeleted),
+                        'ids' => IdBinding::values($toBeDeleted),
                         'streamId' => $binaryStreamId,
                     ],
-                    ['ids' => ArrayParameterType::BINARY],
+                    ['ids' => IdBinding::listType()],
                 );
             });
         }
@@ -226,8 +225,8 @@ class ProductStreamUpdater extends AbstractProductStreamUpdater
 
             $this->connection->executeStatement(
                 'DELETE FROM product_stream_mapping WHERE product_id IN (:ids)',
-                ['ids' => Uuid::fromHexToBytesList($ids)],
-                ['ids' => ArrayParameterType::BINARY]
+                ['ids' => IdBinding::values($ids)],
+                ['ids' => IdBinding::listType()]
             );
 
             foreach ($matches as $match) {
@@ -255,7 +254,7 @@ class ProductStreamUpdater extends AbstractProductStreamUpdater
      */
     private function lockProducts(array $productIds): void
     {
-        $ids = Uuid::fromHexToBytesList($productIds);
+        $ids = IdBinding::values($productIds);
         sort($ids);
 
         foreach (array_chunk($ids, 250) as $chunk) {
@@ -263,9 +262,9 @@ class ProductStreamUpdater extends AbstractProductStreamUpdater
                 'SELECT id FROM product WHERE id IN (:ids) AND version_id = :version ORDER BY id FOR UPDATE',
                 [
                     'ids' => $chunk,
-                    'version' => Uuid::fromHexToBytes(Defaults::LIVE_VERSION),
+                    'version' => IdBinding::value(Defaults::LIVE_VERSION),
                 ],
-                ['ids' => ArrayParameterType::BINARY],
+                ['ids' => IdBinding::listType()],
             );
         }
     }
@@ -286,10 +285,10 @@ class ProductStreamUpdater extends AbstractProductStreamUpdater
                  WHERE product.id IN (:ids) AND product.version_id = :version',
                 [
                     'streamId' => $binaryStreamId,
-                    'ids' => Uuid::fromHexToBytesList($chunk),
-                    'version' => Uuid::fromHexToBytes(Defaults::LIVE_VERSION),
+                    'ids' => IdBinding::values($chunk),
+                    'version' => IdBinding::value(Defaults::LIVE_VERSION),
                 ],
-                ['ids' => ArrayParameterType::BINARY],
+                ['ids' => IdBinding::listType()],
             );
         }
     }

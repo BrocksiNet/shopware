@@ -2,7 +2,6 @@
 
 namespace Shopware\Core\Content\ImportExport\Event\Subscriber;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Content\ImportExport\Event\ImportExportAfterImportRecordEvent;
 use Shopware\Core\Content\ImportExport\ImportExportException;
@@ -10,6 +9,7 @@ use Shopware\Core\Content\Product\Aggregate\ProductConfiguratorSetting\ProductCo
 use Shopware\Core\Content\Product\ProductDefinition;
 use Shopware\Core\Content\Property\Aggregate\PropertyGroupOption\PropertyGroupOptionCollection;
 use Shopware\Core\Content\Property\PropertyGroupCollection;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Api\Sync\SyncBehavior;
 use Shopware\Core\Framework\Api\Sync\SyncOperation;
 use Shopware\Core\Framework\Api\Sync\SyncServiceInterface;
@@ -120,17 +120,17 @@ class ProductVariantsSubscriber implements EventSubscriberInterface, ResetInterf
         $variantIds = array_column($payload, 'id');
         $this->connection->executeStatement(
             'DELETE FROM `product_option` WHERE `product_id` IN (:ids);',
-            ['ids' => Uuid::fromHexToBytesList($variantIds)],
-            ['ids' => ArrayParameterType::BINARY]
+            ['ids' => IdBinding::values($variantIds)],
+            ['ids' => IdBinding::listType()]
         );
         $configuratorSettingPayload = $this->getProductConfiguratorSettingPayload($payload, $parentId);
         $this->connection->executeStatement(
             'DELETE FROM `product_configurator_setting` WHERE `product_id` = :parentId AND `id` NOT IN (:ids);',
             [
-                'parentId' => Uuid::fromHexToBytes($parentId),
-                'ids' => Uuid::fromHexToBytesList(array_column($configuratorSettingPayload, 'id')),
+                'parentId' => IdBinding::value($parentId),
+                'ids' => IdBinding::values(array_column($configuratorSettingPayload, 'id')),
             ],
-            ['ids' => ArrayParameterType::BINARY]
+            ['ids' => IdBinding::listType()]
         );
 
         $this->syncService->sync([

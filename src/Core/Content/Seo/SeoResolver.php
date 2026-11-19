@@ -3,11 +3,11 @@
 namespace Shopware\Core\Content\Seo;
 
 use Doctrine\DBAL\Connection;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\QueryBuilder;
 use Shopware\Core\Framework\Feature;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Plugin\Exception\DecorationPatternException;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Symfony\Component\HttpFoundation\Request;
 
 /**
@@ -80,8 +80,8 @@ class SeoResolver extends AbstractSeoResolver
             'seo_path_info = :seoPathWithSlash',
         ];
 
-        $query->setParameter('language_id', Uuid::fromHexToBytes($context->languageId))
-            ->setParameter('sales_channel_id', Uuid::fromHexToBytes($context->salesChannelId))
+        $query->setParameter('language_id', IdBinding::value($context->languageId))
+            ->setParameter('sales_channel_id', IdBinding::value($context->salesChannelId))
             ->setParameter('seoPath', $seoPathInfo)
             ->setParameter('seoPathWithSlash', $seoPathInfo . '/');
 
@@ -156,8 +156,8 @@ class SeoResolver extends AbstractSeoResolver
                 ->andWhere('is_canonical = 1')
                 ->andWhere('is_deleted = 0')
                 ->setMaxResults(1)
-                ->setParameter('language_id', Uuid::fromHexToBytes($context->languageId))
-                ->setParameter('sales_channel_id', Uuid::fromHexToBytes($context->salesChannelId))
+                ->setParameter('language_id', IdBinding::value($context->languageId))
+                ->setParameter('sales_channel_id', IdBinding::value($context->salesChannelId))
                 ->setParameter('pathInfo', $canonicalPathInfo);
 
             if ($canonicalPathInfoWithQuery !== null) {

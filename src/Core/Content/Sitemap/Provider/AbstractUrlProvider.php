@@ -2,11 +2,10 @@
 
 namespace Shopware\Core\Content\Sitemap\Provider;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Content\Sitemap\Struct\UrlResult;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\System\SalesChannel\SalesChannelContext;
 
 #[Package('discovery')]
@@ -29,7 +28,7 @@ abstract class AbstractUrlProvider
      */
     protected function getSeoUrls(array $ids, string $routeName, SalesChannelContext $context, Connection $connection): array
     {
-        $sql = 'SELECT LOWER(HEX(foreign_key)) as foreign_key, seo_path_info
+        $sql = 'SELECT ' . IdBinding::text('foreign_key') . ' as foreign_key, seo_path_info
                     FROM seo_url WHERE foreign_key IN (:ids)
                      AND `seo_url`.`route_name` =:routeName
                      AND `seo_url`.`is_canonical` = 1
@@ -42,12 +41,12 @@ abstract class AbstractUrlProvider
             $sql,
             [
                 'routeName' => $routeName,
-                'languageId' => Uuid::fromHexToBytes($context->getLanguageId()),
-                'salesChannelId' => Uuid::fromHexToBytes($context->getSalesChannelId()),
-                'ids' => Uuid::fromHexToBytesList(array_values($ids)),
+                'languageId' => IdBinding::value($context->getLanguageId()),
+                'salesChannelId' => IdBinding::value($context->getSalesChannelId()),
+                'ids' => IdBinding::values(array_values($ids)),
             ],
             [
-                'ids' => ArrayParameterType::BINARY,
+                'ids' => IdBinding::listType(),
             ]
         );
 

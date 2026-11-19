@@ -239,8 +239,7 @@ class CategoryIndexer extends EntityIndexer
      */
     private function fetchChildren(array $categoryIds, string $versionId): array
     {
-        $sql = <<<'SQL'
-WITH RECURSIVE category_tree AS (
+        $sql = 'WITH RECURSIVE category_tree AS (
     SELECT id, 0 AS depth
     FROM category
     WHERE id IN (:categoryIds)
@@ -253,10 +252,9 @@ WITH RECURSIVE category_tree AS (
     INNER JOIN category_tree ct ON c.parent_id = ct.id
     WHERE c.version_id = :version
 )
-SELECT DISTINCT LOWER(HEX(id))
+SELECT DISTINCT ' . IdBinding::text('id') . '
 FROM category_tree
-WHERE depth > 0
-SQL;
+WHERE depth > 0';
 
         return $this->connection->fetchFirstColumn($sql, [
             'version' => IdBinding::value($versionId),

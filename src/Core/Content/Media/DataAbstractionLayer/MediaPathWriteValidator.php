@@ -2,13 +2,13 @@
 
 namespace Shopware\Core\Content\Media\DataAbstractionLayer;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Content\Media\Aggregate\MediaThumbnail\MediaThumbnailDefinition;
 use Shopware\Core\Content\Media\File\FileNameValidator;
 use Shopware\Core\Content\Media\MediaDefinition;
 use Shopware\Core\Content\Media\MediaException;
 use Shopware\Core\Content\Media\Util\ExternalMediaUrl;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\InsertCommand;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\UpdateCommand;
@@ -143,9 +143,9 @@ class MediaPathWriteValidator implements EventSubscriberInterface
 
         /** @var array<string, string|null> $storedValues */
         $storedValues = $this->connection->fetchAllKeyValue(
-            \sprintf('SELECT LOWER(HEX(`id`)), `%s` FROM `%s` WHERE `id` IN (:ids)', $column, $entityName),
+            \sprintf('SELECT ' . IdBinding::text('`id`') . ', `%s` FROM `%s` WHERE `id` IN (:ids)', $column, $entityName),
             ['ids' => $ids],
-            ['ids' => ArrayParameterType::BINARY]
+            ['ids' => IdBinding::listType()]
         );
 
         return $storedValues;

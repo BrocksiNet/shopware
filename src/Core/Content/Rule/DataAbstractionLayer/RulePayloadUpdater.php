@@ -2,11 +2,11 @@
 
 namespace Shopware\Core\Content\Rule\DataAbstractionLayer;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Psr\Clock\ClockInterface;
 use Shopware\Core\Content\Rule\DataAbstractionLayer\Indexing\ConditionTypeNotFound;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\App\Event\AppScriptConditionEvents;
 use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\FetchModeHelper;
 use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\RetryableQuery;
@@ -17,7 +17,6 @@ use Shopware\Core\Framework\Rule\Container\AndRule;
 use Shopware\Core\Framework\Rule\Container\ContainerInterface;
 use Shopware\Core\Framework\Rule\Rule;
 use Shopware\Core\Framework\Rule\ScriptRule;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
 /**
@@ -51,13 +50,13 @@ class RulePayloadUpdater implements EventSubscriberInterface
     public function update(array $ids): array
     {
         $conditions = $this->connection->fetchAllAssociative(
-            'SELECT LOWER(HEX(rc.rule_id)) as array_key, rc.*, rs.script, rs.identifier, rs.updated_at as lastModified
+            'SELECT ' . IdBinding::text('rc.rule_id') . ' as array_key, rc.*, rs.script, rs.identifier, rs.updated_at as lastModified
             FROM rule_condition rc
             LEFT JOIN app_script_condition rs ON rc.script_id = rs.id AND rs.active = 1
             WHERE rc.rule_id IN (:ids)
             ORDER BY rc.rule_id, rc.position',
-            ['ids' => Uuid::fromHexToBytesList($ids)],
-            ['ids' => ArrayParameterType::BINARY]
+            ['ids' => IdBinding::values($ids)],
+            ['ids' => IdBinding::listType()]
         );
 
         /** @var array<string, list<array<string, string>>> */
@@ -85,7 +84,7 @@ class RulePayloadUpdater implements EventSubscriberInterface
                 $invalid = true;
             } finally {
                 $update->execute([
-                    'id' => Uuid::fromHexToBytes($id),
+                    'id' => IdBinding::value($id),
                     'payload' => $serialized,
                     'invalid' => (int) $invalid,
                     'updatedAt' => $now,
@@ -106,15 +105,15 @@ class RulePayloadUpdater implements EventSubscriberInterface
                 FROM rule_condition rc
                 INNER JOIN app_script_condition rs ON rc.script_id = rs.id
                 WHERE rs.id IN (:ids)',
-            ['ids' => Uuid::fromHexToBytesList(array_values($event->getIds()))],
-            ['ids' => ArrayParameterType::BINARY]
+            ['ids' => IdBinding::values(array_values($event->getIds()))],
+            ['ids' => IdBinding::listType()]
         );
 
         if ($ruleIds === []) {
             return;
         }
 
-        $this->update(array_values(Uuid::fromBytesToHexList($ruleIds)));
+        $this->update(array_values(IdBinding::toHexList($ruleIds)));
     }
 
     /**

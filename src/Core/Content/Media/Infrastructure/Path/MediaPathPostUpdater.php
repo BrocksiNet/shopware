@@ -2,10 +2,10 @@
 
 namespace Shopware\Core\Content\Media\Infrastructure\Path;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Content\Media\Core\Application\MediaPathUpdater;
 use Shopware\Core\Content\Media\DataAbstractionLayer\MediaIndexingMessage;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\Common\IteratorFactory;
 use Shopware\Core\Framework\DataAbstractionLayer\Indexing\EntityIndexer;
 use Shopware\Core\Framework\DataAbstractionLayer\Indexing\EntityIndexerRegistry;
@@ -13,7 +13,6 @@ use Shopware\Core\Framework\DataAbstractionLayer\Indexing\EntityIndexingMessage;
 use Shopware\Core\Framework\DataAbstractionLayer\Indexing\SynchronousPostUpdateIndexer;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Plugin\Exception\DecorationPatternException;
-use Shopware\Core\Framework\Uuid\Uuid;
 
 #[Package('discovery')]
 class MediaPathPostUpdater extends SynchronousPostUpdateIndexer
@@ -55,16 +54,16 @@ class MediaPathPostUpdater extends SynchronousPostUpdateIndexer
         }
 
         $mediaWithMissingPaths = $this->connection->fetchFirstColumn(
-            'SELECT LOWER(HEX(id)) FROM media WHERE path IS NULL AND id IN (:ids)',
-            ['ids' => Uuid::fromHexToBytesList($ids)],
-            ['ids' => ArrayParameterType::BINARY]
+            'SELECT ' . IdBinding::text('id') . ' FROM media WHERE path IS NULL AND id IN (:ids)',
+            ['ids' => IdBinding::values($ids)],
+            ['ids' => IdBinding::listType()]
         );
         $this->updater->updateMedia($mediaWithMissingPaths);
 
         $thumbnailsWithMissingPaths = $this->connection->fetchFirstColumn(
-            'SELECT LOWER(HEX(id)) FROM media_thumbnail WHERE path IS NULL AND media_id IN (:ids)',
-            ['ids' => Uuid::fromHexToBytesList($ids)],
-            ['ids' => ArrayParameterType::BINARY]
+            'SELECT ' . IdBinding::text('id') . ' FROM media_thumbnail WHERE path IS NULL AND media_id IN (:ids)',
+            ['ids' => IdBinding::values($ids)],
+            ['ids' => IdBinding::listType()]
         );
 
         $this->updater->updateThumbnails($thumbnailsWithMissingPaths);

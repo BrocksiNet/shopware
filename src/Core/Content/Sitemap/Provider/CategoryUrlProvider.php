@@ -2,7 +2,6 @@
 
 namespace Shopware\Core\Content\Sitemap\Provider;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Content\Category\CategoryDefinition;
 use Shopware\Core\Content\Category\CategoryEntity;
@@ -13,11 +12,11 @@ use Shopware\Core\Content\Sitemap\Service\ConfigHandler;
 use Shopware\Core\Content\Sitemap\Struct\Url;
 use Shopware\Core\Content\Sitemap\Struct\UrlResult;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\Common\IteratorFactory;
 use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\FetchModeHelper;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Plugin\Exception\DecorationPatternException;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\System\SalesChannel\SalesChannelContext;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 
@@ -152,10 +151,10 @@ class CategoryUrlProvider extends AbstractUrlProvider
         $excludedCategoryIds = $this->getExcludedCategoryIds($context);
         if ($excludedCategoryIds !== []) {
             $query->andWhere('`category`.id NOT IN (:categoryIds)');
-            $query->setParameter('categoryIds', Uuid::fromHexToBytesList($excludedCategoryIds), ArrayParameterType::BINARY);
+            $query->setParameter('categoryIds', IdBinding::values($excludedCategoryIds), IdBinding::listType());
         }
 
-        $query->setParameter('versionId', Uuid::fromHexToBytes(Defaults::LIVE_VERSION));
+        $query->setParameter('versionId', IdBinding::value(Defaults::LIVE_VERSION));
         $query->setParameter('linkType', CategoryDefinition::TYPE_LINK);
         $query->setParameter('folderType', CategoryDefinition::TYPE_FOLDER);
 

@@ -2,17 +2,15 @@
 
 namespace Shopware\Core\Content\ProductExport\ScheduledTask;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
-use Doctrine\DBAL\ParameterType;
 use Psr\Clock\ClockInterface;
 use Psr\Log\LoggerInterface;
 use Shopware\Core\Content\ProductExport\ProductExportEntity;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\MessageQueue\ScheduledTask\ScheduledTaskCollection;
 use Shopware\Core\Framework\MessageQueue\ScheduledTask\ScheduledTaskHandler;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 use Symfony\Component\Messenger\MessageBusInterface;
 
@@ -66,30 +64,28 @@ final class ProductExportGenerateTaskHandler extends ScheduledTaskHandler
         $productExports = [];
         /** @var list<array<string, mixed>> $rows */
         $rows = $this->connection->fetchAllAssociative(
-            <<<'SQL'
-                SELECT
-                    LOWER(HEX(product_export.id)) AS id,
-                    LOWER(HEX(storefront_sales_channel.id)) AS sales_channel_id,
-                    product_export.generated_at,
-                    product_export.next_generation_at,
-                    product_export.interval,
-                    product_export.is_running,
-                    product_export.updated_at,
-                    product_export.created_at
-                FROM product_export
-                INNER JOIN sales_channel
-                    ON sales_channel.id = product_export.sales_channel_id
-                INNER JOIN sales_channel_domain
-                    ON sales_channel_domain.id = product_export.sales_channel_domain_id
-                INNER JOIN sales_channel storefront_sales_channel
-                    ON storefront_sales_channel.id IN (product_export.storefront_sales_channel_id, sales_channel_domain.sales_channel_id)
-                WHERE product_export.generate_by_cronjob = 1
-                  AND sales_channel.active = 1
-                  AND storefront_sales_channel.`type_id` IN (:typeIds)
-                  AND storefront_sales_channel.active = 1
-            SQL,
-            ['typeIds' => Uuid::fromHexToBytesList(ProductExportEntity::ALLOWED_SALES_CHANNEL_TYPE_IDS)],
-            ['typeIds' => ArrayParameterType::BINARY]
+            '    SELECT
+        ' . IdBinding::text('product_export.id') . ' AS id,
+        ' . IdBinding::text('storefront_sales_channel.id') . ' AS sales_channel_id,
+        product_export.generated_at,
+        product_export.next_generation_at,
+        product_export.interval,
+        product_export.is_running,
+        product_export.updated_at,
+        product_export.created_at
+    FROM product_export
+    INNER JOIN sales_channel
+        ON sales_channel.id = product_export.sales_channel_id
+    INNER JOIN sales_channel_domain
+        ON sales_channel_domain.id = product_export.sales_channel_domain_id
+    INNER JOIN sales_channel storefront_sales_channel
+        ON storefront_sales_channel.id IN (product_export.storefront_sales_channel_id, sales_channel_domain.sales_channel_id)
+    WHERE product_export.generate_by_cronjob = 1
+      AND sales_channel.active = 1
+      AND storefront_sales_channel.`type_id` IN (:typeIds)
+      AND storefront_sales_channel.active = 1',
+            ['typeIds' => IdBinding::values(ProductExportEntity::ALLOWED_SALES_CHANNEL_TYPE_IDS)],
+            ['typeIds' => IdBinding::listType()]
         );
 
         foreach ($rows as $row) {
@@ -117,8 +113,8 @@ final class ProductExportGenerateTaskHandler extends ScheduledTaskHandler
                 $this->connection->update(
                     'product_export',
                     ['is_running' => 0],
-                    ['id' => Uuid::fromHexToBytes($productExport['id'])],
-                    ['id' => ParameterType::BINARY]
+                    ['id' => IdBinding::value($productExport['id'])],
+                    ['id' => IdBinding::type()]
                 );
 
                 return true;

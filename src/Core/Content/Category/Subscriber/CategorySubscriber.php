@@ -7,6 +7,7 @@ use Shopware\Core\Content\Category\CategoryDefinition;
 use Shopware\Core\Content\Category\SalesChannel\SalesChannelCategoryEntity;
 use Shopware\Core\Content\Category\Service\AbstractCategoryUrlGenerator;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\Event\EntityWriteEvent;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\DeleteCommand;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\InsertCommand;
@@ -67,7 +68,7 @@ class CategorySubscriber implements EventSubscriberInterface
             return;
         }
 
-        $defaultCmsPageIdBytes = Uuid::fromHexToBytes($defaultCmsPageId);
+        $defaultCmsPageIdBytes = IdBinding::value($defaultCmsPageId);
 
         foreach ($commands as $command) {
             if ($command instanceof DeleteCommand) {
@@ -109,8 +110,8 @@ class CategorySubscriber implements EventSubscriberInterface
         $cmsPageIdResult = $this->connection->fetchOne(
             'SELECT id FROM cms_page WHERE id = :cmsPageId AND version_id = :versionId LIMIT 1;',
             [
-                'cmsPageId' => Uuid::fromHexToBytes($cmsPageId),
-                'versionId' => Uuid::fromHexToBytes(Defaults::LIVE_VERSION),
+                'cmsPageId' => IdBinding::value($cmsPageId),
+                'versionId' => IdBinding::value(Defaults::LIVE_VERSION),
             ]
         );
 

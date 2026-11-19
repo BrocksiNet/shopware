@@ -4,8 +4,8 @@ namespace Shopware\Core\Content\ImportExport\Service;
 
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Checkout\Customer\CustomerDefinition;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Symfony\Contracts\Service\ResetInterface;
 
 /**
@@ -71,7 +71,7 @@ final class CustomerNumberRangeConfigService implements ResetInterface
                     'number_range.id = number_range_sales_channel.number_range_id',
                 )
                 ->andWhere('(number_range_sales_channel.sales_channel_id = :salesChannelId OR number_range_type.global = 1 OR number_range.global = 1)')
-                ->setParameter('salesChannelId', Uuid::fromHexToBytes($salesChannelId));
+                ->setParameter('salesChannelId', IdBinding::value($salesChannelId));
         }
 
         /** @var array{id: string, pattern: string}|false $configuration */
@@ -81,7 +81,7 @@ final class CustomerNumberRangeConfigService implements ResetInterface
             return $this->cache[$cacheKey] = null;
         }
 
-        $configuration['id'] = Uuid::fromBytesToHex($configuration['id']);
+        $configuration['id'] = IdBinding::toHex($configuration['id']);
 
         return $this->cache[$cacheKey] = $configuration;
     }

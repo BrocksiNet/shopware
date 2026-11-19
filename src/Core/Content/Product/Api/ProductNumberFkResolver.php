@@ -5,10 +5,10 @@ namespace Shopware\Core\Content\Product\Api;
 use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Api\Sync\AbstractFkResolver;
 use Shopware\Core\Framework\Api\Sync\FkReference;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 
 /**
  * @internal
@@ -41,8 +41,8 @@ class ProductNumberFkResolver extends AbstractFkResolver
         }
 
         $hash = $this->connection->fetchAllKeyValue(
-            'SELECT product_number, LOWER(HEX(id)) FROM product WHERE product_number IN (:numbers) AND version_id = :version',
-            ['numbers' => $numbers, 'version' => Uuid::fromHexToBytes(Defaults::LIVE_VERSION)],
+            'SELECT product_number, ' . IdBinding::text('id') . ' FROM product WHERE product_number IN (:numbers) AND version_id = :version',
+            ['numbers' => $numbers, 'version' => IdBinding::value(Defaults::LIVE_VERSION)],
             ['numbers' => ArrayParameterType::STRING]
         );
 

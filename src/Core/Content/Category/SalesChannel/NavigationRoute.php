@@ -11,6 +11,7 @@ use Shopware\Core\Content\Category\Service\DefaultCategoryLevelLoaderInterface;
 use Shopware\Core\Content\Category\Service\NavigationLoaderInterface;
 use Shopware\Core\Content\Category\Tree\CategoryTreePathResolver;
 use Shopware\Core\Framework\Adapter\Cache\CacheTagCollector;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\FetchModeHelper;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsAnyFilter;
@@ -19,7 +20,6 @@ use Shopware\Core\Framework\Feature;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Plugin\Exception\DecorationPatternException;
 use Shopware\Core\Framework\Routing\StoreApiRouteScope;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\PlatformRequest;
 use Shopware\Core\System\SalesChannel\Entity\SalesChannelRepository;
 use Shopware\Core\System\SalesChannel\SalesChannelContext;
@@ -174,10 +174,10 @@ class NavigationRoute extends AbstractNavigationRoute
     {
         $result = $this->connection->fetchAllAssociative('
             # navigation-route::meta-information
-            SELECT LOWER(HEX(`id`)), `path`, `level`
+            SELECT ' . IdBinding::text('`id`') . ', `path`, `level`
             FROM `category`
             WHERE `id` = :activeId OR `id` = :rootId
-        ', ['activeId' => Uuid::fromHexToBytes($activeId), 'rootId' => Uuid::fromHexToBytes($rootId)]);
+        ', ['activeId' => IdBinding::value($activeId), 'rootId' => IdBinding::value($rootId)]);
 
         if (!$result) {
             throw CategoryException::categoryNotFound($activeId);

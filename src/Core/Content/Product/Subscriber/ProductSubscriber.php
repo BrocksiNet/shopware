@@ -2,7 +2,6 @@
 
 namespace Shopware\Core\Content\Product\Subscriber;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Content\MeasurementSystem\MeasurementUnits;
 use Shopware\Core\Content\MeasurementSystem\MeasurementUnitTypeEnum;
@@ -18,6 +17,7 @@ use Shopware\Core\Content\Product\ProductDefinition;
 use Shopware\Core\Content\Product\ProductEntity;
 use Shopware\Core\Content\Product\ProductEvents;
 use Shopware\Core\Content\Product\SalesChannel\Price\AbstractProductPriceCalculator;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Api\Context\AdminApiSource;
 use Shopware\Core\Framework\DataAbstractionLayer\Entity;
 use Shopware\Core\Framework\DataAbstractionLayer\Event\EntityDeleteEvent;
@@ -25,7 +25,6 @@ use Shopware\Core\Framework\DataAbstractionLayer\Event\EntityLoadedEvent;
 use Shopware\Core\Framework\DataAbstractionLayer\Event\EntityWriteEvent;
 use Shopware\Core\Framework\DataAbstractionLayer\PartialEntity;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\PlatformRequest;
 use Shopware\Core\System\SalesChannel\Entity\SalesChannelEntityLoadedEvent;
 use Shopware\Core\System\SystemConfig\SystemConfigService;
@@ -181,18 +180,18 @@ class ProductSubscriber implements EventSubscriberInterface
         }
 
         $parentIds = $this->connection->fetchFirstColumn(
-            'SELECT DISTINCT parent_id
+            'SELECT DISTINCT ' . IdBinding::text('parent_id') . ' AS parent_id
              FROM product
              WHERE id IN (:ids) AND parent_id IS NOT NULL',
-            ['ids' => Uuid::fromHexToBytesList($deletedIds)],
-            ['ids' => ArrayParameterType::BINARY]
+            ['ids' => IdBinding::values($deletedIds)],
+            ['ids' => IdBinding::listType()]
         );
 
         if ($parentIds === []) {
             return;
         }
 
-        $versionBytes = Uuid::fromHexToBytes($event->getContext()->getVersionId());
+        $versionBytes = IdBinding::value($event->getContext()->getVersionId());
 
         $event->addSuccess(function () use ($parentIds, $versionBytes): void {
             $this->cleanupConfiguratorSettings($parentIds, $versionBytes);
@@ -223,11 +222,11 @@ class ProductSubscriber implements EventSubscriberInterface
                      AND po.product_version_id = :versionId
              )',
             [
-                'parentIds' => $parentIds,
+                'parentIds' => IdBinding::values($parentIds),
                 'versionId' => $versionBytes,
             ],
             [
-                'parentIds' => ArrayParameterType::BINARY,
+                'parentIds' => IdBinding::listType(),
             ]
         );
     }

@@ -5,9 +5,9 @@ namespace Shopware\Core\Content\Newsletter\DataAbstractionLayer\Indexing;
 use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Content\Newsletter\SalesChannel\NewsletterSubscribeRoute;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\RetryableQuery;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 
 #[Package('after-sales')]
 class CustomerNewsletterSalesChannelsUpdater
@@ -30,26 +30,24 @@ class CustomerNewsletterSalesChannelsUpdater
 
         $ids = array_unique($ids);
 
-        $tableTemplate = <<<'SQL'
-UPDATE `customer`, `newsletter_recipient` SET `customer`.`newsletter_sales_channel_ids` = (
+        $tableTemplate = 'UPDATE `customer`, `newsletter_recipient` SET `customer`.`newsletter_sales_channel_ids` = (
     SELECT CONCAT(
-        '{',
+        \'{\',
         GROUP_CONCAT(
             CONCAT(
-                JSON_QUOTE(LOWER(HEX(`newsletter_recipient`.`id`))),
-                ':',
-                JSON_QUOTE(LOWER(HEX(`newsletter_recipient`.`sales_channel_id`)))
+                JSON_QUOTE(' . IdBinding::text('`newsletter_recipient`.`id`') . '),
+                \':\',
+                JSON_QUOTE(' . IdBinding::text('`newsletter_recipient`.`sales_channel_id`') . ')
             )
         ),
-        '}'
+        \'}\'
     )
     FROM `newsletter_recipient`
     WHERE `newsletter_recipient`.`email` = `customer`.`email`
     AND `newsletter_recipient`.`status` IN (:states)
 )
 WHERE `newsletter_recipient`.`email` = `customer`.`email`
-AND #table#.`id` IN (:ids)
-SQL;
+AND #table#.`id` IN (:ids)';
 
         // Written without a join in the UPDATE, so the statement is valid on every platform
         $resetSql = 'UPDATE `customer` SET `newsletter_sales_channel_ids` = NULL WHERE `id` IN (:ids)';
@@ -59,7 +57,7 @@ SQL;
         }
 
         $parameters = [
-            'ids' => Uuid::fromHexToBytesList($ids),
+            'ids' => IdBinding::values($ids),
             'states' => [NewsletterSubscribeRoute::STATUS_DIRECT, NewsletterSubscribeRoute::STATUS_OPT_IN],
         ];
 
@@ -77,7 +75,7 @@ SQL;
             $this->connection->executeStatement(
                 $resetSql,
                 $parameters,
-                ['ids' => ArrayParameterType::BINARY]
+                ['ids' => IdBinding::listType()]
             );
         });
 
@@ -85,7 +83,7 @@ SQL;
             $this->connection->executeStatement(
                 $sql,
                 $parameters,
-                ['ids' => ArrayParameterType::BINARY, 'states' => ArrayParameterType::STRING]
+                ['ids' => IdBinding::listType(), 'states' => ArrayParameterType::STRING]
             );
         });
     }
@@ -122,7 +120,7 @@ SQL;
             return;
         }
 
-        $this->update(Uuid::fromBytesToHexList($customerIds), true);
+        $this->update(IdBinding::toHexList($customerIds), true);
     }
 
     /**
@@ -134,8 +132,8 @@ SQL;
 
         $customers = $this->connection->fetchAllAssociative(
             'SELECT newsletter_sales_channel_ids, email, first_name, last_name FROM customer WHERE id IN (:ids)',
-            ['ids' => Uuid::fromHexToBytesList($ids)],
-            ['ids' => ArrayParameterType::BINARY]
+            ['ids' => IdBinding::values($ids)],
+            ['ids' => IdBinding::listType()]
         );
 
         $parameters = [];
@@ -166,23 +164,23 @@ SQL;
                 $this->connection->executeStatement(
                     'UPDATE newsletter_recipient SET status = (:notSet), confirmed_at = NULL WHERE id IN (:ids) AND email <> :email AND status = :optIn',
                     [
-                        'ids' => Uuid::fromHexToBytesList($parameter['newsletter_ids']),
+                        'ids' => IdBinding::values($parameter['newsletter_ids']),
                         'email' => $parameter['email'],
                         'notSet' => NewsletterSubscribeRoute::STATUS_NOT_SET,
                         'optIn' => NewsletterSubscribeRoute::STATUS_OPT_IN,
                     ],
-                    ['ids' => ArrayParameterType::BINARY],
+                    ['ids' => IdBinding::listType()],
                 );
 
                 $this->connection->executeStatement(
                     'UPDATE newsletter_recipient SET email = (:email), first_name = (:firstName), last_name = (:lastName) WHERE id IN (:ids)',
                     [
-                        'ids' => Uuid::fromHexToBytesList($parameter['newsletter_ids']),
+                        'ids' => IdBinding::values($parameter['newsletter_ids']),
                         'email' => $parameter['email'],
                         'firstName' => $parameter['first_name'],
                         'lastName' => $parameter['last_name'],
                     ],
-                    ['ids' => ArrayParameterType::BINARY],
+                    ['ids' => IdBinding::listType()],
                 );
             });
         }

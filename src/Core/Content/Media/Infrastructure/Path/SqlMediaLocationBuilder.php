@@ -2,15 +2,14 @@
 
 namespace Shopware\Core\Content\Media\Infrastructure\Path;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Content\Media\Core\Application\MediaLocationBuilder;
 use Shopware\Core\Content\Media\Core\Event\MediaLocationEvent;
 use Shopware\Core\Content\Media\Core\Event\ThumbnailLocationEvent;
 use Shopware\Core\Content\Media\Core\Params\MediaLocationStruct;
 use Shopware\Core\Content\Media\Core\Params\ThumbnailLocationStruct;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
 /**
@@ -43,15 +42,15 @@ class SqlMediaLocationBuilder implements MediaLocationBuilder
         }
 
         $data = $this->connection->fetchAllAssociativeIndexed(
-            'SELECT LOWER(HEX(id)) as array_key,
-                    LOWER(HEX(id)) as id,
+            'SELECT ' . IdBinding::text('id') . ' as array_key,
+                    ' . IdBinding::text('id') . ' as id,
                     file_extension,
                     file_name,
                     uploaded_at
             FROM media
             WHERE id IN (:ids)',
-            ['ids' => Uuid::fromHexToBytesList($ids)],
-            ['ids' => ArrayParameterType::BINARY]
+            ['ids' => IdBinding::values($ids)],
+            ['ids' => IdBinding::listType()]
         );
 
         $locations = [];
@@ -83,19 +82,19 @@ class SqlMediaLocationBuilder implements MediaLocationBuilder
         }
 
         $data = $this->connection->fetchAllAssociativeIndexed(
-            'SELECT LOWER(HEX(media_thumbnail.id)) as array_key,
-                    LOWER(HEX(media_thumbnail.id)) as id,
+            'SELECT ' . IdBinding::text('media_thumbnail.id') . ' as array_key,
+                    ' . IdBinding::text('media_thumbnail.id') . ' as id,
                     media.file_extension,
                     media.file_name,
-                    LOWER(HEX(media.id)) as media_id,
+                    ' . IdBinding::text('media.id') . ' as media_id,
                     width,
                     height,
                     uploaded_at
             FROM media_thumbnail
                 INNER JOIN media ON media.id = media_thumbnail.media_id
             WHERE media_thumbnail.id IN (:ids)',
-            ['ids' => Uuid::fromHexToBytesList($ids)],
-            ['ids' => ArrayParameterType::BINARY]
+            ['ids' => IdBinding::values($ids)],
+            ['ids' => IdBinding::listType()]
         );
 
         $locations = [];

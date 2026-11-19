@@ -2,15 +2,14 @@
 
 namespace Shopware\Core\Content\Flow\Indexing;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Content\Flow\Dispatching\CachedFlowLoader;
 use Shopware\Core\Content\Flow\Indexing\FlowBuilder\Sequence;
 use Shopware\Core\Framework\Adapter\Cache\CacheInvalidator;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\FetchModeHelper;
 use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\RetryableQuery;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 
 #[Package('after-sales')]
 class FlowPayloadUpdater
@@ -33,12 +32,12 @@ class FlowPayloadUpdater
     public function update(array $ids): array
     {
         $listFlowSequence = $this->connection->fetchAllAssociative(
-            'SELECT LOWER(HEX(`flow`.`id`)) as array_key,
-            LOWER(HEX(`flow`.`id`)) as `flow_id`,
-            LOWER(HEX(`flow_sequence`.`id`)) as `sequence_id`,
-            LOWER(HEX(`flow_sequence`.`parent_id`)) as `parent_id`,
-            LOWER(HEX(`flow_sequence`.`rule_id`)) as `rule_id`,
-            LOWER(HEX(`flow_sequence`.`app_flow_action_id`)) as `app_flow_action_id`,
+            'SELECT ' . IdBinding::text('`flow`.`id`') . ' as array_key,
+            ' . IdBinding::text('`flow`.`id`') . ' as `flow_id`,
+            ' . IdBinding::text('`flow_sequence`.`id`') . ' as `sequence_id`,
+            ' . IdBinding::text('`flow_sequence`.`parent_id`') . ' as `parent_id`,
+            ' . IdBinding::text('`flow_sequence`.`rule_id`') . ' as `rule_id`,
+            ' . IdBinding::text('`flow_sequence`.`app_flow_action_id`') . ' as `app_flow_action_id`,
             `flow_sequence`.`display_group` as `display_group`,
             `flow_sequence`.`position` as `position`,
             `flow_sequence`.`action_name` as `action_name`,
@@ -49,8 +48,8 @@ class FlowPayloadUpdater
             WHERE `flow`.`active` = 1
                 AND (`flow_sequence`.`id` IS NULL OR (`flow_sequence`.`rule_id` IS NOT NULL OR `flow_sequence`.`action_name` IS NOT NULL))
                 AND `flow`.`id` IN (:ids)',
-            ['ids' => Uuid::fromHexToBytesList($ids)],
-            ['ids' => ArrayParameterType::BINARY]
+            ['ids' => IdBinding::values($ids)],
+            ['ids' => IdBinding::listType()]
         );
 
         $listFlowSequence = FetchModeHelper::group($listFlowSequence);
@@ -90,7 +89,7 @@ class FlowPayloadUpdater
                 $invalid = true;
             } finally {
                 $update->execute([
-                    'id' => Uuid::fromHexToBytes($flowId),
+                    'id' => IdBinding::value($flowId),
                     'payload' => $serialized,
                     'invalid' => (int) $invalid,
                 ]);

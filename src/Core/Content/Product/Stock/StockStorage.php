@@ -2,18 +2,17 @@
 
 namespace Shopware\Core\Content\Product\Stock;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use Shopware\Core\Content\Product\Events\ProductBackInStockEvent;
 use Shopware\Core\Content\Product\Events\ProductNoLongerAvailableEvent;
 use Shopware\Core\Content\Product\Events\ProductStockAlteredEvent;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\RetryableQuery;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Plugin\Exception\DecorationPatternException;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\System\SalesChannel\SalesChannelContext;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
@@ -66,8 +65,8 @@ class StockStorage extends AbstractStockStorage
         foreach ($changes as $alteration) {
             $query->execute([
                 'quantity' => $alteration->quantityDelta(),
-                'id' => Uuid::fromHexToBytes($alteration->productId),
-                'version' => Uuid::fromHexToBytes(Defaults::LIVE_VERSION),
+                'id' => IdBinding::value($alteration->productId),
+                'version' => IdBinding::value(Defaults::LIVE_VERSION),
             ]);
         }
 
@@ -99,7 +98,7 @@ class StockStorage extends AbstractStockStorage
             return;
         }
 
-        $bytes = Uuid::fromHexToBytesList($ids);
+        $bytes = IdBinding::values($ids);
 
         $sql = '
             UPDATE product
@@ -136,23 +135,23 @@ class StockStorage extends AbstractStockStorage
         }
 
         $before = $this->connection->fetchAllKeyValue(
-            'SELECT LOWER(HEX(id)), available FROM product WHERE id IN (:ids) AND product.version_id = :version',
-            ['ids' => $bytes, 'version' => Uuid::fromHexToBytes($context->getVersionId())],
-            ['ids' => ArrayParameterType::BINARY]
+            'SELECT ' . IdBinding::text('id') . ', available FROM product WHERE id IN (:ids) AND product.version_id = :version',
+            ['ids' => $bytes, 'version' => IdBinding::value($context->getVersionId())],
+            ['ids' => IdBinding::listType()]
         );
 
         RetryableQuery::retryable($this->connection, function () use ($sql, $context, $bytes): void {
             $this->connection->executeStatement(
                 $sql,
-                ['ids' => $bytes, 'version' => Uuid::fromHexToBytes($context->getVersionId())],
-                ['ids' => ArrayParameterType::BINARY]
+                ['ids' => $bytes, 'version' => IdBinding::value($context->getVersionId())],
+                ['ids' => IdBinding::listType()]
             );
         });
 
         $after = $this->connection->fetchAllKeyValue(
-            'SELECT LOWER(HEX(id)), available FROM product WHERE id IN (:ids) AND product.version_id = :version',
-            ['ids' => $bytes, 'version' => Uuid::fromHexToBytes($context->getVersionId())],
-            ['ids' => ArrayParameterType::BINARY]
+            'SELECT ' . IdBinding::text('id') . ', available FROM product WHERE id IN (:ids) AND product.version_id = :version',
+            ['ids' => $bytes, 'version' => IdBinding::value($context->getVersionId())],
+            ['ids' => IdBinding::listType()]
         );
 
         $noLongerAvailable = [];

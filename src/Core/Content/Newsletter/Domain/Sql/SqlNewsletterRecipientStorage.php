@@ -2,7 +2,6 @@
 
 namespace Shopware\Core\Content\Newsletter\Domain\Sql;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Psr\Clock\ClockInterface;
 use Shopware\Core\Content\Newsletter\Domain\NewsletterRecipient;
@@ -11,9 +10,9 @@ use Shopware\Core\Content\Newsletter\Domain\NewsletterRecipientWrite;
 use Shopware\Core\Content\Newsletter\Domain\NewsletterSalutation;
 use Shopware\Core\Content\Newsletter\Domain\NewsletterStatus;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 
 /**
  * Plain SQL storage, written in the MySQL dialect that the PostgreSQL layer translates, so there is no platform branch.
@@ -24,16 +23,6 @@ use Shopware\Core\Framework\Uuid\Uuid;
 #[Package('after-sales')]
 final class SqlNewsletterRecipientStorage implements NewsletterRecipientStorage
 {
-    private const SELECT = <<<'SQL'
-        SELECT LOWER(HEX(r.`id`)) AS id, r.`email`, r.`status`, r.`hash`,
-               LOWER(HEX(r.`language_id`)) AS language_id, LOWER(HEX(r.`sales_channel_id`)) AS sales_channel_id,
-               r.`title`, r.`first_name`, r.`last_name`, r.`zip_code`, r.`city`, r.`street`,
-               LOWER(HEX(r.`salutation_id`)) AS salutation_id, r.`confirmed_at`, r.`custom_fields`, r.`created_at`, r.`updated_at`,
-               s.`salutation_key`
-        FROM `newsletter_recipient` r
-        LEFT JOIN `salutation` s ON s.`id` = r.`salutation_id`
-        SQL;
-
     /**
      * @internal
      */
@@ -47,7 +36,7 @@ final class SqlNewsletterRecipientStorage implements NewsletterRecipientStorage
     {
         return $this->first(
             'r.`email` = :email AND r.`sales_channel_id` = :salesChannelId',
-            ['email' => $email, 'salesChannelId' => Uuid::fromHexToBytes($salesChannelId)],
+            ['email' => $email, 'salesChannelId' => IdBinding::value($salesChannelId)],
             $context,
         );
     }
@@ -60,12 +49,12 @@ final class SqlNewsletterRecipientStorage implements NewsletterRecipientStorage
     public function upsert(NewsletterRecipientWrite $write, Context $context): void
     {
         $values = [
-            'id' => Uuid::fromHexToBytes($write->id),
+            'id' => IdBinding::value($write->id),
             'email' => $write->email,
             'status' => $write->status->value,
             'hash' => $write->hash,
-            'language_id' => Uuid::fromHexToBytes($write->languageId),
-            'sales_channel_id' => Uuid::fromHexToBytes($write->salesChannelId),
+            'language_id' => IdBinding::value($write->languageId),
+            'sales_channel_id' => IdBinding::value($write->salesChannelId),
         ];
 
         $optional = [
@@ -75,7 +64,7 @@ final class SqlNewsletterRecipientStorage implements NewsletterRecipientStorage
             'zip_code' => $write->zipCode,
             'city' => $write->city,
             'street' => $write->street,
-            'salutation_id' => $write->salutationId === null ? null : Uuid::fromHexToBytes($write->salutationId),
+            'salutation_id' => $write->salutationId === null ? null : IdBinding::value($write->salutationId),
             'custom_fields' => $write->customFields === null ? null : json_encode($write->customFields, \JSON_THROW_ON_ERROR),
         ];
 
@@ -105,7 +94,7 @@ final class SqlNewsletterRecipientStorage implements NewsletterRecipientStorage
                 'status' => NewsletterStatus::OptIn->value,
                 'confirmedAt' => $confirmedAt->setTimezone(new \DateTimeZone('UTC'))->format(Defaults::STORAGE_DATE_TIME_FORMAT),
                 'updatedAt' => $this->now(),
-                'id' => Uuid::fromHexToBytes($id),
+                'id' => IdBinding::value($id),
             ],
         );
     }
@@ -114,15 +103,26 @@ final class SqlNewsletterRecipientStorage implements NewsletterRecipientStorage
     {
         $this->connection->executeStatement(
             'UPDATE `newsletter_recipient` SET `status` = :status, `updated_at` = :updatedAt WHERE `id` = :id',
-            ['status' => NewsletterStatus::OptOut->value, 'updatedAt' => $this->now(), 'id' => Uuid::fromHexToBytes($id)],
+            ['status' => NewsletterStatus::OptOut->value, 'updatedAt' => $this->now(), 'id' => IdBinding::value($id)],
         );
     }
 
     public function findCustomerEmail(string $customerId, Context $context): ?string
     {
-        $email = $this->connection->fetchOne('SELECT `email` FROM `customer` WHERE `id` = :id', ['id' => Uuid::fromHexToBytes($customerId)]);
+        $email = $this->connection->fetchOne('SELECT `email` FROM `customer` WHERE `id` = :id', ['id' => IdBinding::value($customerId)]);
 
         return \is_string($email) ? $email : null;
+    }
+
+    private static function select(): string
+    {
+        return 'SELECT ' . IdBinding::text('r.`id`') . ' AS id, r.`email`, r.`status`, r.`hash`, '
+            . IdBinding::text('r.`language_id`') . ' AS language_id, ' . IdBinding::text('r.`sales_channel_id`') . ' AS sales_channel_id, '
+            . 'r.`title`, r.`first_name`, r.`last_name`, r.`zip_code`, r.`city`, r.`street`, '
+            . IdBinding::text('r.`salutation_id`') . ' AS salutation_id, r.`confirmed_at`, r.`custom_fields`, r.`created_at`, r.`updated_at`, '
+            . 's.`salutation_key` '
+            . 'FROM `newsletter_recipient` r '
+            . 'LEFT JOIN `salutation` s ON s.`id` = r.`salutation_id`';
     }
 
     /**
@@ -131,7 +131,7 @@ final class SqlNewsletterRecipientStorage implements NewsletterRecipientStorage
     private function first(string $where, array $params, Context $context): ?NewsletterRecipient
     {
         $row = $this->connection->fetchAssociative(
-            self::SELECT . ' WHERE ' . $where . ' LIMIT 1',
+            self::select() . ' WHERE ' . $where . ' LIMIT 1',
             $params,
         );
 
@@ -176,9 +176,9 @@ final class SqlNewsletterRecipientStorage implements NewsletterRecipientStorage
     {
         $chain = $context->getLanguageIdChain();
         $rows = $this->connection->fetchAllAssociative(
-            'SELECT LOWER(HEX(`language_id`)) AS language_id, `display_name`, `letter_name` FROM `salutation_translation` WHERE `salutation_id` = :id AND `language_id` IN (:languages)',
-            ['id' => Uuid::fromHexToBytes($salutationId), 'languages' => array_map(Uuid::fromHexToBytes(...), $chain)],
-            ['languages' => ArrayParameterType::BINARY],
+            'SELECT ' . IdBinding::text('`language_id`') . ' AS language_id, `display_name`, `letter_name` FROM `salutation_translation` WHERE `salutation_id` = :id AND `language_id` IN (:languages)',
+            ['id' => IdBinding::value($salutationId), 'languages' => array_map(IdBinding::value(...), $chain)],
+            ['languages' => IdBinding::listType()],
         );
         $byLanguage = array_column($rows, null, 'language_id');
 

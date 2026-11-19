@@ -10,10 +10,10 @@ use Shopware\Core\Content\Cms\CmsPageDefinition;
 use Shopware\Core\Content\Cms\Exception\PageNotFoundException;
 use Shopware\Core\Content\Product\ProductDefinition;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\Event\EntityDeleteEvent;
 use Shopware\Core\Framework\Feature;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\System\SystemConfig\Event\BeforeSystemConfigChangedEvent;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
@@ -162,8 +162,8 @@ class CmsPageDefaultChangeSubscriber implements EventSubscriberInterface
         $count = $this->connection->fetchOne(
             'SELECT count(*) FROM cms_page WHERE id = :cmsPageId AND version_id = :versionId LIMIT 1;',
             [
-                'cmsPageId' => Uuid::fromHexToBytes($cmsPageId),
-                'versionId' => Uuid::fromHexToBytes(Defaults::LIVE_VERSION),
+                'cmsPageId' => IdBinding::value($cmsPageId),
+                'versionId' => IdBinding::value(Defaults::LIVE_VERSION),
             ]
         );
 

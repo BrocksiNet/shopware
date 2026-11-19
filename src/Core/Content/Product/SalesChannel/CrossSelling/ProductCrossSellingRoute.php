@@ -24,6 +24,7 @@ use Shopware\Core\Content\ProductStream\Exception\NoFilterException;
 use Shopware\Core\Content\ProductStream\Service\AbstractProductStreamBuilder;
 use Shopware\Core\Content\ProductStream\Service\ProductStreamBuilderInterface;
 use Shopware\Core\Framework\Adapter\Cache\CacheTagCollector;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\Cache\EntityCacheKeyGenerator;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Aggregation\Bucket\TermsAggregation;
@@ -39,7 +40,6 @@ use Shopware\Core\Framework\Feature;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Plugin\Exception\DecorationPatternException;
 use Shopware\Core\Framework\Routing\StoreApiRouteScope;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\PlatformRequest;
 use Shopware\Core\System\SalesChannel\Entity\SalesChannelRepository;
 use Shopware\Core\System\SalesChannel\SalesChannelContext;
@@ -332,10 +332,10 @@ class ProductCrossSellingRoute extends AbstractProductCrossSellingRoute
     private function fetchRootProductId(string $productId, SalesChannelContext $context): string
     {
         $parentId = $this->connection->fetchOne(
-            'SELECT LOWER(HEX(parent_id)) FROM product WHERE id = :id AND version_id = :versionId',
+            'SELECT ' . IdBinding::text('parent_id') . ' FROM product WHERE id = :id AND version_id = :versionId',
             [
-                'id' => Uuid::fromHexToBytes($productId),
-                'versionId' => Uuid::fromHexToBytes($context->getVersionId()),
+                'id' => IdBinding::value($productId),
+                'versionId' => IdBinding::value($context->getVersionId()),
             ]
         );
 

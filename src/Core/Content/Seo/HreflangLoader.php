@@ -2,12 +2,11 @@
 
 namespace Shopware\Core\Content\Seo;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Content\Seo\Hreflang\HreflangCollection;
 use Shopware\Core\Content\Seo\Hreflang\HreflangStruct;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Symfony\Component\Routing\RouterInterface;
 
 #[Package('inventory')]
@@ -109,7 +108,7 @@ class HreflangLoader implements HreflangLoaderInterface
             INNER JOIN `language` ON `language`.`id` = `domain`.`language_id`
             INNER JOIN `locale` ON `locale`.`id` = `language`.`locale_id`
             WHERE `domain`.`sales_channel_id` = :salesChannelId',
-            ['salesChannelId' => Uuid::fromHexToBytes($salesChannelId)]
+            ['salesChannelId' => IdBinding::value($salesChannelId)]
         );
 
         return $result;
@@ -153,7 +152,7 @@ class HreflangLoader implements HreflangLoaderInterface
             $locale = mb_substr($locale, 0, 2);
         }
 
-        if (Uuid::fromBytesToHex($domain['id']) === $defaultDomainId) {
+        if (IdBinding::toHex($domain['id']) === $defaultDomainId) {
             $mainLang = clone $hrefLang;
             $mainLang->setLocale('x-default');
             $collection->add($mainLang);
@@ -176,8 +175,8 @@ class HreflangLoader implements HreflangLoaderInterface
             FROM `seo_url`
             WHERE `path_info` = :pathInfo AND `is_canonical` = 1 AND
                   `sales_channel_id` = :salesChannelId AND `language_id` IN (:languageIds)',
-            ['pathInfo' => $pathInfo, 'salesChannelId' => Uuid::fromHexToBytes($salesChannelId), 'languageIds' => $languageIds],
-            ['languageIds' => ArrayParameterType::BINARY]
+            ['pathInfo' => $pathInfo, 'salesChannelId' => IdBinding::value($salesChannelId), 'languageIds' => $languageIds],
+            ['languageIds' => IdBinding::listType()]
         );
 
         return $result;

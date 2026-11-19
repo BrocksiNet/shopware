@@ -2,17 +2,16 @@
 
 namespace Shopware\Core\Content\Product\DataAbstractionLayer;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Content\Product\Events\ProductStatesBeforeChangeEvent;
 use Shopware\Core\Content\Product\Events\ProductStatesChangedEvent;
 use Shopware\Core\Content\Product\ProductDefinition;
 use Shopware\Core\Content\Product\State;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\RetryableQuery;
 use Shopware\Core\Framework\Feature;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
 /**
@@ -43,7 +42,7 @@ class StatesUpdater
         );
 
         // EXISTS instead of a join with a partial GROUP BY, which only MySQL without ONLY_FULL_GROUP_BY accepts
-        $sql = 'SELECT LOWER(HEX(`product`.`id`)) as id,
+        $sql = 'SELECT ' . IdBinding::text('`product`.`id`') . ' as id,
                 IF(EXISTS(
                     SELECT 1 FROM `product_download`
                     WHERE `product`.`id` = `product_download`.`product_id`
@@ -56,14 +55,14 @@ class StatesUpdater
                 AND `product`.`version_id` = :versionId';
 
         $params = [
-            'ids' => Uuid::fromHexToBytesList($ids),
-            'versionId' => Uuid::fromHexToBytes($context->getVersionId()),
+            'ids' => IdBinding::values($ids),
+            'versionId' => IdBinding::value($context->getVersionId()),
         ];
 
         $products = $this->connection->fetchAllAssociative(
             $sql,
             $params,
-            ['ids' => ArrayParameterType::BINARY]
+            ['ids' => IdBinding::listType()]
         );
 
         $updates = [];
@@ -99,8 +98,8 @@ class StatesUpdater
             $query->execute([
                 'states' => json_encode($updatedStates->getNewStates(), \JSON_THROW_ON_ERROR),
                 'type' => \in_array(State::IS_DOWNLOAD, $updatedStates->getNewStates(), true) ? ProductDefinition::TYPE_DIGITAL : ProductDefinition::TYPE_PHYSICAL,
-                'id' => Uuid::fromHexToBytes($updatedStates->getId()),
-                'version' => Uuid::fromHexToBytes($context->getVersionId()),
+                'id' => IdBinding::value($updatedStates->getId()),
+                'version' => IdBinding::value($context->getVersionId()),
             ]);
         }
 

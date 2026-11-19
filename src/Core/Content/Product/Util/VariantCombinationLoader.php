@@ -3,11 +3,11 @@
 namespace Shopware\Core\Content\Product\Util;
 
 use Doctrine\DBAL\Connection;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\FetchModeHelper;
 use Shopware\Core\Framework\Feature;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 
 #[Package('inventory')]
 class VariantCombinationLoader
@@ -25,7 +25,7 @@ class VariantCombinationLoader
     public function load(string $productId, Context $context): array
     {
         $query = $this->connection->createQueryBuilder();
-        $query->select('LOWER(HEX(product.id))', 'product.option_ids as options', 'product.product_number as productNumber', 'product.type as type');
+        $query->select(IdBinding::text('product.id'), 'product.option_ids as options', 'product.product_number as productNumber', 'product.type as type');
 
         if (!Feature::isActive('v6.8.0.0')) {
             $query->addSelect('product.states as productStates');
@@ -34,8 +34,8 @@ class VariantCombinationLoader
         $query->from('product');
         $query->where('product.parent_id = :id');
         $query->andWhere('product.version_id = :versionId');
-        $query->setParameter('id', Uuid::fromHexToBytes($productId));
-        $query->setParameter('versionId', Uuid::fromHexToBytes($context->getVersionId()));
+        $query->setParameter('id', IdBinding::value($productId));
+        $query->setParameter('versionId', IdBinding::value($context->getVersionId()));
         $query->andWhere('product.option_ids IS NOT NULL');
 
         $combinations = $query->executeQuery()->fetchAllAssociative();

@@ -97,7 +97,7 @@ class VariantListingUpdater
                 $query->innerJoin($mappingAlias, 'property_group_option', $optionAlias, $optionAlias . '.id = ' . $mappingAlias . '.property_group_option_id AND ' . $optionAlias . '.property_group_id = :' . $optionAlias);
                 $query->andWhere($mappingAlias . '.product_id = product.id AND ' . $mappingAlias . '.product_version_id = :versionId');
 
-                $fields[] = 'LOWER(HEX(' . $optionAlias . '.id))';
+                $fields[] = IdBinding::text($optionAlias . '.id');
 
                 $params[$optionAlias] = IdBinding::value($groupId);
             }

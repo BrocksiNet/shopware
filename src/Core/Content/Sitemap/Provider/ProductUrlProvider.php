@@ -2,7 +2,6 @@
 
 namespace Shopware\Core\Content\Sitemap\Provider;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Content\Product\Aggregate\ProductVisibility\ProductVisibilityDefinition;
 use Shopware\Core\Content\Product\ProductDefinition;
@@ -13,11 +12,11 @@ use Shopware\Core\Content\Sitemap\Service\ConfigHandler;
 use Shopware\Core\Content\Sitemap\Struct\Url;
 use Shopware\Core\Content\Sitemap\Struct\UrlResult;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\Common\IteratorFactory;
 use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\FetchModeHelper;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Plugin\Exception\DecorationPatternException;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\System\SalesChannel\SalesChannelContext;
 use Shopware\Core\System\SystemConfig\SystemConfigService;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
@@ -149,7 +148,7 @@ class ProductUrlProvider extends AbstractUrlProvider
         $excludedProductIds = $this->getExcludedProductIds($context);
         if ($excludedProductIds !== []) {
             $query->andWhere('`product`.id NOT IN (:productIds)');
-            $query->setParameter('productIds', Uuid::fromHexToBytesList($excludedProductIds), ArrayParameterType::BINARY);
+            $query->setParameter('productIds', IdBinding::values($excludedProductIds), IdBinding::listType());
         }
 
         $excludeLinkedProducts = $this->systemConfigService->getBool(self::CONFIG_EXCLUDE_LINKED_PRODUCTS, $context->getSalesChannelId());
@@ -158,8 +157,8 @@ class ProductUrlProvider extends AbstractUrlProvider
             $query->setParameter('excludedVisibility', ProductVisibilityDefinition::VISIBILITY_LINK);
         }
 
-        $query->setParameter('versionId', Uuid::fromHexToBytes(Defaults::LIVE_VERSION));
-        $query->setParameter('salesChannelId', Uuid::fromHexToBytes($context->getSalesChannelId()));
+        $query->setParameter('versionId', IdBinding::value(Defaults::LIVE_VERSION));
+        $query->setParameter('salesChannelId', IdBinding::value($context->getSalesChannelId()));
 
         $this->eventDispatcher->dispatch(
             new SitemapQueryEvent($query, $limit, $offset, $context, self::QUERY_EVENT_NAME)

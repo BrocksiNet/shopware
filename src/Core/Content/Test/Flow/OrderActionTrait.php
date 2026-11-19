@@ -12,6 +12,7 @@ use Shopware\Core\Checkout\Cart\Tax\Struct\TaxRuleCollection;
 use Shopware\Core\Checkout\Customer\CustomerCollection;
 use Shopware\Core\Content\Product\Aggregate\ProductVisibility\ProductVisibilityDefinition;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Pricing\CashRoundingConfig;
@@ -259,7 +260,7 @@ trait OrderActionTrait
     {
         return static::getContainer()->get(Connection::class)
             ->fetchOne('
-                SELECT LOWER(HEX(state_machine_state.id))
+                SELECT ' . IdBinding::text('state_machine_state.id') . '
                 FROM state_machine_state
                     INNER JOIN  state_machine
                     ON state_machine.id = state_machine_state.state_machine_id

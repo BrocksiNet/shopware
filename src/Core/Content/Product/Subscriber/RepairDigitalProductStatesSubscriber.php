@@ -8,11 +8,11 @@ use Psr\Log\LoggerInterface;
 use Shopware\Core\Content\Product\DataAbstractionLayer\StatesUpdater;
 use Shopware\Core\Content\Product\ProductDefinition;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Adapter\Storage\AbstractKeyValueStorage;
 use Shopware\Core\Framework\Feature;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Update\Event\UpdatePostFinishEvent;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
 /**
@@ -79,18 +79,16 @@ final readonly class RepairDigitalProductStatesSubscriber implements EventSubscr
             while (true) {
                 /** @var list<string> $ids */
                 $ids = $this->connection->fetchFirstColumn(
-                    <<<'SQL'
-                    SELECT LOWER(HEX(`id`)) AS id
-                    FROM `product`
-                    WHERE `version_id` = :versionId
-                      AND `type` = :type
-                      AND `states` IS NULL
-                    LIMIT :limit
-                    SQL,
+                    'SELECT ' . IdBinding::text('`id`') . ' AS id
+FROM `product`
+WHERE `version_id` = :versionId
+  AND `type` = :type
+  AND `states` IS NULL
+LIMIT :limit',
                     [
                         'type' => ProductDefinition::TYPE_DIGITAL,
                         'limit' => self::BATCH_SIZE,
-                        'versionId' => Uuid::fromHexToBytes(Defaults::LIVE_VERSION),
+                        'versionId' => IdBinding::value(Defaults::LIVE_VERSION),
                     ],
                     [
                         'limit' => ParameterType::INTEGER,

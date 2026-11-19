@@ -2,7 +2,6 @@
 
 namespace Shopware\Core\Content\Sitemap\Provider;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Content\LandingPage\LandingPageDefinition;
 use Shopware\Core\Content\LandingPage\LandingPageEntity;
@@ -12,10 +11,10 @@ use Shopware\Core\Content\Sitemap\Service\ConfigHandler;
 use Shopware\Core\Content\Sitemap\Struct\Url;
 use Shopware\Core\Content\Sitemap\Struct\UrlResult;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\FetchModeHelper;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Plugin\Exception\DecorationPatternException;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\System\SalesChannel\SalesChannelContext;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 
@@ -120,11 +119,11 @@ class LandingPageUrlProvider extends AbstractUrlProvider
         $excludedLandingPageIds = $this->getExcludedLandingPageIds($context);
         if ($excludedLandingPageIds !== []) {
             $query->andWhere('lp.id NOT IN (:landingPageIds)');
-            $query->setParameter('landingPageIds', Uuid::fromHexToBytesList($excludedLandingPageIds), ArrayParameterType::BINARY);
+            $query->setParameter('landingPageIds', IdBinding::values($excludedLandingPageIds), IdBinding::listType());
         }
 
-        $query->setParameter('versionId', Uuid::fromHexToBytes(Defaults::LIVE_VERSION));
-        $query->setParameter('salesChannelId', Uuid::fromHexToBytes($context->getSalesChannelId()));
+        $query->setParameter('versionId', IdBinding::value(Defaults::LIVE_VERSION));
+        $query->setParameter('salesChannelId', IdBinding::value($context->getSalesChannelId()));
 
         $this->eventDispatcher->dispatch(
             new SitemapQueryEvent($query, $limit, $offset, $context, self::QUERY_EVENT_NAME)
@@ -134,7 +133,7 @@ class LandingPageUrlProvider extends AbstractUrlProvider
         $result = $query->executeQuery()->fetchAllAssociative();
 
         return array_map(static function (array $landingPage): array {
-            $landingPage['id'] = Uuid::fromBytesToHex($landingPage['id']);
+            $landingPage['id'] = IdBinding::toHex($landingPage['id']);
 
             return $landingPage;
         }, $result);

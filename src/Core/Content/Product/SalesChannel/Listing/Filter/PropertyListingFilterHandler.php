@@ -2,12 +2,12 @@
 
 namespace Shopware\Core\Content\Product\SalesChannel\Listing\Filter;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Content\Product\SalesChannel\Listing\Filter;
 use Shopware\Core\Content\Product\SalesChannel\Listing\ProductListingResult;
 use Shopware\Core\Content\Property\Aggregate\PropertyGroupOption\PropertyGroupOptionCollection;
 use Shopware\Core\Content\Property\PropertyGroupCollection;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\FetchModeHelper;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Aggregation\Bucket\FilterAggregation;
@@ -164,11 +164,11 @@ class PropertyListingFilterHandler extends AbstractListingFilterHandler
         }
 
         $grouped = $this->connection->fetchAllAssociative(
-            'SELECT LOWER(HEX(property_group_id)) as property_group_id, LOWER(HEX(id)) as id
+            'SELECT ' . IdBinding::text('property_group_id') . ' as property_group_id, ' . IdBinding::text('id') . ' as id
              FROM property_group_option
              WHERE id IN (:ids)',
-            ['ids' => Uuid::fromHexToBytesList($ids)],
-            ['ids' => ArrayParameterType::BINARY]
+            ['ids' => IdBinding::values($ids)],
+            ['ids' => IdBinding::listType()]
         );
 
         $grouped = FetchModeHelper::group($grouped, static fn ($row): string => (string) $row['id']);

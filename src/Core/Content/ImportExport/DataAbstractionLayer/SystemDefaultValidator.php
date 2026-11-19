@@ -2,10 +2,10 @@
 
 namespace Shopware\Core\Content\ImportExport\DataAbstractionLayer;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Content\ImportExport\Exception\DeleteDefaultProfileException;
 use Shopware\Core\Content\ImportExport\ImportExportProfileDefinition;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Validation\PreWriteValidationEvent;
 use Shopware\Core\Framework\Log\Package;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
@@ -60,7 +60,7 @@ class SystemDefaultValidator implements EventSubscriberInterface
         $result = $this->connection->executeQuery(
             'SELECT id FROM import_export_profile WHERE id IN (:idList) AND system_default = 1',
             ['idList' => $ids],
-            ['idList' => ArrayParameterType::BINARY]
+            ['idList' => IdBinding::listType()]
         );
 
         return $result->fetchFirstColumn();
