@@ -46,6 +46,11 @@ class BooleanAssignmentRewriterTest extends TestCase
             '/* conflict-target: id */ INSERT INTO "t" ("id", "flag") VALUES (?, ?) ON CONFLICT ("id") DO UPDATE SET "flag" = 1, "id" = EXCLUDED."id"',
             '/* conflict-target: id */ INSERT INTO "t" ("id", "flag") VALUES (?, mysql_compat_to_bool(?)) ON CONFLICT ("id") DO UPDATE SET "flag" = TRUE, "id" = EXCLUDED."id"',
         ];
+        yield 'upsert with a trailing statement terminator' => [
+            'INSERT INTO "t" ("id", "flag") VALUES (?, ?) ON CONFLICT ("id") DO UPDATE SET "flag" = EXCLUDED."flag" ;',
+            'INSERT INTO "t" ("id", "flag") VALUES (?, mysql_compat_to_bool(?)) ON CONFLICT ("id") DO UPDATE SET "flag" = mysql_compat_to_bool(EXCLUDED."flag") ;',
+        ];
+
         yield 'upsert do nothing' => [
             'INSERT INTO "t" ("flag") VALUES (0) ON CONFLICT DO NOTHING',
             'INSERT INTO "t" ("flag") VALUES (FALSE) ON CONFLICT DO NOTHING',

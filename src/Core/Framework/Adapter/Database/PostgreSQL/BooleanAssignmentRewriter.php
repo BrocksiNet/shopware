@@ -29,6 +29,11 @@ class BooleanAssignmentRewriter
      */
     public static function rewrite(string $sql, \Closure $booleanColumns): string
     {
+        // a trailing statement terminator (the multi insert queue appends one) must not end up inside the last expression
+        if (preg_match('/^(.*?)(\s*;\s*)\z/s', $sql, $terminated) === 1 && !str_contains($terminated[1], ';')) {
+            return self::rewrite($terminated[1], $booleanColumns) . $terminated[2];
+        }
+
         if (preg_match('/^(' . self::PREFIX . 'INSERT\s+INTO\s+(' . self::IDENT . ')\s*\(([^()]*)\)\s*VALUES\s*)(.*)\z/is', $sql, $m) === 1) {
             $booleans = $booleanColumns(self::unquote($m[2]));
 
