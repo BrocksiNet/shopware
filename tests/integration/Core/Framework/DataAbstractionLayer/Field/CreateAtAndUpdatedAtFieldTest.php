@@ -58,7 +58,7 @@ class CreateAtAndUpdatedAtFieldTest extends TestCase
 
         $nullableTable = <<<EOF
 CREATE TABLE IF NOT EXISTS `date_time_test` (
-  `id` varbinary(16) NOT NULL,
+  `id` binary(16) NOT NULL,
   `name` varchar(500) NULL,
   `created_at` datetime(3) NOT NULL,
   `updated_at` datetime(3) NULL,

@@ -202,7 +202,7 @@ class DdlRewriter
 
                 continue;
             }
-            if (preg_match('/^PRIMARY\s+KEY\s*(?:USING\s+\w+\s*)?\(([^)]*)\)/i', $item, $k) === 1) {
+            if (preg_match('/^PRIMARY\s+KEY\s*(?:USING\s+\w+\s*)?(?:(?:`[^`]+`|' . self::IDENT . ')\s*)?\(([^)]*)\)/i', $item, $k) === 1) {
                 $lines[] = 'PRIMARY KEY (' . self::columnList($k[1], false) . ')';
                 $indexedPrefixes[] = self::columnNames($k[1]);
 
