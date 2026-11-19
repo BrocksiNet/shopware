@@ -2,11 +2,11 @@
 
 namespace Shopware\Core\Content\Media\DataAbstractionLayer;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Content\Media\Aggregate\MediaFolder\MediaFolderCollection;
 use Shopware\Core\Content\Media\Aggregate\MediaFolder\MediaFolderDefinition;
 use Shopware\Core\Content\Media\Event\MediaFolderIndexerEvent;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\Common\IteratorFactory;
 use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\RetryableQuery;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
@@ -18,7 +18,6 @@ use Shopware\Core\Framework\DataAbstractionLayer\Indexing\EntityIndexingMessage;
 use Shopware\Core\Framework\DataAbstractionLayer\Indexing\TreeUpdater;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Plugin\Exception\DecorationPatternException;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Tests\Integration\Core\Content\Media\DataAbstractionLayer\Indexing\MediaFolderIndexerTest;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
@@ -94,7 +93,7 @@ class MediaFolderIndexer extends EntityIndexer
 
             $state = $existence->getState();
             if ($childCountAffected && isset($state['parent_id'])) {
-                $previousParentIds[] = Uuid::fromBytesToHex($state['parent_id']);
+                $previousParentIds[] = IdBinding::toHex($state['parent_id']);
             }
         }
 
@@ -131,15 +130,15 @@ class MediaFolderIndexer extends EntityIndexer
 
         foreach ($ids as $id) {
             $folder = $this->connection->fetchAssociative(
-                'SELECT LOWER(HEX(child.id)) as id,
-                       LOWER(HEX(parent.media_folder_configuration_id)) AS parent_configuration_id
+                'SELECT ' . IdBinding::text('child.id') . ' as id,
+                       ' . IdBinding::text('parent.media_folder_configuration_id') . ' AS parent_configuration_id
                 FROM media_folder child
                     LEFT JOIN media_folder as parent
                         ON parent.id = child.parent_id
                 WHERE child.id = :id
                     AND child.media_folder_configuration_id != parent.media_folder_configuration_id
                     AND child.use_parent_configuration = 1',
-                ['id' => Uuid::fromHexToBytes($id)]
+                ['id' => IdBinding::value($id)]
             );
 
             if ($folder === false) {
@@ -150,8 +149,8 @@ class MediaFolderIndexer extends EntityIndexer
 
             foreach (array_merge([$id], $children) as $folderId) {
                 $update->execute([
-                    'id' => Uuid::fromHexToBytes($folderId),
-                    'configId' => Uuid::fromHexToBytes($folder['parent_configuration_id']),
+                    'id' => IdBinding::value($folderId),
+                    'configId' => IdBinding::value($folder['parent_configuration_id']),
                 ]);
             }
         }
@@ -201,9 +200,9 @@ class MediaFolderIndexer extends EntityIndexer
     private function fetchChildren(array $parentIds): array
     {
         $childIds = $this->connection->fetchAllAssociative(
-            'SELECT LOWER(HEX(id)) as id FROM media_folder WHERE parent_id IN (:ids) AND use_parent_configuration = 1',
-            ['ids' => Uuid::fromHexToBytesList($parentIds)],
-            ['ids' => ArrayParameterType::BINARY]
+            'SELECT ' . IdBinding::text('id') . ' as id FROM media_folder WHERE parent_id IN (:ids) AND use_parent_configuration = 1',
+            ['ids' => IdBinding::values($parentIds)],
+            ['ids' => IdBinding::listType()]
         );
 
         $childIds = array_column($childIds, 'id');
@@ -224,9 +223,9 @@ class MediaFolderIndexer extends EntityIndexer
     {
         /** @var list<string> $parentIds */
         $parentIds = $this->connection->fetchFirstColumn(
-            'SELECT DISTINCT LOWER(HEX(media_folder.parent_id)) as id FROM media_folder WHERE id IN (:ids)',
-            ['ids' => Uuid::fromHexToBytesList($ids)],
-            ['ids' => ArrayParameterType::BINARY]
+            'SELECT DISTINCT ' . IdBinding::text('media_folder.parent_id') . ' as id FROM media_folder WHERE id IN (:ids)',
+            ['ids' => IdBinding::values($ids)],
+            ['ids' => IdBinding::listType()]
         );
 
         return array_unique(array_filter($parentIds));

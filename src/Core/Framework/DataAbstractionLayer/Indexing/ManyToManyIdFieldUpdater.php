@@ -2,8 +2,8 @@
 
 namespace Shopware\Core\Framework\DataAbstractionLayer\Indexing;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\DataAbstractionLayerException;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\EntityDefinitionQueryHelper;
@@ -16,7 +16,6 @@ use Shopware\Core\Framework\DataAbstractionLayer\Field\ManyToManyAssociationFiel
 use Shopware\Core\Framework\DataAbstractionLayer\Field\ManyToManyIdField;
 use Shopware\Core\Framework\DataAbstractionLayer\MappingEntityDefinition;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 
 #[Package('framework')]
 class ManyToManyIdFieldUpdater
@@ -77,7 +76,7 @@ WHERE #table#.id IN (:ids)
 #table_version_aware#
 SQL;
 
-        $bytes = array_map(static fn ($id) => Uuid::fromHexToBytes($id), $ids);
+        $bytes = array_map(static fn ($id) => IdBinding::value($id), $ids);
 
         /** @var ManyToManyIdField $field */
         foreach ($fields as $field) {
@@ -108,7 +107,7 @@ SQL;
                 $tableVersionCondition = 'AND #table#.version_id = :version';
                 $mappingVersionCondition = 'AND #table#.version_id = #mapping_table#.#unescaped_table#_version_id';
 
-                $parameters['version'] = Uuid::fromHexToBytes($context->getVersionId());
+                $parameters['version'] = IdBinding::value($context->getVersionId());
                 $replacement['#unescaped_table#'] = $definition->getEntityName();
             }
 
@@ -125,7 +124,7 @@ SQL;
                 $this->connection->executeStatement(
                     $sql,
                     $parameters,
-                    ['ids' => ArrayParameterType::BINARY]
+                    ['ids' => IdBinding::listType()]
                 );
             });
         }

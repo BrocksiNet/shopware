@@ -13,6 +13,7 @@ use Shopware\Core\Content\Product\Aggregate\ProductVisibility\ProductVisibilityD
 use Shopware\Core\Content\Product\ProductCollection;
 use Shopware\Core\Content\Product\ProductDefinition;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\EntityWriteGateway;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\ExceptionHandlerRegistry;
@@ -140,7 +141,7 @@ class EntityWriteGatewayTest extends TestCase
         $changeSet = $this->getChangeSet(ProductCategoryDefinition::ENTITY_NAME, $result);
 
         static::assertTrue($changeSet->hasChanged('product_id'));
-        static::assertSame(Uuid::fromHexToBytes($id), $changeSet->getBefore('product_id'));
+        static::assertSame(IdBinding::value($id), $changeSet->getBefore('product_id'));
         static::assertNull($changeSet->getAfter('product_id'));
     }
 
@@ -224,8 +225,8 @@ class EntityWriteGatewayTest extends TestCase
         $changeSet = $this->getChangeSet(ProductDefinition::ENTITY_NAME, $result);
 
         static::assertTrue($changeSet->hasChanged('product_manufacturer_id'));
-        static::assertSame($id, Uuid::fromBytesToHex($changeSet->getBefore('product_manufacturer_id')));
-        static::assertSame($newId, Uuid::fromBytesToHex($changeSet->getAfter('product_manufacturer_id')));
+        static::assertSame($id, IdBinding::toHex($changeSet->getBefore('product_manufacturer_id')));
+        static::assertSame($newId, IdBinding::toHex($changeSet->getAfter('product_manufacturer_id')));
     }
 
     public function testChangeSetWithMultipleCommandsForSameEntityType(): void
@@ -251,10 +252,10 @@ class EntityWriteGatewayTest extends TestCase
 
         $changeSets = $this->getChangeSets(ProductDefinition::ENTITY_NAME, $result, 2);
         $changeSetForProduct1 = array_values(array_filter($changeSets, static function (ChangeSet $changeSet) use (&$productId1) {
-            return $changeSet->getBefore('id') === hex2bin($productId1);
+            return $changeSet->getBefore('id') === IdBinding::value($productId1);
         }))[0];
         $changeSetForProduct2 = array_values(array_filter($changeSets, static function (ChangeSet $changeSet) use (&$productId2) {
-            return $changeSet->getBefore('id') === hex2bin($productId2);
+            return $changeSet->getBefore('id') === IdBinding::value($productId2);
         }))[0];
 
         static::assertNotNull($changeSetForProduct1);

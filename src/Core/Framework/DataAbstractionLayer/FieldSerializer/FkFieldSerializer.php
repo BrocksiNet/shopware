@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Shopware\Core\Framework\DataAbstractionLayer\FieldSerializer;
 
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\DataAbstractionLayerException;
 use Shopware\Core\Framework\DataAbstractionLayer\Exception\UnableToLoadPathException;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\Field;
@@ -13,7 +14,6 @@ use Shopware\Core\Framework\DataAbstractionLayer\Write\DataStack\KeyValuePair;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\EntityExistence;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\WriteParameterBag;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\Framework\Validation\Constraint\Uuid as UuidConstraint;
 use Symfony\Component\Validator\Constraints\NotBlank;
 
@@ -77,7 +77,7 @@ class FkFieldSerializer extends AbstractFieldSerializer
             $this->validate([new UuidConstraint()], $data, $parameters->getPath());
         }
 
-        $value = Uuid::fromHexToBytes($value);
+        $value = IdBinding::value($value);
 
         yield $field->getStorageName() => $value;
     }
@@ -88,7 +88,7 @@ class FkFieldSerializer extends AbstractFieldSerializer
             return null;
         }
 
-        return Uuid::fromBytesToHex($value);
+        return IdBinding::toHex($value);
     }
 
     protected function shouldUseContext(FkField $field, bool $isRaw, mixed $value): bool

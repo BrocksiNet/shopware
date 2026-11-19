@@ -3,6 +3,7 @@
 namespace Shopware\Core\System\Language;
 
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\DefinitionInstanceRegistry;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityTranslationDefinition;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\FkField;
@@ -11,7 +12,6 @@ use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\DeleteCommand;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\WriteCommand;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Validation\PreWriteValidationEvent;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\Framework\Validation\WriteConstraintViolationException;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\Validator\ConstraintViolation;
@@ -72,12 +72,12 @@ class TranslationValidator implements EventSubscriberInterface
                 continue;
             }
 
-            if (Uuid::fromBytesToHex($pk['language_id']) !== Defaults::LANGUAGE_SYSTEM) {
+            if (IdBinding::toHex($pk['language_id']) !== Defaults::LANGUAGE_SYSTEM) {
                 continue;
             }
 
             $fks = $this->getFkFields($definition);
-            $id = Uuid::fromBytesToHex($pk[$fks['id']->getStorageName()]);
+            $id = IdBinding::toHex($pk[$fks['id']->getStorageName()]);
             $violations->add(
                 $this->buildViolation(
                     'Cannot delete system translation',

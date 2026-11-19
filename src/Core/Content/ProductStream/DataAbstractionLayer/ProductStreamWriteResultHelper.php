@@ -3,6 +3,7 @@
 namespace Shopware\Core\Content\ProductStream\DataAbstractionLayer;
 
 use Shopware\Core\Content\ProductStream\Aggregate\ProductStreamFilter\ProductStreamFilterDefinition;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityWriteResult;
 use Shopware\Core\Framework\DataAbstractionLayer\Event\EntityWrittenContainerEvent;
 use Shopware\Core\Framework\DataAbstractionLayer\Event\EntityWrittenEvent;
@@ -88,7 +89,7 @@ final class ProductStreamWriteResultHelper
         }
 
         if (\strlen($streamId) === 16) {
-            return Uuid::fromBytesToHex($streamId);
+            return IdBinding::toHex($streamId);
         }
 
         return null;

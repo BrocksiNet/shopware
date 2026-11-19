@@ -6,6 +6,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Shopware\Core\Checkout\Order\OrderStates;
 use Shopware\Core\Content\Product\ProductDefinition;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\DefinitionInstanceRegistry;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\StateMachineStateField;
@@ -48,7 +49,7 @@ class StateMachineStateFieldSerializerTest extends TestCase
             $parameters
         )));
 
-        static::assertSame(['state_id' => Uuid::fromHexToBytes($stateId)], $encoded);
+        static::assertSame(['state_id' => IdBinding::value($stateId)], $encoded);
     }
 
     public function testEncodeRejectsStateChangeWhenScopeIsNotAllowed(): void
@@ -80,7 +81,7 @@ class StateMachineStateFieldSerializerTest extends TestCase
             $parameters
         )));
 
-        static::assertSame(['state_id' => Uuid::fromHexToBytes($stateId)], $encoded);
+        static::assertSame(['state_id' => IdBinding::value($stateId)], $encoded);
     }
 
     private function createField(): StateMachineStateField

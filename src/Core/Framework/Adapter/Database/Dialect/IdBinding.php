@@ -6,6 +6,7 @@ use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\ParameterType;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Uuid\Uuid;
+use Shopware\Core\Framework\Uuid\UuidException;
 
 /**
  * Static counterpart of `Uuid::fromHexToBytes()` / `Uuid::fromBytesToHex()` for SQL code:
@@ -36,7 +37,16 @@ final class IdBinding
 
     public static function value(string $hex): string
     {
-        return self::isHexBinding() ? strtolower($hex) : Uuid::fromHexToBytes($hex);
+        if (!self::isHexBinding()) {
+            return Uuid::fromHexToBytes($hex);
+        }
+
+        if (\strlen($hex) !== 32 || !ctype_xdigit($hex)) {
+            // same exception as Uuid::fromHexToBytes() on the binary databases
+            throw UuidException::invalidUuid($hex); // @phpstan-ignore shopware.domainException
+        }
+
+        return strtolower($hex);
     }
 
     /**
@@ -65,6 +75,29 @@ final class IdBinding
     public static function text(string $columnSql): string
     {
         return self::isHexBinding() ? \sprintf('REPLACE(%s::text, \'-\', \'\')', $columnSql) : \sprintf('LOWER(HEX(%s))', $columnSql);
+    }
+
+    /**
+     * SQL literal for an id that is written into the statement text (a constant such as the live version), `UNHEX('...')` replaces `UNHEX("...")`.
+     */
+    public static function literal(string $hex): string
+    {
+        $hex = self::toHex($hex);
+        if (\strlen($hex) !== 32 || !ctype_xdigit($hex)) {
+            // same exception as Uuid::fromHexToBytes() on the binary databases
+            throw UuidException::invalidUuid($hex); // @phpstan-ignore shopware.domainException
+        }
+
+        return self::isHexBinding() ? \sprintf('\'%s\'', $hex) : \sprintf('UNHEX(\'%s\')', $hex);
+    }
+
+    /**
+     * SQL expression for an id column in a SELECT list that the caller converts with `toHex()`:
+     * PostgreSQL selects the hex text directly (so no value is rewritten at the connection), MySQL, MariaDB and SQLite select the raw 16 bytes and `toHex()` converts them in PHP.
+     */
+    public static function selectText(string $columnSql): string
+    {
+        return self::isHexBinding() ? self::text($columnSql) : $columnSql;
     }
 
     /**

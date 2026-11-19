@@ -2,15 +2,14 @@
 
 namespace Shopware\Core\Checkout\Customer\Subscriber;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Checkout\Order\OrderDefinition;
 use Shopware\Core\Checkout\Order\OrderStates;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\RetryableQuery;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Validation\PreWriteValidationEvent;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\System\StateMachine\Event\StateMachineTransitionEvent;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
@@ -64,7 +63,7 @@ class CustomerMetaFieldSubscriber implements EventSubscriberInterface
 
         $orderIds = [];
         foreach ($event->getDeletedPrimaryKeys(OrderDefinition::ENTITY_NAME) as $primaryKey) {
-            $orderIds[] = Uuid::fromBytesToHex($primaryKey['id']);
+            $orderIds[] = IdBinding::toHex($primaryKey['id']);
         }
 
         $this->updateCustomer($orderIds, true);
@@ -80,9 +79,9 @@ class CustomerMetaFieldSubscriber implements EventSubscriberInterface
         }
 
         $customerIds = $this->connection->fetchFirstColumn(
-            'SELECT DISTINCT LOWER(HEX(customer_id)) FROM `order_customer` WHERE order_id IN (:ids) AND order_version_id = :version AND customer_id IS NOT NULL',
-            ['ids' => Uuid::fromHexToBytesList($orderIds), 'version' => Uuid::fromHexToBytes(Defaults::LIVE_VERSION)],
-            ['ids' => ArrayParameterType::BINARY]
+            'SELECT DISTINCT ' . IdBinding::text('customer_id') . ' FROM `order_customer` WHERE order_id IN (:ids) AND order_version_id = :version AND customer_id IS NOT NULL',
+            ['ids' => IdBinding::values($orderIds), 'version' => IdBinding::value(Defaults::LIVE_VERSION)],
+            ['ids' => IdBinding::listType()]
         );
 
         if ($customerIds === []) {
@@ -90,23 +89,23 @@ class CustomerMetaFieldSubscriber implements EventSubscriberInterface
         }
 
         $parameters = [
-            'customerIds' => Uuid::fromHexToBytesList($customerIds),
-            'version' => Uuid::fromHexToBytes(Defaults::LIVE_VERSION),
+            'customerIds' => IdBinding::values($customerIds),
+            'version' => IdBinding::value(Defaults::LIVE_VERSION),
             'state' => OrderStates::STATE_COMPLETED,
         ];
         $types = [
-            'customerIds' => ArrayParameterType::BINARY,
+            'customerIds' => IdBinding::listType(),
         ];
 
         $whereOrder = '';
         if ($isDelete) {
             $whereOrder = 'AND `order`.id NOT IN (:exceptOrderIds)';
-            $parameters['exceptOrderIds'] = Uuid::fromHexToBytesList($orderIds);
-            $types['exceptOrderIds'] = ArrayParameterType::BINARY;
+            $parameters['exceptOrderIds'] = IdBinding::values($orderIds);
+            $types['exceptOrderIds'] = IdBinding::listType();
         }
 
         $select = '
-            SELECT LOWER(HEX(`order_customer`.customer_id)) as customer_id,
+            SELECT ' . IdBinding::text('`order_customer`.customer_id') . ' as customer_id,
                    `order_customer`.customer_id as id,
                    COUNT(`order`.id) as order_count,
                    ROUND(SUM(`order`.amount_total / `order`.currency_factor), 2) as order_total_amount,
@@ -131,7 +130,7 @@ class CustomerMetaFieldSubscriber implements EventSubscriberInterface
         $data = [];
         foreach ($customerIds as $customerId) {
             $data[$customerId] = [
-                'id' => Uuid::fromHexToBytes($customerId),
+                'id' => IdBinding::value($customerId),
                 'order_count' => 0,
                 'order_total_amount' => 0,
                 'last_order_date' => null,

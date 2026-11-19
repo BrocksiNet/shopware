@@ -3,6 +3,7 @@
 namespace Shopware\Core\Framework\DataAbstractionLayer\Dbal;
 
 use Doctrine\DBAL\Connection;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\DataAbstractionLayerException;
 use Shopware\Core\Framework\DataAbstractionLayer\DefinitionInstanceRegistry;
@@ -350,7 +351,7 @@ class EntityAggregator implements EntityAggregatorInterface
 
         $field = $this->queryHelper::getField($aggregation->getField(), $definition, $definition->getEntityName());
         if ($field instanceof FkField || $field instanceof IdField) {
-            $keyAccessor = 'LOWER(HEX(' . $keyAccessor . '))';
+            $keyAccessor = IdBinding::text($keyAccessor);
         }
 
         $query->addSelect(\sprintf('%s as %s', $keyAccessor, EntityDefinitionQueryHelper::escape($key)));
@@ -489,7 +490,7 @@ class EntityAggregator implements EntityAggregatorInterface
         $accessor = $this->queryHelper->getFieldAccessor($aggregation->getField(), $definition, $definition->getEntityName(), $context);
         $query->addGroupBy($accessor);
 
-        $accessor = 'LOWER(HEX(' . $accessor . '))';
+        $accessor = IdBinding::text($accessor);
         $query->addSelect(\sprintf('%s as %s', $accessor, EntityDefinitionQueryHelper::escape($aggregation->getName())));
     }
 

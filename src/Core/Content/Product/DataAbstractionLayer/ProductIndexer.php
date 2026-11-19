@@ -2,7 +2,6 @@
 
 namespace Shopware\Core\Content\Product\DataAbstractionLayer;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Psr\Clock\ClockInterface;
 use Shopware\Core\Content\Product\Events\InvalidateProductCache;
@@ -11,6 +10,7 @@ use Shopware\Core\Content\Product\ProductCollection;
 use Shopware\Core\Content\Product\ProductDefinition;
 use Shopware\Core\Content\Product\Stock\AbstractStockStorage;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\Common\IterableQuery;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\Common\IteratorFactory;
 use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\RetryableQuery;
@@ -25,7 +25,6 @@ use Shopware\Core\Framework\DataAbstractionLayer\Indexing\ManyToManyIdFieldUpdat
 use Shopware\Core\Framework\Feature;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Plugin\Exception\DecorationPatternException;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\Profiling\Profiler;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
@@ -263,8 +262,8 @@ class ProductIndexer extends EntityIndexer
         RetryableQuery::retryable($this->connection, function () use ($ids): void {
             $this->connection->executeStatement(
                 'UPDATE product SET updated_at = :now WHERE id IN (:ids)',
-                ['ids' => Uuid::fromHexToBytesList($ids), 'now' => $this->clock->now()->format(Defaults::STORAGE_DATE_TIME_FORMAT)],
-                ['ids' => ArrayParameterType::BINARY]
+                ['ids' => IdBinding::values($ids), 'now' => $this->clock->now()->format(Defaults::STORAGE_DATE_TIME_FORMAT)],
+                ['ids' => IdBinding::listType()]
             );
         });
 
@@ -299,9 +298,9 @@ class ProductIndexer extends EntityIndexer
     private function getChildrenIds(array $ids): array
     {
         $childrenIds = $this->connection->fetchFirstColumn(
-            'SELECT DISTINCT LOWER(HEX(id)) as id FROM product WHERE parent_id IN (:ids)',
-            ['ids' => Uuid::fromHexToBytesList($ids)],
-            ['ids' => ArrayParameterType::BINARY]
+            'SELECT DISTINCT ' . IdBinding::text('id') . ' as id FROM product WHERE parent_id IN (:ids)',
+            ['ids' => IdBinding::values($ids)],
+            ['ids' => IdBinding::listType()]
         );
 
         return array_unique(array_filter($childrenIds));
@@ -317,9 +316,9 @@ class ProductIndexer extends EntityIndexer
     private function getInheritingChildrenIds(array $ids): array
     {
         $childrenIds = $this->connection->fetchFirstColumn(
-            'SELECT DISTINCT LOWER(HEX(id)) as id FROM product WHERE parent_id IN (:ids) AND (is_closeout IS NULL OR min_purchase IS NULL)',
-            ['ids' => Uuid::fromHexToBytesList($ids)],
-            ['ids' => ArrayParameterType::BINARY]
+            'SELECT DISTINCT ' . IdBinding::text('id') . ' as id FROM product WHERE parent_id IN (:ids) AND (is_closeout IS NULL OR min_purchase IS NULL)',
+            ['ids' => IdBinding::values($ids)],
+            ['ids' => IdBinding::listType()]
         );
 
         return array_unique(array_filter($childrenIds));
@@ -333,9 +332,9 @@ class ProductIndexer extends EntityIndexer
     private function getParentIds(array $ids): array
     {
         $parentIds = $this->connection->fetchFirstColumn(
-            'SELECT DISTINCT LOWER(HEX(product.parent_id)) as id FROM product WHERE id IN (:ids)',
-            ['ids' => Uuid::fromHexToBytesList($ids)],
-            ['ids' => ArrayParameterType::BINARY]
+            'SELECT DISTINCT ' . IdBinding::text('product.parent_id') . ' as id FROM product WHERE id IN (:ids)',
+            ['ids' => IdBinding::values($ids)],
+            ['ids' => IdBinding::listType()]
         );
 
         return array_unique(array_filter($parentIds));
@@ -349,12 +348,12 @@ class ProductIndexer extends EntityIndexer
     private function filterVariants(array $ids): array
     {
         return $this->connection->fetchFirstColumn(
-            'SELECT DISTINCT LOWER(HEX(`id`))
+            'SELECT DISTINCT ' . IdBinding::text('`id`') . '
              FROM product
              WHERE `id` IN (:ids)
              AND `parent_id` IS NULL',
-            ['ids' => Uuid::fromHexToBytesList($ids)],
-            ['ids' => ArrayParameterType::BINARY]
+            ['ids' => IdBinding::values($ids)],
+            ['ids' => IdBinding::listType()]
         );
     }
 

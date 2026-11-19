@@ -5,6 +5,7 @@ namespace Shopware\Tests\Unit\Core\Framework\DataAbstractionLayer\FieldSerialize
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\DefinitionInstanceRegistry;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityDefinition;
@@ -69,7 +70,7 @@ class ReferenceVersionFieldSerializerTest extends TestCase
             $this->createWriteParameterBag($this->plainDefinition)
         ));
 
-        static::assertSame([$field->getStorageName() => Uuid::fromHexToBytes($versionId)], $encoded);
+        static::assertSame([$field->getStorageName() => IdBinding::value($versionId)], $encoded);
     }
 
     public function testEncodeUsesLiveVersionForSelfReferenceWithoutValue(): void
@@ -83,7 +84,7 @@ class ReferenceVersionFieldSerializerTest extends TestCase
             $this->createWriteParameterBag($this->rootDefinition)
         ));
 
-        static::assertSame([$field->getStorageName() => Uuid::fromHexToBytes(Defaults::LIVE_VERSION)], $encoded);
+        static::assertSame([$field->getStorageName() => IdBinding::value(Defaults::LIVE_VERSION)], $encoded);
     }
 
     public function testEncodeUsesReferenceVersionFromWriteContext(): void
@@ -100,7 +101,7 @@ class ReferenceVersionFieldSerializerTest extends TestCase
             })
         ));
 
-        static::assertSame([$field->getStorageName() => Uuid::fromHexToBytes($versionId)], $encoded);
+        static::assertSame([$field->getStorageName() => IdBinding::value($versionId)], $encoded);
     }
 
     public function testEncodeUsesOwnVersionForChildDefinitionWithParentReference(): void
@@ -117,7 +118,7 @@ class ReferenceVersionFieldSerializerTest extends TestCase
             })
         ));
 
-        static::assertSame([$field->getStorageName() => Uuid::fromHexToBytes($versionId)], $encoded);
+        static::assertSame([$field->getStorageName() => IdBinding::value($versionId)], $encoded);
     }
 
     public function testEncodeKeepsExistingValueForNonVersionAwareExistingEntityDefault(): void
@@ -140,7 +141,7 @@ class ReferenceVersionFieldSerializerTest extends TestCase
 
         static::assertSame(
             $versionId,
-            $this->serializer->decode($this->createField(ReferenceVersionRootDefinition::class), Uuid::fromHexToBytes($versionId))
+            $this->serializer->decode($this->createField(ReferenceVersionRootDefinition::class), IdBinding::value($versionId))
         );
     }
 

@@ -2,12 +2,12 @@
 
 namespace Shopware\Core\Content\Product\Aggregate\ProductPrice;
 
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\EntityHydrator;
 use Shopware\Core\Framework\DataAbstractionLayer\Entity;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityDefinition;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 
 #[Package('inventory')]
 class ProductPriceHydrator extends EntityHydrator
@@ -15,16 +15,16 @@ class ProductPriceHydrator extends EntityHydrator
     protected function assign(EntityDefinition $definition, Entity $entity, string $root, array $row, Context $context): Entity
     {
         if (isset($row[$root . '.id'])) {
-            $entity->id = Uuid::fromBytesToHex($row[$root . '.id']);
+            $entity->id = IdBinding::toHex($row[$root . '.id']);
         }
         if (isset($row[$root . '.versionId'])) {
-            $entity->versionId = Uuid::fromBytesToHex($row[$root . '.versionId']);
+            $entity->versionId = IdBinding::toHex($row[$root . '.versionId']);
         }
         if (isset($row[$root . '.productId'])) {
-            $entity->productId = Uuid::fromBytesToHex($row[$root . '.productId']);
+            $entity->productId = IdBinding::toHex($row[$root . '.productId']);
         }
         if (isset($row[$root . '.ruleId'])) {
-            $entity->ruleId = Uuid::fromBytesToHex($row[$root . '.ruleId']);
+            $entity->ruleId = IdBinding::toHex($row[$root . '.ruleId']);
         }
         if (\array_key_exists($root . '.price', $row)) {
             $entity->price = $definition->decode('price', self::value($row, $root, 'price'));

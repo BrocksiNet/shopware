@@ -6,12 +6,12 @@ use Doctrine\DBAL\Connection;
 use PHPUnit\Framework\TestCase;
 use Shopware\Core\Content\Test\Product\ProductBuilder;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\RowLoader;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Test\TestCaseBase\DatabaseTransactionBehaviour;
 use Shopware\Core\Framework\Test\TestCaseBase\KernelTestBehaviour;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\Test\Stub\Framework\IdsCollection;
 
 /**
@@ -45,8 +45,8 @@ class RowLoaderTest extends TestCase
 
         usort($rows, static fn (array $a, array $b): int => $a['stock'] <=> $b['stock']);
         static::assertSame([
-            ['id' => $this->ids->getBytes('p1'), 'stock' => '1'],
-            ['id' => $this->ids->getBytes('p3'), 'stock' => '3'],
+            ['id' => IdBinding::value($this->ids->get('p1')), 'stock' => '1'],
+            ['id' => IdBinding::value($this->ids->get('p3')), 'stock' => '3'],
         ], $rows);
     }
 
@@ -64,6 +64,6 @@ class RowLoaderTest extends TestCase
      */
     private function primaryKey(string $key): array
     {
-        return ['id' => $this->ids->getBytes($key), 'version_id' => Uuid::fromHexToBytes(Defaults::LIVE_VERSION)];
+        return ['id' => IdBinding::value($this->ids->get($key)), 'version_id' => IdBinding::value(Defaults::LIVE_VERSION)];
     }
 }

@@ -2,8 +2,8 @@
 
 namespace Shopware\Core\Framework\DataAbstractionLayer\Indexing;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\DataAbstractionLayerException;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\EntityDefinitionQueryHelper;
@@ -19,7 +19,6 @@ use Shopware\Core\Framework\DataAbstractionLayer\Field\OneToManyAssociationField
 use Shopware\Core\Framework\DataAbstractionLayer\Field\OneToOneAssociationField;
 use Shopware\Core\Framework\DataAbstractionLayer\FieldCollection;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 
 #[Package('framework')]
 class InheritanceUpdater
@@ -65,7 +64,7 @@ class InheritanceUpdater
      */
     private function updateToManyAssociations(EntityDefinition $definition, array $ids, FieldCollection $associations, Context $context): void
     {
-        $bytes = array_map(static fn ($id) => Uuid::fromHexToBytes($id), $ids);
+        $bytes = array_map(static fn ($id) => IdBinding::value($id), $ids);
 
         /** @var AssociationField $association */
         foreach ($associations as $association) {
@@ -109,7 +108,7 @@ class InheritanceUpdater
             $params = ['ids' => $bytes];
 
             if ($definition->isVersionAware()) {
-                $versionId = Uuid::fromHexToBytes($context->getVersionId());
+                $versionId = IdBinding::value($context->getVersionId());
                 $params['version'] = $versionId;
             }
 
@@ -123,7 +122,7 @@ class InheritanceUpdater
                 $this->connection->executeStatement(
                     $sql,
                     $params,
-                    ['ids' => ArrayParameterType::BINARY]
+                    ['ids' => IdBinding::listType()]
                 );
             });
         }
@@ -134,7 +133,7 @@ class InheritanceUpdater
      */
     private function updateToOneAssociations(EntityDefinition $definition, array $ids, FieldCollection $associations, Context $context): void
     {
-        $bytes = array_map(static fn ($id) => Uuid::fromHexToBytes($id), $ids);
+        $bytes = array_map(static fn ($id) => IdBinding::value($id), $ids);
 
         /** @var ManyToOneAssociationField $association */
         foreach ($associations as $association) {
@@ -159,7 +158,7 @@ class InheritanceUpdater
             if ($definition->isVersionAware()) {
                 $sql .= 'AND #root#.version_id = parent.version_id
                          AND #root#.version_id = :version';
-                $versionId = Uuid::fromHexToBytes($context->getVersionId());
+                $versionId = IdBinding::value($context->getVersionId());
                 $params['version'] = $versionId;
             }
 
@@ -173,7 +172,7 @@ class InheritanceUpdater
                 $this->connection->executeStatement(
                     $sql,
                     $params,
-                    ['ids' => ArrayParameterType::BINARY]
+                    ['ids' => IdBinding::listType()]
                 );
             });
 
@@ -186,7 +185,7 @@ class InheritanceUpdater
 
             if ($definition->isVersionAware()) {
                 $sql .= 'AND #root#.version_id = :version';
-                $versionId = Uuid::fromHexToBytes($context->getVersionId());
+                $versionId = IdBinding::value($context->getVersionId());
                 $params['version'] = $versionId;
             }
 
@@ -200,7 +199,7 @@ class InheritanceUpdater
                 $this->connection->executeStatement(
                     $sql,
                     $params,
-                    ['ids' => ArrayParameterType::BINARY]
+                    ['ids' => IdBinding::listType()]
                 );
             });
         }

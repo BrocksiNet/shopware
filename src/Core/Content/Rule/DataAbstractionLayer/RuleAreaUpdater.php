@@ -9,6 +9,7 @@ use Shopware\Core\Checkout\Cart\CachedRuleLoader;
 use Shopware\Core\Content\Rule\RuleDefinition;
 use Shopware\Core\Defaults;
 use Shopware\Core\Framework\Adapter\Cache\CacheInvalidator;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\CompiledFieldCollection;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\EntityDefinitionQueryHelper;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\QueryBuilder;
@@ -31,7 +32,6 @@ use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\DeleteCommand;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Validation\PreWriteValidationEvent;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Rule\Collector\RuleConditionRegistry;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
 /**
@@ -111,7 +111,7 @@ class RuleAreaUpdater implements EventSubscriberInterface
             return;
         }
 
-        $this->update(array_values(Uuid::fromBytesToHexList(array_filter(array_unique($ruleIds)))));
+        $this->update(array_values(IdBinding::toHexList(array_filter(array_unique($ruleIds)))));
 
         $this->cacheInvalidator->invalidate([CachedRuleLoader::CACHE_KEY]);
     }
@@ -160,7 +160,7 @@ class RuleAreaUpdater implements EventSubscriberInterface
 
             $update->execute([
                 'areas' => json_encode(array_values($ruleAreas), \JSON_THROW_ON_ERROR),
-                'id' => Uuid::fromHexToBytes($id),
+                'id' => IdBinding::value($id),
                 'updatedAt' => $now,
             ]);
         }
@@ -193,7 +193,7 @@ class RuleAreaUpdater implements EventSubscriberInterface
                     continue;
                 }
 
-                $ruleIds[] = Uuid::fromHexToBytes($ruleId);
+                $ruleIds[] = IdBinding::value($ruleId);
             }
         }
 
@@ -208,7 +208,7 @@ class RuleAreaUpdater implements EventSubscriberInterface
     private function getAreas(array $ids, CompiledFieldCollection $associationFields): array
     {
         $query = new QueryBuilder($this->connection);
-        $query->select('LOWER(HEX(`rule`.`id`)) AS array_key')
+        $query->select(IdBinding::text('`rule`.`id`') . ' AS array_key')
             ->from('rule')
             ->andWhere('`rule`.`id` IN (:ids)');
 
@@ -220,8 +220,8 @@ class RuleAreaUpdater implements EventSubscriberInterface
 
         $query->setParameter(
             'ids',
-            Uuid::fromHexToBytesList($ids),
-            ArrayParameterType::BINARY
+            IdBinding::values($ids),
+            IdBinding::listType()
         )->setParameter(
             'flowTypes',
             $this->conditionRegistry->getFlowRuleNames(),

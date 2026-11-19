@@ -4,6 +4,7 @@ namespace Shopware\Core\Framework\DataAbstractionLayer\Dbal;
 
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityDefinition;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\AssociationField;
@@ -23,7 +24,6 @@ use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Struct\ArrayStruct;
 use Shopware\Core\Framework\Uuid\Exception\InvalidUuidException;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\System\Language\LanguageDefinition;
 use Symfony\Contracts\Service\ResetInterface;
 
@@ -346,7 +346,7 @@ class EntityForeignKeyResolver implements ResetInterface
 
         if ($root->isVersionAware()) {
             $query->andWhere(EntityDefinitionQueryHelper::escape($root->getEntityName()) . '.`version_id` = :version');
-            $query->setParameter('version', Uuid::fromHexToBytes($context->getVersionId()));
+            $query->setParameter('version', IdBinding::value($context->getVersionId()));
         }
 
         $this->queryHelper->addIdCondition(new Criteria($ids), $root, $query);
@@ -439,7 +439,7 @@ class EntityForeignKeyResolver implements ResetInterface
 
             $rootParams = $metaFields->map(
                 static fn (Field $field) => $field instanceof IdField
-                    ? Uuid::fromBytesToHex($row['_' . $field->getPropertyName()])
+                    ? IdBinding::toHex($row['_' . $field->getPropertyName()])
                     : $row['_' . $field->getPropertyName()]
             );
 

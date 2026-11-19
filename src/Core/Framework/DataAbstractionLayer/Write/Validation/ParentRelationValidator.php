@@ -2,10 +2,10 @@
 
 namespace Shopware\Core\Framework\DataAbstractionLayer\Write\Validation;
 
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\DefinitionInstanceRegistry;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\WriteCommand;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\Framework\Validation\WriteConstraintViolationException;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\Validator\ConstraintViolation;
@@ -86,7 +86,7 @@ class ParentRelationValidator implements EventSubscriberInterface
 
             if (isset($commandData['parent_id']) && $commandData['parent_id'] === $id) {
                 $selfReferences[] = [
-                    'id' => Uuid::fromBytesToHex($id),
+                    'id' => IdBinding::toHex($id),
                     'entity' => $command->getEntityName(),
                     'path' => $command->getPath(),
                 ];

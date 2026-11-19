@@ -2,12 +2,12 @@
 
 namespace Shopware\Core\Content\Product\SalesChannel\Sorting;
 
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\EntityHydrator;
 use Shopware\Core\Framework\DataAbstractionLayer\Entity;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityDefinition;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 
 #[Package('inventory')]
 class ProductSortingHydrator extends EntityHydrator
@@ -15,7 +15,7 @@ class ProductSortingHydrator extends EntityHydrator
     protected function assign(EntityDefinition $definition, Entity $entity, string $root, array $row, Context $context): Entity
     {
         if (isset($row[$root . '.id'])) {
-            $entity->id = Uuid::fromBytesToHex($row[$root . '.id']);
+            $entity->id = IdBinding::toHex($row[$root . '.id']);
         }
         if (isset($row[$root . '.locked'])) {
             $entity->locked = (bool) $row[$root . '.locked'];

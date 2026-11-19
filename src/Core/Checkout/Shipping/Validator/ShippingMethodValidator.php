@@ -2,11 +2,11 @@
 
 namespace Shopware\Core\Checkout\Shipping\Validator;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Checkout\Shipping\Aggregate\ShippingMethodPrice\ShippingMethodPriceDefinition;
 use Shopware\Core\Checkout\Shipping\ShippingMethodDefinition;
 use Shopware\Core\Checkout\Shipping\ShippingMethodEntity;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\DeleteCommand;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\InsertCommand;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\UpdateCommand;
@@ -14,7 +14,6 @@ use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\WriteCommand;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Validation\PreWriteValidationEvent;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Validation\WriteOutcome;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\Framework\Validation\WriteConstraintViolationException;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\Validator\Constraints\NotBlank;
@@ -79,7 +78,7 @@ class ShippingMethodValidator implements EventSubscriberInterface
             }
 
             // Use `Uuid::fromBytesToHex` to validate the binary encoded `taxId`
-            if ($taxType === ShippingMethodEntity::TAX_TYPE_FIXED && ($taxId === null || !Uuid::fromBytesToHex($taxId))) {
+            if ($taxType === ShippingMethodEntity::TAX_TYPE_FIXED && ($taxId === null || !IdBinding::toHex($taxId))) {
                 $violations->add(
                     $this->buildViolation(
                         'The defined tax rate is required when fixed tax present',
@@ -248,7 +247,7 @@ class ShippingMethodValidator implements EventSubscriberInterface
         $owner = $priceStates[$id]['owner'] ?? null;
         if (\array_key_exists('shipping_method_id', $payload)) {
             $shippingMethodId = $payload['shipping_method_id'];
-            $owner = \is_string($shippingMethodId) ? Uuid::fromBytesToHex($shippingMethodId) : null;
+            $owner = \is_string($shippingMethodId) ? IdBinding::toHex($shippingMethodId) : null;
         }
 
         if ($owner === null) {
@@ -299,13 +298,13 @@ class ShippingMethodValidator implements EventSubscriberInterface
         sort($priceIds);
 
         $rows = $this->connection->fetchAllNumeric(
-            'SELECT LOWER(HEX(`id`)), LOWER(HEX(`shipping_method_id`)), `currency_price` IS NOT NULL
+            'SELECT ' . IdBinding::text('`id`') . ', ' . IdBinding::text('`shipping_method_id`') . ', `currency_price` IS NOT NULL
              FROM `shipping_method_price`
              WHERE `id` IN (:ids)
              ORDER BY `id`
              FOR UPDATE',
-            ['ids' => Uuid::fromHexToBytesList($priceIds)],
-            ['ids' => ArrayParameterType::BINARY]
+            ['ids' => IdBinding::values($priceIds)],
+            ['ids' => IdBinding::listType()]
         );
 
         $states = [];
@@ -343,13 +342,13 @@ class ShippingMethodValidator implements EventSubscriberInterface
     private function fetchShippingMethodStates(array $shippingMethodIds): array
     {
         sort($shippingMethodIds);
-        $parameters = ['ids' => Uuid::fromHexToBytesList($shippingMethodIds)];
-        $types = ['ids' => ArrayParameterType::BINARY];
+        $parameters = ['ids' => IdBinding::values($shippingMethodIds)];
+        $types = ['ids' => IdBinding::listType()];
 
         $this->lockShippingMethods($parameters, $types);
 
         $rows = $this->connection->fetchAllAssociative(
-            'SELECT LOWER(HEX(`shipping_method`.`id`)) AS `id`,
+            'SELECT ' . IdBinding::text('`shipping_method`.`id`') . ' AS `id`,
                     `shipping_method`.`active` AS `active`,
                     COUNT(`shipping_method_price`.`id`) AS `price_count`
              FROM `shipping_method`

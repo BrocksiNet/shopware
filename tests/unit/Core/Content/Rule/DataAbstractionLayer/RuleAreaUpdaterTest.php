@@ -13,6 +13,7 @@ use Shopware\Core\Content\Rule\DataAbstractionLayer\RuleAreaUpdater;
 use Shopware\Core\Content\Rule\RuleDefinition;
 use Shopware\Core\Defaults;
 use Shopware\Core\Framework\Adapter\Cache\CacheInvalidator;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityDefinition;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityWriteResult;
@@ -109,7 +110,7 @@ class RuleAreaUpdaterTest extends TestCase
         $connection->expects($this->once())
             ->method('executeQuery')
             ->willReturnCallback(function (string $sql, array $params) use ($resultStatement, $id): Result {
-                static::assertSame(['ids' => Uuid::fromHexToBytesList([$id]), 'flowTypes' => ['orderTags']], $params);
+                static::assertSame(['ids' => IdBinding::values([$id]), 'flowTypes' => ['orderTags']], $params);
 
                 return $resultStatement;
             });
@@ -117,7 +118,7 @@ class RuleAreaUpdaterTest extends TestCase
         $statement = $this->createMock(Statement::class);
         $params = [
             ['areas', json_encode([RuleAreas::PRODUCT_AREA, RuleAreas::PROMOTION_AREA, RuleAreas::PAYMENT_AREA, RuleAreas::SHIPPING_AREA])],
-            ['id', Uuid::fromHexToBytes($id)],
+            ['id', IdBinding::value($id)],
             ['updatedAt', $this->clock->now()->format(Defaults::STORAGE_DATE_TIME_FORMAT)],
         ];
         $matcher = $this->exactly(\count($params));
@@ -214,7 +215,7 @@ class RuleAreaUpdaterTest extends TestCase
         $connection->expects($this->once())
             ->method('executeQuery')
             ->willReturnCallback(function (string $sql, array $params) use ($resultStatement, $idA, $idB, $idC, $idD, $idE): Result {
-                static::assertSame(['ids' => [Uuid::fromHexToBytes($idA), $idB, $idC, $idD, $idE], 'flowTypes' => ['orderTags']], $params);
+                static::assertSame(['ids' => IdBinding::values(IdBinding::toHexList([$idA, $idB, $idC, $idD, $idE])), 'flowTypes' => ['orderTags']], $params);
 
                 return $resultStatement;
             });

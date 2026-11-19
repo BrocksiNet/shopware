@@ -2,15 +2,14 @@
 
 namespace Shopware\Core\Framework\DataAbstractionLayer\Indexing;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\EntityDefinitionQueryHelper;
 use Shopware\Core\Framework\DataAbstractionLayer\DefinitionInstanceRegistry;
 use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\RetryableTransaction;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityDefinition;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 
 #[Package('framework')]
 class ChildCountUpdater
@@ -49,12 +48,12 @@ class ChildCountUpdater
         $versionAware = $definition->isVersionAware();
 
         // sort the ids so concurrent transactions acquire the parent row locks in a consistent order
-        $ids = Uuid::fromHexToBytesList($parentIds);
+        $ids = IdBinding::values($parentIds);
         sort($ids);
 
         $params = ['ids' => $ids];
         if ($versionAware) {
-            $params['version'] = Uuid::fromHexToBytes($context->getVersionId());
+            $params['version'] = IdBinding::value($context->getVersionId());
         }
 
         // lock the parents (PK only) so concurrent recalculations serialise instead of a stale count
@@ -66,17 +65,18 @@ class ChildCountUpdater
                 $versionAware ? 'AND version_id = :version' : ''
             ),
             $params,
-            ['ids' => ArrayParameterType::BINARY]
+            ['ids' => IdBinding::listType()]
         );
 
         $aggregations = $this->connection->fetchAllKeyValue(
             \sprintf(
-                'SELECT parent_id, COUNT(id) FROM %s WHERE parent_id IN (:ids) %s GROUP BY parent_id',
+                'SELECT %s, COUNT(id) FROM %s WHERE parent_id IN (:ids) %s GROUP BY parent_id',
+                IdBinding::selectText('parent_id'),
                 $entity,
                 $versionAware ? 'AND version_id = :version' : ''
             ),
             $params,
-            ['ids' => ArrayParameterType::BINARY]
+            ['ids' => IdBinding::listType()]
         );
         /**
          * @var list<array{
@@ -103,7 +103,7 @@ class ChildCountUpdater
                 $versionAware ? 'AND version_id = :version' : ''
             ),
             $params,
-            ['ids' => ArrayParameterType::BINARY]
+            ['ids' => IdBinding::listType()]
         );
     }
 }

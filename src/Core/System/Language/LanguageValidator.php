@@ -2,9 +2,9 @@
 
 namespace Shopware\Core\System\Language;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\CascadeDeleteCommand;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\DeleteCommand;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\InsertCommand;
@@ -13,7 +13,6 @@ use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\WriteCommand;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Validation\PostWriteValidationEvent;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Validation\PreWriteValidationEvent;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\Framework\Validation\WriteConstraintViolationException;
 use Shopware\Tests\Integration\Core\Framework\Language\LanguageValidatorTest;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
@@ -83,7 +82,7 @@ class LanguageValidator implements EventSubscriberInterface
             }
 
             $pk = $command->getPrimaryKey();
-            $id = mb_strtolower(Uuid::fromBytesToHex($pk['id']));
+            $id = mb_strtolower(IdBinding::toHex($pk['id']));
 
             if ($command instanceof DeleteCommand && $id === Defaults::LANGUAGE_SYSTEM) {
                 $violations->add(
@@ -130,13 +129,13 @@ class LanguageValidator implements EventSubscriberInterface
              WHERE (child.id IN (:ids) OR child.parent_id IN (:ids))
              AND parent.parent_id IS NOT NULL',
             ['ids' => $affectedIds],
-            ['ids' => ArrayParameterType::BINARY]
+            ['ids' => IdBinding::listType()]
         );
         $ids = $statement->fetchFirstColumn();
 
         $violations = new ConstraintViolationList();
         foreach ($ids as $binId) {
-            $id = Uuid::fromBytesToHex($binId);
+            $id = IdBinding::toHex($binId);
             $violations->add(
                 $this->buildViolation(
                     'Language inheritance limit for the child {{ id }} exceeded. A Language must not be nested deeper than one level.',
@@ -164,13 +163,13 @@ class LanguageValidator implements EventSubscriberInterface
              AND lang.parent_id IS NULL # root
              AND lang.id IN (:ids)',
             ['ids' => $affectedIds],
-            ['ids' => ArrayParameterType::BINARY]
+            ['ids' => IdBinding::listType()]
         );
         $ids = $statement->fetchFirstColumn();
 
         $violations = new ConstraintViolationList();
         foreach ($ids as $binId) {
-            $id = Uuid::fromBytesToHex($binId);
+            $id = IdBinding::toHex($binId);
             $violations->add(
                 $this->buildViolation(
                     'Root language {{ id }} requires a translation code',

@@ -2,6 +2,7 @@
 
 namespace Shopware\Core\Framework\Api\Acl;
 
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Api\Acl\Event\CommandAclValidationEvent;
 use Shopware\Core\Framework\Api\Acl\Role\AclRoleDefinition;
 use Shopware\Core\Framework\Api\ApiException;
@@ -13,7 +14,6 @@ use Shopware\Core\Framework\DataAbstractionLayer\EntityTranslationDefinition;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\WriteCommand;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Validation\PreWriteValidationEvent;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
@@ -101,7 +101,7 @@ class AclWriteValidator implements EventSubscriberInterface
      */
     private function getPrivilegeForParentWriteOperation(WriteCommand $command, array $commands): string
     {
-        $pathSuffix = '/translations/' . Uuid::fromBytesToHex($command->getPrimaryKey()['language_id']);
+        $pathSuffix = '/translations/' . IdBinding::toHex($command->getPrimaryKey()['language_id']);
         $parentCommandPath = str_replace($pathSuffix, '', $command->getPath());
         $parentCommand = $this->findCommandByPath($parentCommandPath, $commands);
 

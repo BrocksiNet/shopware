@@ -6,6 +6,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\TestDox;
 use PHPUnit\Framework\TestCase;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\EntityForeignKeyResolver;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityDefinition;
@@ -20,7 +21,6 @@ use Shopware\Core\Framework\DataAbstractionLayer\Write\EntityWriteResultFactory;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\WriteCommandExtractor;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\WriteContext;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\System\Language\LanguageLoaderInterface;
 use Shopware\Core\Test\Stub\DataAbstractionLayer\StaticDefinitionInstanceRegistry;
 use Shopware\Tests\Unit\Core\Framework\DataAbstractionLayer\Write\_fixtures\CoverChildDefinition;
@@ -96,7 +96,7 @@ class EntityWriterTest extends TestCase
         );
 
         $actual = array_map(
-            static fn (WriteCommand $command): string => $command::class . ':' . $command->getEntityName() . ':' . Uuid::fromBytesToHex($command->getPrimaryKey()['id']),
+            static fn (WriteCommand $command): string => $command::class . ':' . $command->getEntityName() . ':' . IdBinding::toHex($command->getPrimaryKey()['id']),
             $executed,
         );
         sort($actual);

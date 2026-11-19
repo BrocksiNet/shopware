@@ -4,6 +4,7 @@ namespace Shopware\Tests\Unit\Core\Framework\DataAbstractionLayer\FieldSerialize
 
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityDefinition;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\CustomFields;
@@ -82,7 +83,7 @@ class CustomFieldsSerializerTest extends TestCase
         static::assertSame('custom_fields', $command->getStorageName());
         static::assertSame('custom_fields_serializer_test', $command->getEntityName());
         static::assertSame(['custom_text' => 'foo'], $command->getPayload(), 'The payload is keyed by the custom field storage name');
-        static::assertSame(['id' => Uuid::fromHexToBytes($id)], $command->getPrimaryKey());
+        static::assertSame(['id' => IdBinding::value($id)], $command->getPrimaryKey());
     }
 
     public function testEncodeQueuesNothingWhenTheExistenceHasNoEntityName(): void

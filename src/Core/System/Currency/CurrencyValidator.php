@@ -3,9 +3,9 @@
 namespace Shopware\Core\System\Currency;
 
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Validation\PreWriteValidationEvent;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\Framework\Validation\WriteConstraintViolationException;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\Validator\ConstraintViolation;
@@ -31,7 +31,7 @@ class CurrencyValidator implements EventSubscriberInterface
         $violations = new ConstraintViolationList();
 
         foreach ($event->getDeletedPrimaryKeys(CurrencyDefinition::ENTITY_NAME) as $pk) {
-            $id = mb_strtolower(Uuid::fromBytesToHex($pk['id']));
+            $id = mb_strtolower(IdBinding::toHex($pk['id']));
             if ($id !== Defaults::CURRENCY) {
                 continue;
             }

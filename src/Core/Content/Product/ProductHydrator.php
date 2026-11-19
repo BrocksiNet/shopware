@@ -2,13 +2,13 @@
 
 namespace Shopware\Core\Content\Product;
 
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\EntityHydrator;
 use Shopware\Core\Framework\DataAbstractionLayer\Entity;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityDefinition;
 use Shopware\Core\Framework\Feature;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 
 #[Package('inventory')]
 class ProductHydrator extends EntityHydrator
@@ -21,43 +21,43 @@ class ProductHydrator extends EntityHydrator
     protected function assign(EntityDefinition $definition, Entity $entity, string $root, array $row, Context $context): Entity
     {
         if (isset($row[$root . '.id'])) {
-            $entity->id = Uuid::fromBytesToHex($row[$root . '.id']);
+            $entity->id = IdBinding::toHex($row[$root . '.id']);
         }
         if (isset($row[$root . '.versionId'])) {
-            $entity->versionId = Uuid::fromBytesToHex($row[$root . '.versionId']);
+            $entity->versionId = IdBinding::toHex($row[$root . '.versionId']);
         }
         if (isset($row[$root . '.parentId'])) {
-            $entity->parentId = Uuid::fromBytesToHex($row[$root . '.parentId']);
+            $entity->parentId = IdBinding::toHex($row[$root . '.parentId']);
         }
         if (isset($row[$root . '.manufacturerId'])) {
-            $entity->manufacturerId = Uuid::fromBytesToHex($row[$root . '.manufacturerId']);
+            $entity->manufacturerId = IdBinding::toHex($row[$root . '.manufacturerId']);
         }
         if (isset($row[$root . '.unitId'])) {
-            $entity->unitId = Uuid::fromBytesToHex($row[$root . '.unitId']);
+            $entity->unitId = IdBinding::toHex($row[$root . '.unitId']);
         }
         if (isset($row[$root . '.taxId'])) {
-            $entity->taxId = Uuid::fromBytesToHex($row[$root . '.taxId']);
+            $entity->taxId = IdBinding::toHex($row[$root . '.taxId']);
         }
         if (isset($row[$root . '.coverId'])) {
-            $entity->coverId = Uuid::fromBytesToHex($row[$root . '.coverId']);
+            $entity->coverId = IdBinding::toHex($row[$root . '.coverId']);
         }
         if (isset($row[$root . '.deliveryTimeId'])) {
-            $entity->deliveryTimeId = Uuid::fromBytesToHex($row[$root . '.deliveryTimeId']);
+            $entity->deliveryTimeId = IdBinding::toHex($row[$root . '.deliveryTimeId']);
         }
         if (isset($row[$root . '.featureSetId'])) {
-            $entity->featureSetId = Uuid::fromBytesToHex($row[$root . '.featureSetId']);
+            $entity->featureSetId = IdBinding::toHex($row[$root . '.featureSetId']);
         }
         if (isset($row[$root . '.canonicalProductId'])) {
-            $entity->canonicalProductId = Uuid::fromBytesToHex($row[$root . '.canonicalProductId']);
+            $entity->canonicalProductId = IdBinding::toHex($row[$root . '.canonicalProductId']);
         }
         if (isset($row[$root . '.cmsPageId'])) {
-            $entity->cmsPageId = Uuid::fromBytesToHex($row[$root . '.cmsPageId']);
+            $entity->cmsPageId = IdBinding::toHex($row[$root . '.cmsPageId']);
         }
         if (isset($row[$root . '.openGraphMediaId'])) {
-            $entity->openGraphMediaId = Uuid::fromBytesToHex($row[$root . '.openGraphMediaId']);
+            $entity->openGraphMediaId = IdBinding::toHex($row[$root . '.openGraphMediaId']);
         }
         if (isset($row[$root . '.guaranteeTermsMediaId'])) {
-            $entity->guaranteeTermsMediaId = Uuid::fromBytesToHex($row[$root . '.guaranteeTermsMediaId']);
+            $entity->guaranteeTermsMediaId = IdBinding::toHex($row[$root . '.guaranteeTermsMediaId']);
         }
         if (\array_key_exists($root . '.price', $row)) {
             $entity->price = $definition->decode('price', self::value($row, $root, 'price'));

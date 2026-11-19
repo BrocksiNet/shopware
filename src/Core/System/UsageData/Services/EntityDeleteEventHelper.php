@@ -2,6 +2,7 @@
 
 namespace Shopware\Core\System\UsageData\Services;
 
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityDefinition;
 use Shopware\Core\Framework\DataAbstractionLayer\Event\EntityDeleteEvent;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\Field;
@@ -9,7 +10,6 @@ use Shopware\Core\Framework\DataAbstractionLayer\Field\StorageAware;
 use Shopware\Core\Framework\DataAbstractionLayer\FieldCollection;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\WriteCommand;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 
 /**
  * @internal
@@ -112,7 +112,7 @@ class EntityDeleteEventHelper
                 continue;
             }
 
-            $pks[$field->getPropertyName()] = Uuid::fromBytesToHex($primaryKey[$field->getStorageName()]);
+            $pks[$field->getPropertyName()] = IdBinding::toHex($primaryKey[$field->getStorageName()]);
         }
 
         return $pks;

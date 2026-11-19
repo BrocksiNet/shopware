@@ -2,9 +2,9 @@
 
 namespace Shopware\Core\Framework\DataAbstractionLayer\Dbal;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Adapter\Database\Dialect\SqlDialectFactory;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\DataAbstractionLayerException;
@@ -451,7 +451,7 @@ class EntityDefinitionQueryHelper
             $versionIdField = array_shift($versionIdField);
 
             $query->andWhere(self::escape($table) . '.' . self::escape($versionIdField->getStorageName()) . ' = :version');
-            $query->setParameter('version', Uuid::fromHexToBytes($context->getVersionId()));
+            $query->setParameter('version', IdBinding::value($context->getVersionId()));
         }
 
         return $query;
@@ -618,8 +618,8 @@ class EntityDefinitionQueryHelper
             )
         );
 
-        $query->setParameter('liveVersion', Uuid::fromHexToBytes(Defaults::LIVE_VERSION));
-        $query->setParameter('version', Uuid::fromHexToBytes($context->getVersionId()));
+        $query->setParameter('liveVersion', IdBinding::value(Defaults::LIVE_VERSION));
+        $query->setParameter('version', IdBinding::value($context->getVersionId()));
     }
 
     public static function getTranslatedField(EntityDefinition $definition, TranslatedField $translatedField): Field
@@ -685,10 +685,10 @@ class EntityDefinitionQueryHelper
                         $shiftedId = array_shift($id);
                         \assert(\is_string($shiftedId));
 
-                        return Uuid::fromHexToBytes($shiftedId);
+                        return IdBinding::value($shiftedId);
                     }
 
-                    return Uuid::fromHexToBytes($id);
+                    return IdBinding::value($id);
                 }, $primaryKeys);
             }
 
@@ -702,7 +702,7 @@ class EntityDefinitionQueryHelper
                 EntityDefinitionQueryHelper::escape($primaryKeyField->getStorageName())
             ));
 
-            $query->setParameter('ids', $primaryKeys, ArrayParameterType::BINARY);
+            $query->setParameter('ids', $primaryKeys, IdBinding::listType());
 
             return;
         }
@@ -744,11 +744,11 @@ class EntityDefinitionQueryHelper
         foreach ($query->getSelectParts() as $part) {
             $expression = $part;
             $alias = null;
-            if (preg_match('/^(.+)\s+as\s+([`"][^`"]+[`"])$/is', $part, $match) === 1) {
+            if (preg_match('/^(.+)\s+as\s+([`"][^`"]+[`"])$/isD', $part, $match) === 1) {
                 [, $expression, $alias] = $match;
-            } elseif (preg_match('/^[`"][^`"]+[`"]\.([`"][^`"]+[`"])$/', $part, $match) === 1) {
+            } elseif (preg_match('/^[`"][^`"]+[`"]\.([`"][^`"]+[`"])$/D', $part, $match) === 1) {
                 $alias = $match[1];
-            } elseif (preg_match('/^[`"][^`"]+[`"]$/', $part) === 1) {
+            } elseif (preg_match('/^[`"][^`"]+[`"]$/D', $part) === 1) {
                 $alias = $part;
             }
 
@@ -800,7 +800,7 @@ class EntityDefinitionQueryHelper
                 }
 
                 if ($field instanceof IdField || $field instanceof FkField) {
-                    $value = Uuid::fromHexToBytes($value);
+                    $value = IdBinding::value($value);
                 }
 
                 $key = 'pk' . Uuid::randomHex();
@@ -833,9 +833,11 @@ class EntityDefinitionQueryHelper
         foreach ($chain as $part) {
             $select = $this->buildFieldSelector($part, $field, $context, $accessor);
 
+            // the quote character depends on the dialect (backtick or double quote)
+            $quote = self::escape('x')[0];
             $selects[] = str_replace(
-                '`.' . self::escape($field->getStorageName()),
-                '.' . $field->getPropertyName() . '`',
+                $quote . '.' . self::escape($field->getStorageName()),
+                '.' . $field->getPropertyName() . $quote,
                 $select
             );
         }

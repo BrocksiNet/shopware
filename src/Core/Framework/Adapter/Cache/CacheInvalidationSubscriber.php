@@ -34,6 +34,7 @@ use Shopware\Core\Content\ProductStream\ProductStreamDefinition;
 use Shopware\Core\Content\Sitemap\Event\SitemapGeneratedEvent;
 use Shopware\Core\Content\Sitemap\SalesChannel\SitemapRoute;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Adapter\Translation\Translator;
 use Shopware\Core\Framework\DataAbstractionLayer\Cache\EntityCacheKeyGenerator;
 use Shopware\Core\Framework\DataAbstractionLayer\Event\EntityDeleteEvent;
@@ -363,12 +364,12 @@ class CacheInvalidationSubscriber
         /** @var list<array{'product_id':string, 'variant_id':string|null}> $productIds */
         $productIds = $this->connection->fetchAllAssociative(
             'SELECT
-                    LOWER(HEX(pm.product_id)) as product_id,
-                    IF(variant.id IS NULL,  NULL, LOWER(HEX(variant.id))) as variant_id
+                    ' . IdBinding::text('pm.product_id') . ' as product_id,
+                    IF(variant.id IS NULL,  NULL, ' . IdBinding::text('variant.id') . ') as variant_id
                     FROM product_media AS pm
                     LEFT JOIN product as variant ON (pm.product_id = variant.parent_id)
                     WHERE media_id IN (:ids)',
-            ['ids' => Uuid::fromHexToBytesList($event->getIds())],
+            ['ids' => IdBinding::values($event->getIds())],
             ['ids' => ArrayParameterType::STRING]
         );
 
@@ -443,13 +444,13 @@ class CacheInvalidationSubscriber
         }
 
         $ids = $this->connection->fetchFirstColumn(
-            'SELECT DISTINCT LOWER(HEX(category_id)) as category_id
+            'SELECT DISTINCT ' . IdBinding::text('category_id') . ' as category_id
              FROM product_category_tree
                 INNER JOIN product ON product.id = product_category_tree.product_id AND product_category_tree.product_version_id = product.version_id
              WHERE product.product_manufacturer_id IN (:ids)
              AND product.version_id = :version',
-            ['ids' => Uuid::fromHexToBytesList($ids), 'version' => Uuid::fromHexToBytes(Defaults::LIVE_VERSION)],
-            ['ids' => ArrayParameterType::BINARY]
+            ['ids' => IdBinding::values($ids), 'version' => IdBinding::value(Defaults::LIVE_VERSION)],
+            ['ids' => IdBinding::listType()]
         );
 
         $this->cacheInvalidator->invalidate(
@@ -473,12 +474,12 @@ class CacheInvalidationSubscriber
 
         // invalidates product listings which are based on a product stream
         $ids = $this->connection->fetchFirstColumn(
-            'SELECT DISTINCT LOWER(HEX(product_stream_id))
+            'SELECT DISTINCT ' . IdBinding::text('product_stream_id') . '
              FROM product_stream_mapping
              WHERE product_stream_mapping.product_id IN (:ids)
              AND product_stream_mapping.product_version_id = :version',
-            ['ids' => Uuid::fromHexToBytesList($ids), 'version' => Uuid::fromHexToBytes(Defaults::LIVE_VERSION)],
-            ['ids' => ArrayParameterType::BINARY]
+            ['ids' => IdBinding::values($ids), 'version' => IdBinding::value(Defaults::LIVE_VERSION)],
+            ['ids' => IdBinding::listType()]
         );
 
         $this->cacheInvalidator->invalidate(
@@ -514,13 +515,13 @@ class CacheInvalidationSubscriber
     private function getProductCategoryIds(array $ids): array
     {
         return $this->connection->fetchFirstColumn(
-            'SELECT DISTINCT LOWER(HEX(category_id)) as category_id
+            'SELECT DISTINCT ' . IdBinding::text('category_id') . ' as category_id
              FROM product_category_tree
              WHERE product_id IN (:ids)
              AND product_version_id = :version
              AND category_version_id = :version',
-            ['ids' => Uuid::fromHexToBytesList($ids), 'version' => Uuid::fromHexToBytes(Defaults::LIVE_VERSION)],
-            ['ids' => ArrayParameterType::BINARY]
+            ['ids' => IdBinding::values($ids), 'version' => IdBinding::value(Defaults::LIVE_VERSION)],
+            ['ids' => IdBinding::listType()]
         );
     }
 
@@ -535,9 +536,9 @@ class CacheInvalidationSubscriber
         }
 
         $ids = $this->connection->fetchFirstColumn(
-            'SELECT DISTINCT LOWER(HEX(sales_channel_id)) as id FROM sales_channel_shipping_method WHERE shipping_method_id IN (:ids)',
-            ['ids' => Uuid::fromHexToBytesList($ids)],
-            ['ids' => ArrayParameterType::BINARY]
+            'SELECT DISTINCT ' . IdBinding::text('sales_channel_id') . ' as id FROM sales_channel_shipping_method WHERE shipping_method_id IN (:ids)',
+            ['ids' => IdBinding::values($ids)],
+            ['ids' => IdBinding::listType()]
         );
 
         $tags = [];
@@ -572,9 +573,9 @@ class CacheInvalidationSubscriber
         }
 
         $ids = $this->connection->fetchFirstColumn(
-            'SELECT DISTINCT LOWER(HEX(sales_channel_id)) as id FROM sales_channel_payment_method WHERE payment_method_id IN (:ids)',
-            ['ids' => Uuid::fromHexToBytesList($ids)],
-            ['ids' => ArrayParameterType::BINARY]
+            'SELECT DISTINCT ' . IdBinding::text('sales_channel_id') . ' as id FROM sales_channel_payment_method WHERE payment_method_id IN (:ids)',
+            ['ids' => IdBinding::values($ids)],
+            ['ids' => IdBinding::listType()]
         );
 
         $tags = [];
@@ -610,9 +611,9 @@ class CacheInvalidationSubscriber
 
         // Used to detect changes to the country itself and invalidate the route for all sales channels in which the country is assigned.
         $ids = $this->connection->fetchFirstColumn(
-            'SELECT DISTINCT LOWER(HEX(sales_channel_id)) as id FROM sales_channel_country WHERE country_id IN (:ids)',
-            ['ids' => Uuid::fromHexToBytesList($ids)],
-            ['ids' => ArrayParameterType::BINARY]
+            'SELECT DISTINCT ' . IdBinding::text('sales_channel_id') . ' as id FROM sales_channel_country WHERE country_id IN (:ids)',
+            ['ids' => IdBinding::values($ids)],
+            ['ids' => IdBinding::listType()]
         );
 
         $tags = [];
@@ -661,9 +662,9 @@ class CacheInvalidationSubscriber
 
         // Used to detect changes to the language itself and invalidate the route for all sales channels in which the language is assigned.
         $ids = $this->connection->fetchFirstColumn(
-            'SELECT DISTINCT LOWER(HEX(sales_channel_id)) as id FROM sales_channel_language WHERE language_id IN (:ids)',
-            ['ids' => Uuid::fromHexToBytesList($ids)],
-            ['ids' => ArrayParameterType::BINARY]
+            'SELECT DISTINCT ' . IdBinding::text('sales_channel_id') . ' as id FROM sales_channel_language WHERE language_id IN (:ids)',
+            ['ids' => IdBinding::values($ids)],
+            ['ids' => IdBinding::listType()]
         );
 
         $tags = [];
@@ -700,9 +701,9 @@ class CacheInvalidationSubscriber
 
         // Used to detect changes to the currency itself and invalidate the route for all sales channels in which the currency is assigned.
         $ids = $this->connection->fetchFirstColumn(
-            'SELECT DISTINCT LOWER(HEX(sales_channel_id)) as id FROM sales_channel_currency WHERE currency_id IN (:ids)',
-            ['ids' => Uuid::fromHexToBytesList($ids)],
-            ['ids' => ArrayParameterType::BINARY]
+            'SELECT DISTINCT ' . IdBinding::text('sales_channel_id') . ' as id FROM sales_channel_currency WHERE currency_id IN (:ids)',
+            ['ids' => IdBinding::values($ids)],
+            ['ids' => IdBinding::listType()]
         );
 
         $tags = [];
@@ -735,8 +736,8 @@ class CacheInvalidationSubscriber
     {
         return $this->connection->fetchFirstColumn(
             'SELECT DISTINCT LOWER(HEX(COALESCE(parent_id, id))) as id FROM product WHERE id IN (:ids) AND version_id = :version',
-            ['ids' => Uuid::fromHexToBytesList($ids), 'version' => Uuid::fromHexToBytes(Defaults::LIVE_VERSION)],
-            ['ids' => ArrayParameterType::BINARY]
+            ['ids' => IdBinding::values($ids), 'version' => IdBinding::value(Defaults::LIVE_VERSION)],
+            ['ids' => IdBinding::listType()]
         );
     }
 
@@ -752,12 +753,12 @@ class CacheInvalidationSubscriber
         }
 
         return $this->connection->fetchFirstColumn(
-            'SELECT DISTINCT LOWER(HEX(product_stream_id))
+            'SELECT DISTINCT ' . IdBinding::text('product_stream_id') . '
              FROM product_stream_mapping
              WHERE product_stream_mapping.product_id IN (:ids)
              AND product_stream_mapping.product_version_id = :version',
-            ['ids' => Uuid::fromHexToBytesList($ids), 'version' => Uuid::fromHexToBytes(Defaults::LIVE_VERSION)],
-            ['ids' => ArrayParameterType::BINARY]
+            ['ids' => IdBinding::values($ids), 'version' => IdBinding::value(Defaults::LIVE_VERSION)],
+            ['ids' => IdBinding::listType()]
         );
     }
 
@@ -815,7 +816,7 @@ class CacheInvalidationSubscriber
                 continue;
             }
 
-            $crossSellingIds[] = Uuid::isValid($crossSellingId) ? $crossSellingId : Uuid::fromBytesToHex($crossSellingId);
+            $crossSellingIds[] = Uuid::isValid($crossSellingId) ? $crossSellingId : IdBinding::toHex($crossSellingId);
         }
 
         return array_values(array_unique($crossSellingIds));
@@ -837,14 +838,14 @@ class CacheInvalidationSubscriber
             $payloadId = $payload['crossSellingId'] ?? $payload['cross_selling_id'] ?? null;
 
             if (\is_string($payloadId)) {
-                $crossSellingIds[] = Uuid::isValid($payloadId) ? $payloadId : Uuid::fromBytesToHex($payloadId);
+                $crossSellingIds[] = Uuid::isValid($payloadId) ? $payloadId : IdBinding::toHex($payloadId);
             }
 
             $state = $writeResult->getExistence()?->getState() ?? [];
             $stateId = $state['crossSellingId'] ?? $state['cross_selling_id'] ?? null;
 
             if (\is_string($stateId)) {
-                $crossSellingIds[] = Uuid::isValid($stateId) ? $stateId : Uuid::fromBytesToHex($stateId);
+                $crossSellingIds[] = Uuid::isValid($stateId) ? $stateId : IdBinding::toHex($stateId);
             }
         }
 
@@ -865,11 +866,11 @@ class CacheInvalidationSubscriber
         }
 
         return $this->connection->fetchFirstColumn(
-            'SELECT DISTINCT LOWER(HEX(cross_selling_id))
+            'SELECT DISTINCT ' . IdBinding::text('cross_selling_id') . '
              FROM product_cross_selling_assigned_products
              WHERE id IN (:ids)',
-            ['ids' => Uuid::fromHexToBytesList($ids)],
-            ['ids' => ArrayParameterType::BINARY]
+            ['ids' => IdBinding::values($ids)],
+            ['ids' => IdBinding::listType()]
         );
     }
 
@@ -893,8 +894,8 @@ class CacheInvalidationSubscriber
                 ON product.id = product_cross_selling.product_id
                 AND product.version_id = product_cross_selling.product_version_id
              WHERE product_cross_selling.id IN (:ids)',
-            ['ids' => Uuid::fromHexToBytesList($ids)],
-            ['ids' => ArrayParameterType::BINARY]
+            ['ids' => IdBinding::values($ids)],
+            ['ids' => IdBinding::listType()]
         );
     }
 
@@ -906,9 +907,9 @@ class CacheInvalidationSubscriber
     private function getSetIds(array $ids): array
     {
         return $this->connection->fetchFirstColumn(
-            'SELECT DISTINCT LOWER(HEX(snippet_set_id)) FROM snippet WHERE id IN (:ids)',
-            ['ids' => Uuid::fromHexToBytesList($ids)],
-            ['ids' => ArrayParameterType::BINARY]
+            'SELECT DISTINCT ' . IdBinding::text('snippet_set_id') . ' FROM snippet WHERE id IN (:ids)',
+            ['ids' => IdBinding::values($ids)],
+            ['ids' => IdBinding::listType()]
         );
     }
 }

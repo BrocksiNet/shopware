@@ -2,8 +2,8 @@
 
 namespace Shopware\Core\Framework\DataAbstractionLayer\Write\Validation;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\EntityDefinitionQueryHelper;
 use Shopware\Core\Framework\DataAbstractionLayer\DefinitionInstanceRegistry;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityDefinition;
@@ -119,8 +119,8 @@ class LockValidator implements EventSubscriberInterface
             $locked[$entityName] = $this->connection->createQueryBuilder()
                 ->select('1')
                 ->from(EntityDefinitionQueryHelper::escape($entityName))
-                ->where('`id` IN (:ids) AND `locked` = 1')
-                ->setParameter('ids', $primaryKeys, ArrayParameterType::BINARY)
+                ->where(EntityDefinitionQueryHelper::escape('id') . ' IN (:ids) AND ' . EntityDefinitionQueryHelper::escape('locked') . ' = 1')
+                ->setParameter('ids', $primaryKeys, IdBinding::listType())
                 ->executeQuery()
                 ->rowCount() > 0;
         }

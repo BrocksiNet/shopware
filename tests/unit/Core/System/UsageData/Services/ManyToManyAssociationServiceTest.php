@@ -8,6 +8,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Shopware\Core\Content\Product\ProductDefinition;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\DataAbstractionLayer\Dbal\EntityDefinitionQueryHelper;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityDefinition;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\Flag\PrimaryKey;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\IdField;
@@ -39,7 +40,7 @@ class ManyToManyAssociationServiceTest extends TestCase
         $connection->expects($this->once())
             ->method('executeQuery')
             ->with(
-                'SELECT `referenceColumn`, `localColumn` FROM `ManyToManyEntity` WHERE (`localColumn` IN (:ids)) AND (`product_version_id` = UNHEX(:versionId))',
+                str_replace('`', EntityDefinitionQueryHelper::escape('x')[0], 'SELECT `referenceColumn`, `localColumn` FROM `ManyToManyEntity` WHERE (`localColumn` IN (:ids)) AND (`product_version_id` = UNHEX(:versionId))'),
                 [
                     'ids' => [
                         Uuid::fromHexToBytes($ids->get('1')),

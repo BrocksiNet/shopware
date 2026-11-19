@@ -3,6 +3,7 @@
 namespace Shopware\Core\Checkout\Customer\Subscriber;
 
 use Shopware\Core\Checkout\Customer\CustomerDefinition;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Api\Context\SalesChannelApiSource;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityCollection;
@@ -15,7 +16,6 @@ use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\InsertCommand;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\UpdateCommand;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Validation\PreWriteValidationEvent;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\Framework\Validation\WriteConstraintViolationException;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\Validator\ConstraintViolation;
@@ -98,9 +98,9 @@ class CustomerLanguageSalesChannelSubscriber implements EventSubscriberInterface
             $pk = $command->getPrimaryKey();
 
             $candidates[] = [
-                'customerId' => $command instanceof UpdateCommand && isset($pk['id']) ? Uuid::fromBytesToHex($pk['id']) : null,
-                'languageId' => Uuid::fromBytesToHex($payload['language_id']),
-                'salesChannelId' => isset($payload['sales_channel_id']) ? Uuid::fromBytesToHex($payload['sales_channel_id']) : null,
+                'customerId' => $command instanceof UpdateCommand && isset($pk['id']) ? IdBinding::toHex($pk['id']) : null,
+                'languageId' => IdBinding::toHex($payload['language_id']),
+                'salesChannelId' => isset($payload['sales_channel_id']) ? IdBinding::toHex($payload['sales_channel_id']) : null,
             ];
         }
 

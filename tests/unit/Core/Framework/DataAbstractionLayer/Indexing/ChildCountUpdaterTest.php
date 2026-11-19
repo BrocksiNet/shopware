@@ -5,6 +5,7 @@ namespace Shopware\Tests\Unit\Core\Framework\DataAbstractionLayer\Indexing;
 use Doctrine\DBAL\Connection;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\DefinitionInstanceRegistry;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityDefinition;
@@ -68,7 +69,7 @@ class ChildCountUpdaterTest extends TestCase
 
         static::assertSame(2, $captured['count0'] ?? null, 'The child count of the version-aware parent must be written.');
         static::assertArrayHasKey('version', $captured, 'A version-aware recalculation must be scoped to the context version.');
-        static::assertSame(Uuid::fromHexToBytes($context->getVersionId()), $captured['version']);
+        static::assertSame(IdBinding::value($context->getVersionId()), $captured['version']);
     }
 
     /**
@@ -90,7 +91,7 @@ class ChildCountUpdaterTest extends TestCase
         $written = [];
         foreach ($captured as $key => $value) {
             if (preg_match('/^id(\d+)$/', $key, $matches) === 1) {
-                $written[Uuid::fromBytesToHex((string) $value)] = $captured['count' . $matches[1]];
+                $written[IdBinding::toHex((string) $value)] = $captured['count' . $matches[1]];
             }
         }
 
@@ -113,7 +114,7 @@ class ChildCountUpdaterTest extends TestCase
         // fetchAllKeyValue() returns the counts keyed by the binary parent_id, as MySQL would
         $aggregation = [];
         foreach ($aggregationByHex as $hex => $count) {
-            $aggregation[Uuid::fromHexToBytes($hex)] = $count;
+            $aggregation[IdBinding::value($hex)] = $count;
         }
 
         $connection = static::createStub(Connection::class);

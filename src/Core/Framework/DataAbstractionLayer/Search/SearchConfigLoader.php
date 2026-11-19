@@ -4,11 +4,11 @@ namespace Shopware\Core\Framework\DataAbstractionLayer\Search;
 
 use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\DataAbstractionLayerException;
 use Shopware\Core\Framework\Deprecation\BCChange\ClassMoved;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 
 /**
  * @phpstan-type SearchConfig array{and_logic: string, excluded_terms: array<string>, min_search_length: int, field: string, tokenize: int, ranking: float, use_exact_subfield: int}
@@ -49,7 +49,7 @@ FROM product_search_config
 INNER JOIN product_search_config_field ON(product_search_config_field.product_search_config_id = product_search_config.id)
 WHERE product_search_config.language_id = :languageId AND product_search_config_field.searchable = 1 AND product_search_config_field.field NOT IN(:excludedFields)',
                 [
-                    'languageId' => Uuid::fromHexToBytes($languageId),
+                    'languageId' => IdBinding::value($languageId),
                     'excludedFields' => self::NOT_SUPPORTED_FIELDS,
                 ],
                 [

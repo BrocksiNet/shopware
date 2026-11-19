@@ -191,7 +191,7 @@ class EntityForeignKeyResolverTest extends TestCase
 
                 $result = static::createStub(Result::class);
                 $result->method('fetchAllAssociative')->willReturn(
-                    str_contains($query, '`cascade_parent.children`')
+                    str_contains($query, 'cascade_parent.children')
                         ? [['id' => $childId]]
                         : [['id' => $parentId]]
                 );
@@ -258,7 +258,7 @@ class EntityForeignKeyResolverTest extends TestCase
         $rootId = Uuid::randomHex();
         $scopeId = Uuid::randomHex();
 
-        $this->returnRowsFor('`composite_restrict_root.children`', [
+        $this->returnRowsFor('composite_restrict_root.children', [
             ['_id' => Uuid::fromHexToBytes($rootId), 'rootId' => $rootId, 'scopeId' => $scopeId],
         ]);
 
@@ -282,7 +282,7 @@ class EntityForeignKeyResolverTest extends TestCase
         $rootId = Uuid::randomHex();
         $targetId = Uuid::randomHex();
 
-        $this->returnRowsFor('`composite_restrict_root.targets.mapping`', [
+        $this->returnRowsFor('composite_restrict_root.targets.mapping', [
             ['_id' => Uuid::fromHexToBytes($rootId), 'rootId' => $rootId, 'targetId' => $targetId],
         ]);
 

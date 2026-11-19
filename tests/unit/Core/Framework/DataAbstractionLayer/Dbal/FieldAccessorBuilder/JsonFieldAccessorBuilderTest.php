@@ -21,14 +21,14 @@ class JsonFieldAccessorBuilderTest extends TestCase
 {
     public function testWholeColumn(): void
     {
-        $builder = new JsonFieldAccessorBuilder($this->createStub(Connection::class), new MySqlDialect());
+        $builder = new JsonFieldAccessorBuilder(static::createStub(Connection::class), new MySqlDialect());
 
         static::assertSame('`product`.`data`', $builder->buildAccessor('product', $this->field(), Context::createDefaultContext(), 'data'));
     }
 
     public function testMySqlKeepsTheExistingSql(): void
     {
-        $builder = new JsonFieldAccessorBuilder($this->createStub(Connection::class), new MySqlDialect());
+        $builder = new JsonFieldAccessorBuilder(static::createStub(Connection::class), new MySqlDialect());
         $context = Context::createDefaultContext();
 
         static::assertSame(
@@ -47,7 +47,7 @@ class JsonFieldAccessorBuilderTest extends TestCase
 
     public function testPostgreSqlUsesJsonPath(): void
     {
-        $builder = new JsonFieldAccessorBuilder($this->createStub(Connection::class), new PostgreSqlDialect(null, true));
+        $builder = new JsonFieldAccessorBuilder(static::createStub(Connection::class), new PostgreSqlDialect(null, true));
         $context = Context::createDefaultContext();
 
         static::assertSame(
@@ -62,7 +62,7 @@ class JsonFieldAccessorBuilderTest extends TestCase
 
     public function testInvalidIdentifiersAreRejected(): void
     {
-        $builder = new JsonFieldAccessorBuilder($this->createStub(Connection::class), new MySqlDialect());
+        $builder = new JsonFieldAccessorBuilder(static::createStub(Connection::class), new MySqlDialect());
 
         $this->expectException(\Throwable::class);
         $builder->buildAccessor('pro`duct', $this->field(), Context::createDefaultContext(), 'data.name');

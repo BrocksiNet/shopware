@@ -2,16 +2,15 @@
 
 namespace Shopware\Core\Content\Product\DataAbstractionLayer;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\FetchModeHelper;
 use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\MultiInsertQueryQueue;
 use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\RetryableTransaction;
 use Shopware\Core\Framework\DataAbstractionLayer\Util\StatementHelper;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 
 #[Package('framework')]
 class ProductCategoryDenormalizer
@@ -37,13 +36,13 @@ class ProductCategoryDenormalizer
 
         $categories = $this->fetchMapping($ids, $context);
 
-        $versionId = Uuid::fromHexToBytes($context->getVersionId());
-        $liveVersionId = Uuid::fromHexToBytes(Defaults::LIVE_VERSION);
+        $versionId = IdBinding::value($context->getVersionId());
+        $liveVersionId = IdBinding::value(Defaults::LIVE_VERSION);
 
         $inserts = [];
         $updates = [];
         foreach ($categories as $productId => $mapping) {
-            $productId = Uuid::fromHexToBytes($productId);
+            $productId = IdBinding::value($productId);
             $allIds[] = $productId;
             $categoryIds = $this->mapCategories($mapping);
 
@@ -62,7 +61,7 @@ class ProductCategoryDenormalizer
                 $inserts[] = [
                     'product_id' => $productId,
                     'product_version_id' => $versionId,
-                    'category_id' => Uuid::fromHexToBytes($id),
+                    'category_id' => IdBinding::value($id),
                     'category_version_id' => $liveVersionId,
                 ];
             }
@@ -72,7 +71,7 @@ class ProductCategoryDenormalizer
             $this->connection->executeStatement(
                 'DELETE FROM product_category_tree WHERE `product_id` IN (:ids) AND `product_version_id` = :version',
                 ['ids' => $allIds, 'version' => $versionId],
-                ['ids' => ArrayParameterType::BINARY]
+                ['ids' => IdBinding::listType()]
             );
         });
 
@@ -112,9 +111,9 @@ class ProductCategoryDenormalizer
     {
         $query = $this->connection->createQueryBuilder();
         $query->select(
-            'LOWER(HEX(product.id)) as product_id',
+            IdBinding::text('product.id') . ' as product_id',
             'GROUP_CONCAT(category.path SEPARATOR \'\') as paths',
-            'GROUP_CONCAT(LOWER(HEX(category.id)) SEPARATOR \'|\') as ids',
+            'GROUP_CONCAT(' . IdBinding::text('category.id') . ' SEPARATOR \'|\') as ids',
         );
         $query->from('product');
         $query->leftJoin(
@@ -143,12 +142,12 @@ class ProductCategoryDenormalizer
 
         $query->andWhere('product.version_id = :version');
 
-        $query->setParameter('version', Uuid::fromHexToBytes($context->getVersionId()));
-        $query->setParameter('live', Uuid::fromHexToBytes(Defaults::LIVE_VERSION));
+        $query->setParameter('version', IdBinding::value($context->getVersionId()));
+        $query->setParameter('live', IdBinding::value(Defaults::LIVE_VERSION));
 
-        $bytes = array_map(static fn (string $id) => Uuid::fromHexToBytes($id), $ids);
+        $bytes = array_map(static fn (string $id) => IdBinding::value($id), $ids);
 
-        $query->setParameter('ids', $bytes, ArrayParameterType::BINARY);
+        $query->setParameter('ids', $bytes, IdBinding::listType());
 
         $rows = $query->executeQuery()->fetchAllAssociative();
 

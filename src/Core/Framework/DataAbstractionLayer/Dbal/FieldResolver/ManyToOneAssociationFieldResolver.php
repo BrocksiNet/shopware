@@ -4,6 +4,7 @@ namespace Shopware\Core\Framework\DataAbstractionLayer\Dbal\FieldResolver;
 
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\EntityDefinitionQueryHelper;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\QueryBuilder;
@@ -162,9 +163,9 @@ class ManyToOneAssociationFieldResolver extends AbstractFieldResolver
         }
 
         return \sprintf(
-            ' AND #alias#.%s = UNHEX("%s")',
+            ' AND #alias#.%s = %s',
             EntityDefinitionQueryHelper::escape('version_id'),
-            Defaults::LIVE_VERSION,
+            IdBinding::literal(Defaults::LIVE_VERSION),
         );
     }
 

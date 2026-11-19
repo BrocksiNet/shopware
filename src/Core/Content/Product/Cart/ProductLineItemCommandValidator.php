@@ -7,13 +7,13 @@ use Shopware\Core\Checkout\Order\Aggregate\OrderLineItem\OrderLineItemDefinition
 use Shopware\Core\Content\Product\Exception\ProductLineItemDifferentIdException;
 use Shopware\Core\Content\Product\Exception\ProductLineItemInconsistentException;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\SetNullOnDeleteCommand;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\WriteCommand;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Validation\OutcomeRow;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Validation\PreWriteValidationEvent;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Validation\WriteOutcome;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Tests\Integration\Core\Content\Product\Cart\ProductLineItemCommandValidatorTest;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
@@ -60,7 +60,7 @@ class ProductLineItemCommandValidator implements EventSubscriberInterface
                 continue;
             }
 
-            $lineItemId = Uuid::fromBytesToHex($lineItem->primaryKey['id']);
+            $lineItemId = IdBinding::toHex($lineItem->primaryKey['id']);
 
             $productIdChanged = $lineItem->payloadContainsAny('product_id');
             $referenceIdChanged = $lineItem->payloadContainsAny('referenced_id');
@@ -71,7 +71,7 @@ class ProductLineItemCommandValidator implements EventSubscriberInterface
             }
 
             $productId = $lineItem->getPayloadValue('product_id');
-            if ((\is_string($productId) ? Uuid::fromBytesToHex($productId) : null) !== $lineItem->getPayloadValue('referenced_id')) {
+            if ((\is_string($productId) ? IdBinding::toHex($productId) : null) !== $lineItem->getPayloadValue('referenced_id')) {
                 $event->getExceptions()->add(
                     new ProductLineItemDifferentIdException($lineItemId)
                 );

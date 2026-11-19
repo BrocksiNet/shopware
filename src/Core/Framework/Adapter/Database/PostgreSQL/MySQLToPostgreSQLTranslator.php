@@ -417,6 +417,11 @@ class MySQLToPostgreSQLTranslator
             return false;
         }
 
+        // a cast written for PostgreSQL only follows a column: "a"::text
+        if (substr($sql, $end, 2) === '::') {
+            return true;
+        }
+
         $trimmed = rtrim($out);
         // an alias without AS follows an identifier or a subquery: FROM "t" "alias", JOIN (SELECT ...) "alias"
         if (str_ends_with($trimmed, '.') || ($sql[$end] ?? '') === '.' || str_ends_with($trimmed, '"') || str_ends_with($trimmed, ')')) {

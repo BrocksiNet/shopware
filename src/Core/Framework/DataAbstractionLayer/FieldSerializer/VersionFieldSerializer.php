@@ -2,6 +2,7 @@
 
 namespace Shopware\Core\Framework\DataAbstractionLayer\FieldSerializer;
 
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\DataAbstractionLayerException;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\Field;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\VersionField;
@@ -9,7 +10,6 @@ use Shopware\Core\Framework\DataAbstractionLayer\Write\DataStack\KeyValuePair;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\EntityExistence;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\WriteParameterBag;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 
 /**
  * @internal
@@ -47,13 +47,13 @@ class VersionFieldSerializer implements FieldSerializerInterface
             $data->setValue($result[$field->getPropertyName()]);
         }
 
-        yield $field->getStorageName() => Uuid::fromHexToBytes($data->getValue());
+        yield $field->getStorageName() => IdBinding::value($data->getValue());
     }
 
     public function decode(Field $field, mixed $value): ?string
     {
         try {
-            return Uuid::fromBytesToHex($value);
+            return IdBinding::toHex($value);
         } catch (\Exception) {
             return null;
         }

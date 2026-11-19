@@ -2,8 +2,8 @@
 
 namespace Shopware\Core\System\Integration\Subscriber;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Api\Context\AdminApiSource;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Validation\PreWriteValidationEvent;
@@ -55,7 +55,7 @@ class AdminIntegrationWriteValidator implements EventSubscriberInterface
         $adminIds = $this->connection->fetchFirstColumn(
             'SELECT id FROM integration WHERE id IN (:ids) AND admin = 1',
             ['ids' => $ids],
-            ['ids' => ArrayParameterType::BINARY]
+            ['ids' => IdBinding::listType()]
         );
 
         if ($adminIds !== []) {

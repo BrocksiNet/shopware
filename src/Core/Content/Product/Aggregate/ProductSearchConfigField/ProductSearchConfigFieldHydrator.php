@@ -2,12 +2,12 @@
 
 namespace Shopware\Core\Content\Product\Aggregate\ProductSearchConfigField;
 
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\EntityHydrator;
 use Shopware\Core\Framework\DataAbstractionLayer\Entity;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityDefinition;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 
 #[Package('inventory')]
 class ProductSearchConfigFieldHydrator extends EntityHydrator
@@ -15,13 +15,13 @@ class ProductSearchConfigFieldHydrator extends EntityHydrator
     protected function assign(EntityDefinition $definition, Entity $entity, string $root, array $row, Context $context): Entity
     {
         if (isset($row[$root . '.id'])) {
-            $entity->id = Uuid::fromBytesToHex($row[$root . '.id']);
+            $entity->id = IdBinding::toHex($row[$root . '.id']);
         }
         if (isset($row[$root . '.searchConfigId'])) {
-            $entity->searchConfigId = Uuid::fromBytesToHex($row[$root . '.searchConfigId']);
+            $entity->searchConfigId = IdBinding::toHex($row[$root . '.searchConfigId']);
         }
         if (isset($row[$root . '.customFieldId'])) {
-            $entity->customFieldId = Uuid::fromBytesToHex($row[$root . '.customFieldId']);
+            $entity->customFieldId = IdBinding::toHex($row[$root . '.customFieldId']);
         }
         if (isset($row[$root . '.field'])) {
             $entity->field = $row[$root . '.field'];

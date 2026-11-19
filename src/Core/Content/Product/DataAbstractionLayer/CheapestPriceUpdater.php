@@ -2,17 +2,16 @@
 
 namespace Shopware\Core\Content\Product\DataAbstractionLayer;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Psr\EventDispatcher\EventDispatcherInterface;
 use Shopware\Core\Content\Product\DataAbstractionLayer\CheapestPrice\CheapestPriceContainer;
 use Shopware\Core\Content\Product\Events\ProductIndexerEvent;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\FetchModeHelper;
 use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\RetryableQuery;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Util\Json;
-use Shopware\Core\Framework\Uuid\Uuid;
 
 #[Package('framework')]
 class CheapestPriceUpdater
@@ -40,7 +39,7 @@ class CheapestPriceUpdater
 
         $all = $this->fetchPrices($parentIds, $context);
 
-        $versionId = Uuid::fromHexToBytes($context->getVersionId());
+        $versionId = IdBinding::value($context->getVersionId());
 
         $cheapestPrice = new RetryableQuery(
             $this->connection,
@@ -57,11 +56,11 @@ class CheapestPriceUpdater
         $existingAccessorsByParent = [];
         if ($all !== []) {
             $rows = $this->connection->fetchAllAssociative(
-                'SELECT LOWER(HEX(`parent_id`)) AS parentId, `id` AS id, `cheapest_price_accessor` AS accessor
+                'SELECT ' . IdBinding::text('`parent_id`') . ' AS parentId, `id` AS id, `cheapest_price_accessor` AS accessor
                  FROM product
                  WHERE `parent_id` IN (:ids) AND `version_id` = :version',
-                ['ids' => Uuid::fromHexToBytesList(array_keys($all)), 'version' => $versionId],
-                ['ids' => ArrayParameterType::BINARY]
+                ['ids' => IdBinding::values(array_keys($all)), 'version' => $versionId],
+                ['ids' => IdBinding::listType()]
             );
 
             foreach ($rows as $row) {
@@ -76,7 +75,7 @@ class CheapestPriceUpdater
 
             $cheapestPrice->execute([
                 'price' => serialize($container),
-                'id' => Uuid::fromHexToBytes($productId),
+                'id' => IdBinding::value($productId),
                 'version' => $versionId,
             ]);
 
@@ -91,7 +90,7 @@ class CheapestPriceUpdater
             foreach ($container->getVariantIds() as $variantId) {
                 $accessor = Json::encode($this->buildAccessor($container, $variantId));
 
-                if (($existingAccessors[Uuid::fromHexToBytes($variantId)] ?? null) === $accessor) {
+                if (($existingAccessors[IdBinding::value($variantId)] ?? null) === $accessor) {
                     continue;
                 }
 
@@ -101,7 +100,7 @@ class CheapestPriceUpdater
 
                 $accessorQuery->execute([
                     'accessor' => $accessor,
-                    'id' => Uuid::fromHexToBytes($variantId),
+                    'id' => IdBinding::value($variantId),
                     'version' => $versionId,
                 ]);
             }
@@ -194,8 +193,8 @@ class CheapestPriceUpdater
         $query = $this->connection->createQueryBuilder();
         $query->select(
             'LOWER(HEX(IFNULL(product.parent_id, product.id))) as parent_id',
-            'LOWER(HEX(product.id)) as variant_id',
-            'LOWER(HEX(price.rule_id)) as rule_id',
+            IdBinding::text('product.id') . ' as variant_id',
+            IdBinding::text('price.rule_id') . ' as rule_id',
             'LOWER(HEX(IFNULL(product.unit_id, parent.unit_id))) as unit_id',
             'IFNULL(product.purchase_unit, parent.purchase_unit) as purchase_unit',
             'IFNULL(product.reference_unit, parent.reference_unit) as reference_unit',
@@ -214,10 +213,10 @@ class CheapestPriceUpdater
 
         $this->quantitySelector->add($query);
 
-        $idsBytes = Uuid::fromHexToBytesList($ids);
-        $versionBytes = Uuid::fromHexToBytes($context->getVersionId());
+        $idsBytes = IdBinding::values($ids);
+        $versionBytes = IdBinding::value($context->getVersionId());
 
-        $query->setParameter('ids', $idsBytes, ArrayParameterType::BINARY);
+        $query->setParameter('ids', $idsBytes, IdBinding::listType());
         $query->setParameter('version', $versionBytes);
 
         $data = $query->executeQuery()->fetchAllAssociative();
@@ -225,7 +224,7 @@ class CheapestPriceUpdater
         $query = $this->connection->createQueryBuilder();
         $query->select(
             'LOWER(HEX(IFNULL(product.parent_id, product.id))) as parent_id',
-            'LOWER(HEX(product.id)) as variant_id',
+            IdBinding::text('product.id') . ' as variant_id',
             'NULL as rule_id',
             '0 AS is_ranged',
             'product.price as price',
@@ -241,7 +240,7 @@ class CheapestPriceUpdater
         $query->andWhere('product.id IN (:ids) OR product.parent_id IN (:ids)');
         $query->andWhere('product.version_id = :version');
         $query->andWhere('IFNULL(product.active, parent.active) = 1 OR product.child_count > 0'); // always load parent products
-        $query->setParameter('ids', $idsBytes, ArrayParameterType::BINARY);
+        $query->setParameter('ids', $idsBytes, IdBinding::listType());
         $query->setParameter('version', $versionBytes);
 
         $defaults = $query->executeQuery()->fetchAllAssociative();
@@ -298,16 +297,16 @@ class CheapestPriceUpdater
         }
 
         $results = $this->connection->fetchAllAssociative(
-            'SELECT LOWER(HEX(product_id)) as product_id, LOWER(HEX(sales_channel_id)) as sales_channel_id
+            'SELECT ' . IdBinding::text('product_id') . ' as product_id, ' . IdBinding::text('sales_channel_id') . ' as sales_channel_id
              FROM product_visibility
              WHERE product_id IN (:ids)
              AND product_version_id = :version',
             [
-                'ids' => Uuid::fromHexToBytesList($productIds),
-                'version' => Uuid::fromHexToBytes($context->getVersionId()),
+                'ids' => IdBinding::values($productIds),
+                'version' => IdBinding::value($context->getVersionId()),
             ],
             [
-                'ids' => ArrayParameterType::BINARY,
+                'ids' => IdBinding::listType(),
             ]
         );
 

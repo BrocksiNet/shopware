@@ -3,16 +3,15 @@
 namespace Shopware\Core\Framework\DataAbstractionLayer\Dbal\FieldResolver;
 
 use Doctrine\DBAL\Connection;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\DataAbstractionLayerException;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\EntityDefinitionQueryHelper;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\QueryBuilder;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityDefinition;
-use Shopware\Core\Framework\DataAbstractionLayer\Field\Field;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\StorageAware;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\TranslatedField;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 
 /**
  * @internal
@@ -219,7 +218,7 @@ class TranslationFieldResolver extends AbstractFieldResolver
         $query->addSelect(str_replace('#alias#', $firstAlias, $select));
         $query->from(EntityDefinitionQueryHelper::escape($table), EntityDefinitionQueryHelper::escape($firstAlias));
         $query->where(EntityDefinitionQueryHelper::escape($firstAlias) . '.`language_id` = :languageId');
-        $query->setParameter('languageId', Uuid::fromHexToBytes($first));
+        $query->setParameter('languageId', IdBinding::value($first));
 
         /*
          * Build the following select
@@ -274,7 +273,7 @@ class TranslationFieldResolver extends AbstractFieldResolver
             );
 
             $query->addSelect(str_replace('#alias#', $alias, $select));
-            $query->setParameter('languageId' . $i, Uuid::fromHexToBytes($language));
+            $query->setParameter('languageId' . $i, IdBinding::value($language));
         }
 
         return $query;

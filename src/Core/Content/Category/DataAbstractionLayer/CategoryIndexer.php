@@ -2,12 +2,12 @@
 
 namespace Shopware\Core\Content\Category\DataAbstractionLayer;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Content\Category\Aggregate\CategoryTranslation\CategoryTranslationDefinition;
 use Shopware\Core\Content\Category\CategoryCollection;
 use Shopware\Core\Content\Category\CategoryDefinition;
 use Shopware\Core\Content\Category\Event\CategoryIndexerEvent;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\Common\IterableQuery;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\Common\IteratorFactory;
 use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\RetryableTransaction;
@@ -22,7 +22,6 @@ use Shopware\Core\Framework\DataAbstractionLayer\Indexing\EntityIndexingMessage;
 use Shopware\Core\Framework\DataAbstractionLayer\Indexing\TreeUpdater;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Plugin\Exception\DecorationPatternException;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
@@ -110,7 +109,7 @@ class CategoryIndexer extends EntityIndexer
                 || \array_key_exists('parentId', $payload);
 
             if (isset($state['parent_id']) && $parentChildCountAffected) {
-                $parentIds[] = Uuid::fromBytesToHex($state['parent_id']);
+                $parentIds[] = IdBinding::toHex($state['parent_id']);
             }
 
             if (\array_key_exists('parentId', $payload)) {
@@ -260,10 +259,10 @@ WHERE depth > 0
 SQL;
 
         return $this->connection->fetchFirstColumn($sql, [
-            'version' => Uuid::fromHexToBytes($versionId),
-            'categoryIds' => Uuid::fromHexToBytesList($categoryIds),
+            'version' => IdBinding::value($versionId),
+            'categoryIds' => IdBinding::values($categoryIds),
         ], [
-            'categoryIds' => ArrayParameterType::BINARY,
+            'categoryIds' => IdBinding::listType(),
         ]);
     }
 

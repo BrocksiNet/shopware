@@ -4,6 +4,7 @@ namespace Shopware\Core\Framework\DataAbstractionLayer\Search\Parser;
 
 use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\DataAbstractionLayerException;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\EntityDefinitionQueryHelper;
@@ -235,7 +236,7 @@ class SqlQueryParser
             $value[] = $v;
         }
         if ($field instanceof IdField || $field instanceof FkField) {
-            $value = array_filter(array_map(static fn (bool|float|int|string $id): string => Uuid::fromHexToBytes((string) $id), $value));
+            $value = array_filter(array_map(static fn (bool|float|int|string $id): string => IdBinding::value((string) $id), $value));
         }
 
         $where = [];
@@ -299,7 +300,7 @@ class SqlQueryParser
         }
 
         if ($field instanceof IdField || $field instanceof FkField) {
-            $value = Uuid::fromHexToBytes((string) $value);
+            $value = IdBinding::value((string) $value);
         }
 
         $result->addParameter($key, $value);

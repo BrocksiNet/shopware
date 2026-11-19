@@ -2,9 +2,9 @@
 
 namespace Shopware\Core\Content\Product\DataAbstractionLayer;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Exception;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\RetryableQuery;
 use Shopware\Core\Framework\Log\Package;
@@ -40,7 +40,7 @@ class VariantListingUpdater
 
         $ids = array_keys(array_flip($ids));
 
-        $versionBytes = Uuid::fromHexToBytes($context->getVersionId());
+        $versionBytes = IdBinding::value($context->getVersionId());
 
         $listingConfiguration = $this->getListingConfiguration($ids, $context);
 
@@ -99,7 +99,7 @@ class VariantListingUpdater
 
                 $fields[] = 'LOWER(HEX(' . $optionAlias . '.id))';
 
-                $params[$optionAlias] = Uuid::fromHexToBytes($groupId);
+                $params[$optionAlias] = IdBinding::value($groupId);
             }
 
             $query->addSelect('CONCAT(' . implode(',', $fields) . ')');
@@ -107,7 +107,7 @@ class VariantListingUpdater
             $sql = '
             UPDATE product SET display_group = SHA2(
                 CONCAT(
-                    LOWER(HEX(product.parent_id)),
+                    ' . IdBinding::text('product.parent_id') . ',
                     (' . $query->getSQL() . ')
                 ),
                 256
@@ -128,7 +128,7 @@ class VariantListingUpdater
      */
     private function getListingConfiguration(array $ids, Context $context): array
     {
-        $versionBytes = Uuid::fromHexToBytes($context->getVersionId());
+        $versionBytes = IdBinding::value($context->getVersionId());
 
         $query = $this->connection->createQueryBuilder();
         $query->select(
@@ -139,7 +139,7 @@ class VariantListingUpdater
         $query->from('product');
         $query->andWhere('product.version_id = :version');
         $query->andWhere('product.id IN (:ids)');
-        $query->setParameter('ids', Uuid::fromHexToBytesList($ids), ArrayParameterType::BINARY);
+        $query->setParameter('ids', IdBinding::values($ids), IdBinding::listType());
         $query->setParameter('version', $versionBytes);
 
         $configuration = $query->executeQuery()->fetchAllAssociative();

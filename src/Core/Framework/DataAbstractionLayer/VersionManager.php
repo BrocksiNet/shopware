@@ -4,6 +4,7 @@ namespace Shopware\Core\Framework\DataAbstractionLayer;
 
 use Psr\Clock\ClockInterface;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Api\Acl\AclWriteValidator;
 use Shopware\Core\Framework\Api\Context\AdminApiSource;
 use Shopware\Core\Framework\Api\Sync\SyncOperation;
@@ -342,13 +343,13 @@ class VersionManager
             return;
         }
 
-        $commitId = Uuid::randomBytes();
+        $commitId = IdBinding::value(Uuid::randomHex());
 
         $date = $this->clock->now()->format(Defaults::STORAGE_DATE_TIME_FORMAT);
 
         $source = $writeContext->getContext()->getSource();
         $userId = $source instanceof AdminApiSource && $source->getUserId()
-            ? Uuid::fromHexToBytes($source->getUserId())
+            ? IdBinding::value($source->getUserId())
             : null;
 
         $insert = new InsertCommand(
@@ -356,13 +357,13 @@ class VersionManager
             [
                 'id' => $commitId,
                 'user_id' => $userId,
-                'version_id' => Uuid::fromHexToBytes($versionId),
+                'version_id' => IdBinding::value($versionId),
                 'created_at' => $date,
             ],
             ['id' => $commitId],
             EntityExistence::createForEntity(
                 $this->versionCommitDefinition->getEntityName(),
-                ['id' => Uuid::fromBytesToHex($commitId)],
+                ['id' => IdBinding::toHex($commitId)],
             ),
             ''
         );
@@ -394,7 +395,7 @@ class VersionManager
                 }
                 $primary['versionId'] = $versionId;
 
-                $id = Uuid::randomBytes();
+                $id = IdBinding::value(Uuid::randomHex());
 
                 $commands[] = new InsertCommand(
                     $this->versionCommitDataDefinition,
@@ -411,7 +412,7 @@ class VersionManager
                     ['id' => $id],
                     EntityExistence::createForEntity(
                         $this->versionCommitDataDefinition->getEntityName(),
-                        ['id' => Uuid::fromBytesToHex($id)],
+                        ['id' => IdBinding::toHex($id)],
                     ),
                     ''
                 );

@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Shopware\Core\Framework\DataAbstractionLayer\FieldSerializer;
 
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\DataAbstractionLayerException;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\Field;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\Flag\Required;
@@ -12,7 +13,6 @@ use Shopware\Core\Framework\DataAbstractionLayer\Write\DataStack\KeyValuePair;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\EntityExistence;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\WriteParameterBag;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 
 /**
  * @internal
@@ -77,7 +77,7 @@ class ReferenceVersionFieldSerializer implements FieldSerializerInterface
             // parent inheritance with versioning
             $value = $data->getValue() ?? Defaults::LIVE_VERSION;
 
-            yield $field->getStorageName() => Uuid::fromHexToBytes($value);
+            yield $field->getStorageName() => IdBinding::value($value);
 
             return;
         }
@@ -86,7 +86,7 @@ class ReferenceVersionFieldSerializer implements FieldSerializerInterface
             // if the reference is already written, use the version id of the written entity
             $value = $context->get($reference->getEntityName(), 'versionId');
 
-            yield $field->getStorageName() => Uuid::fromHexToBytes($value);
+            yield $field->getStorageName() => IdBinding::value($value);
 
             return;
         }
@@ -97,7 +97,7 @@ class ReferenceVersionFieldSerializer implements FieldSerializerInterface
             // this is the case, if a entity is created over a sub api call
             $value = $context->get($definition->getEntityName(), 'versionId');
 
-            yield $field->getStorageName() => Uuid::fromHexToBytes($value);
+            yield $field->getStorageName() => IdBinding::value($value);
 
             return;
         }
@@ -109,7 +109,7 @@ class ReferenceVersionFieldSerializer implements FieldSerializerInterface
             return;
         }
 
-        yield $field->getStorageName() => Uuid::fromHexToBytes(Defaults::LIVE_VERSION);
+        yield $field->getStorageName() => IdBinding::value(Defaults::LIVE_VERSION);
     }
 
     public function decode(Field $field, mixed $value): ?string
@@ -118,6 +118,6 @@ class ReferenceVersionFieldSerializer implements FieldSerializerInterface
             return null;
         }
 
-        return Uuid::fromBytesToHex($value);
+        return IdBinding::toHex($value);
     }
 }

@@ -2,12 +2,12 @@
 
 namespace Shopware\Core\Content\Product\Aggregate\ProductReview;
 
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\EntityHydrator;
 use Shopware\Core\Framework\DataAbstractionLayer\Entity;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityDefinition;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 
 #[Package('after-sales')]
 class ProductReviewHydrator extends EntityHydrator
@@ -15,19 +15,19 @@ class ProductReviewHydrator extends EntityHydrator
     protected function assign(EntityDefinition $definition, Entity $entity, string $root, array $row, Context $context): Entity
     {
         if (isset($row[$root . '.id'])) {
-            $entity->id = Uuid::fromBytesToHex($row[$root . '.id']);
+            $entity->id = IdBinding::toHex($row[$root . '.id']);
         }
         if (isset($row[$root . '.productId'])) {
-            $entity->productId = Uuid::fromBytesToHex($row[$root . '.productId']);
+            $entity->productId = IdBinding::toHex($row[$root . '.productId']);
         }
         if (isset($row[$root . '.customerId'])) {
-            $entity->customerId = Uuid::fromBytesToHex($row[$root . '.customerId']);
+            $entity->customerId = IdBinding::toHex($row[$root . '.customerId']);
         }
         if (isset($row[$root . '.salesChannelId'])) {
-            $entity->salesChannelId = Uuid::fromBytesToHex($row[$root . '.salesChannelId']);
+            $entity->salesChannelId = IdBinding::toHex($row[$root . '.salesChannelId']);
         }
         if (isset($row[$root . '.languageId'])) {
-            $entity->languageId = Uuid::fromBytesToHex($row[$root . '.languageId']);
+            $entity->languageId = IdBinding::toHex($row[$root . '.languageId']);
         }
         if (isset($row[$root . '.externalUser'])) {
             $entity->externalUser = $row[$root . '.externalUser'];

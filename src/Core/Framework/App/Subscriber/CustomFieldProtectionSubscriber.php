@@ -3,6 +3,7 @@
 namespace Shopware\Core\Framework\App\Subscriber;
 
 use Doctrine\DBAL\Connection;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Api\Context\AdminApiSource;
 use Shopware\Core\Framework\Api\Context\SystemSource;
 use Shopware\Core\Framework\Context;
@@ -10,7 +11,6 @@ use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\InsertCommand;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\WriteCommand;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Validation\PreWriteValidationEvent;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\Framework\Validation\WriteConstraintViolationException;
 use Shopware\Core\System\CustomField\Aggregate\CustomFieldSet\CustomFieldSetDefinition;
 use Shopware\Tests\Integration\Core\Framework\App\Subscriber\CustomFieldProtectionSubscriberTest;
@@ -99,7 +99,7 @@ class CustomFieldProtectionSubscriber implements EventSubscriberInterface
             return null;
         }
 
-        return Uuid::fromBytesToHex($integrationId);
+        return IdBinding::toHex($integrationId);
     }
 
     private function addViolation(ConstraintViolationList $violationList, WriteCommand $command): void

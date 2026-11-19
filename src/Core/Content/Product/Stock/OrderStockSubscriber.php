@@ -2,12 +2,12 @@
 
 namespace Shopware\Core\Content\Product\Stock;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Checkout\Cart\LineItem\LineItem;
 use Shopware\Core\Checkout\Order\Aggregate\OrderLineItem\OrderLineItemDefinition;
 use Shopware\Core\Checkout\Order\OrderStates;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\Event\EntityWriteEvent;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\DeleteCommand;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\InsertCommand;
@@ -200,8 +200,8 @@ final readonly class OrderStockSubscriber implements EventSubscriberInterface
         /** @var array<string, array{id: string, quantity: int, referenced_id: string}> $result */
         $result = $this->connection->fetchAllAssociativeIndexed(
             $sql,
-            ['ids' => $ids, 'version' => Uuid::fromHexToBytes(Defaults::LIVE_VERSION), 'type' => LineItem::PRODUCT_LINE_ITEM_TYPE, 'cancelled_state' => OrderStates::STATE_CANCELLED],
-            ['ids' => ArrayParameterType::BINARY]
+            ['ids' => $ids, 'version' => IdBinding::value(Defaults::LIVE_VERSION), 'type' => LineItem::PRODUCT_LINE_ITEM_TYPE, 'cancelled_state' => OrderStates::STATE_CANCELLED],
+            ['ids' => IdBinding::listType(), 'version' => IdBinding::type()]
         );
 
         return $result;

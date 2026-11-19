@@ -2,12 +2,12 @@
 
 namespace Shopware\Core\Content\Property\Aggregate\PropertyGroupOption;
 
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\EntityHydrator;
 use Shopware\Core\Framework\DataAbstractionLayer\Entity;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityDefinition;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 
 #[Package('inventory')]
 class PropertyGroupOptionHydrator extends EntityHydrator
@@ -15,16 +15,16 @@ class PropertyGroupOptionHydrator extends EntityHydrator
     protected function assign(EntityDefinition $definition, Entity $entity, string $root, array $row, Context $context): Entity
     {
         if (isset($row[$root . '.id'])) {
-            $entity->id = Uuid::fromBytesToHex($row[$root . '.id']);
+            $entity->id = IdBinding::toHex($row[$root . '.id']);
         }
         if (isset($row[$root . '.groupId'])) {
-            $entity->groupId = Uuid::fromBytesToHex($row[$root . '.groupId']);
+            $entity->groupId = IdBinding::toHex($row[$root . '.groupId']);
         }
         if (isset($row[$root . '.colorHexCode'])) {
             $entity->colorHexCode = $row[$root . '.colorHexCode'];
         }
         if (isset($row[$root . '.mediaId'])) {
-            $entity->mediaId = Uuid::fromBytesToHex($row[$root . '.mediaId']);
+            $entity->mediaId = IdBinding::toHex($row[$root . '.mediaId']);
         }
         if (isset($row[$root . '.createdAt'])) {
             $entity->createdAt = new \DateTimeImmutable($row[$root . '.createdAt']);

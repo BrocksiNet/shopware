@@ -2,15 +2,14 @@
 
 namespace Shopware\Core\System\SalesChannel\Validation;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\DeleteCommand;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\InsertCommand;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\UpdateCommand;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\WriteCommand;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Validation\PreWriteValidationEvent;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\Framework\Validation\WriteConstraintViolationException;
 use Shopware\Core\System\SalesChannel\Aggregate\SalesChannelCurrency\SalesChannelCurrencyDefinition;
 use Shopware\Core\System\SalesChannel\Aggregate\SalesChannelLanguage\SalesChannelLanguageDefinition;
@@ -156,7 +155,7 @@ class SalesChannelValidator implements EventSubscriberInterface
             return;
         }
 
-        $id = Uuid::fromBytesToHex($command->getPrimaryKey()['id']);
+        $id = IdBinding::toHex($command->getPrimaryKey()['id']);
         $salesChannelData = $mapping->get($id);
         if ($salesChannelData === null) {
             $salesChannelData = new SalesChannelData();
@@ -164,11 +163,11 @@ class SalesChannelValidator implements EventSubscriberInterface
         }
 
         if (isset($command->getPayload()['type_id'])) {
-            $salesChannelData->typeId = Uuid::fromBytesToHex($command->getPayload()['type_id']);
+            $salesChannelData->typeId = IdBinding::toHex($command->getPayload()['type_id']);
         }
 
         if ($command instanceof UpdateCommand) {
-            $salesChannelData->updateId = Uuid::fromBytesToHex($command->getPayload()[$defaultField]);
+            $salesChannelData->updateId = IdBinding::toHex($command->getPayload()[$defaultField]);
 
             return;
         }
@@ -177,14 +176,14 @@ class SalesChannelValidator implements EventSubscriberInterface
             return;
         }
 
-        $salesChannelData->newDefault = Uuid::fromBytesToHex($command->getPayload()[$defaultField]);
+        $salesChannelData->newDefault = IdBinding::toHex($command->getPayload()[$defaultField]);
         $salesChannelData->inserts = [];
     }
 
     private function handleSalesChannelMappingCommand(Mapping $mapping, WriteCommand $command, string $mappingField): void
     {
-        $mappingId = Uuid::fromBytesToHex($command->getPrimaryKey()[$mappingField]);
-        $id = Uuid::fromBytesToHex($command->getPrimaryKey()['sales_channel_id']);
+        $mappingId = IdBinding::toHex($command->getPrimaryKey()[$mappingField]);
+        $id = IdBinding::toHex($command->getPrimaryKey()['sales_channel_id']);
 
         $salesChannelData = $mapping->get($id);
         if ($salesChannelData === null) {
@@ -329,8 +328,8 @@ class SalesChannelValidator implements EventSubscriberInterface
         /** @var CurrentSalesChannelStates $result */
         $result = $this->connection->fetchAllAssociative(
             \sprintf(
-                'SELECT LOWER(HEX(sales_channel.id)) AS sales_channel_id,
-                LOWER(HEX(sales_channel.type_id)) AS type_id,
+                'SELECT ' . IdBinding::text('sales_channel.id') . ' AS sales_channel_id,
+                ' . IdBinding::text('sales_channel.type_id') . ' AS type_id,
                 LOWER(HEX(sales_channel.%s)) AS current_default,
                 LOWER(HEX(mapping.%s)) AS %s
                 FROM sales_channel
@@ -342,8 +341,8 @@ class SalesChannelValidator implements EventSubscriberInterface
                 $mappingField,
                 $mappingTable,
             ),
-            ['ids' => Uuid::fromHexToBytesList($salesChannelIds)],
-            ['ids' => ArrayParameterType::BINARY]
+            ['ids' => IdBinding::values($salesChannelIds)],
+            ['ids' => IdBinding::listType()]
         );
 
         return $result;

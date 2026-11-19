@@ -2,8 +2,8 @@
 
 namespace Shopware\Core\System\User\Subscriber;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Api\Context\AdminApiSource;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\InsertCommand;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Validation\PreWriteValidationEvent;
@@ -69,7 +69,7 @@ class AdminUserWriteValidator implements EventSubscriberInterface
         $existingUserIds = $this->connection->fetchFirstColumn(
             'SELECT id FROM `user` WHERE id IN (:userIds)',
             ['userIds' => $userIds],
-            ['userIds' => ArrayParameterType::BINARY]
+            ['userIds' => IdBinding::listType()]
         );
 
         if (array_diff($existingUserIds, [$callerId]) !== []) {
@@ -103,7 +103,7 @@ class AdminUserWriteValidator implements EventSubscriberInterface
             $ownerIds = [...$ownerIds, ...$this->connection->fetchFirstColumn(
                 'SELECT user_id FROM user_access_key WHERE id IN (:keyIds)',
                 ['keyIds' => $existingKeyIds],
-                ['keyIds' => ArrayParameterType::BINARY]
+                ['keyIds' => IdBinding::listType()]
             )];
         }
 

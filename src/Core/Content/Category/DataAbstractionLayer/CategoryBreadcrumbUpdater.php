@@ -2,13 +2,12 @@
 
 namespace Shopware\Core\Content\Category\DataAbstractionLayer;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\RetryableQuery;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 
 #[Package('discovery')]
 class CategoryBreadcrumbUpdater
@@ -54,7 +53,7 @@ class CategoryBreadcrumbUpdater
     {
         /** @var list<array{id: string, parentId: string|null}> $languages */
         $languages = $this->connection->fetchAllAssociative(
-            'SELECT LOWER(HEX(`id`)) AS id, LOWER(HEX(`parent_id`)) AS parentId FROM `language` WHERE `active` = 1'
+            'SELECT ' . IdBinding::text('`id`') . ' AS id, ' . IdBinding::text('`parent_id`') . ' AS parentId FROM `language` WHERE `active` = 1'
         );
 
         return $languages;
@@ -72,8 +71,8 @@ class CategoryBreadcrumbUpdater
         $query->from('category');
         $query->where('category.id IN (:ids)');
         $query->andWhere('category.version_id = :version');
-        $query->setParameter('version', Uuid::fromHexToBytes($context->getVersionId()));
-        $query->setParameter('ids', Uuid::fromHexToBytesList($ids), ArrayParameterType::BINARY);
+        $query->setParameter('version', IdBinding::value($context->getVersionId()));
+        $query->setParameter('ids', IdBinding::values($ids), IdBinding::listType());
 
         $paths = $query->executeQuery()->fetchFirstColumn();
 
@@ -99,8 +98,8 @@ class CategoryBreadcrumbUpdater
         $query->from('category');
         $query->where('category.id IN (:ids)');
         $query->andWhere('category.version_id = :version');
-        $query->setParameter('version', Uuid::fromHexToBytes(Defaults::LIVE_VERSION));
-        $query->setParameter('ids', Uuid::fromHexToBytesList($ids), ArrayParameterType::BINARY);
+        $query->setParameter('version', IdBinding::value(Defaults::LIVE_VERSION));
+        $query->setParameter('ids', IdBinding::values($ids), IdBinding::listType());
 
         $coalesce = [];
         foreach ($languageChain as $index => $languageId) {
@@ -117,13 +116,13 @@ class CategoryBreadcrumbUpdater
                     $index
                 )
             );
-            $query->setParameter('language' . $index, Uuid::fromHexToBytes($languageId));
+            $query->setParameter('language' . $index, IdBinding::value($languageId));
             $coalesce[] = $alias . '.name';
         }
 
         $query->select(
-            'LOWER(HEX(category.id)) AS id',
-            'LOWER(HEX(category.parent_id)) AS parentId',
+            IdBinding::text('category.id') . ' AS id',
+            IdBinding::text('category.parent_id') . ' AS parentId',
             'COALESCE(' . implode(', ', $coalesce) . ') AS name'
         );
 
@@ -144,8 +143,8 @@ class CategoryBreadcrumbUpdater
      */
     private function updateLanguage(array $ids, string $languageId, array $names): void
     {
-        $versionId = Uuid::fromHexToBytes(Defaults::LIVE_VERSION);
-        $languageIdBytes = Uuid::fromHexToBytes($languageId);
+        $versionId = IdBinding::value(Defaults::LIVE_VERSION);
+        $languageIdBytes = IdBinding::value($languageId);
 
         $cache = [];
         $rows = [];
@@ -156,7 +155,7 @@ class CategoryBreadcrumbUpdater
             }
 
             $rows[] = [
-                Uuid::fromHexToBytes($id),
+                IdBinding::value($id),
                 $versionId,
                 $languageIdBytes,
                 json_encode($breadcrumb, \JSON_THROW_ON_ERROR),

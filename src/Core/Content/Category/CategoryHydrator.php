@@ -2,12 +2,12 @@
 
 namespace Shopware\Core\Content\Category;
 
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\EntityHydrator;
 use Shopware\Core\Framework\DataAbstractionLayer\Entity;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityDefinition;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 
 #[Package('discovery')]
 class CategoryHydrator extends EntityHydrator
@@ -15,19 +15,19 @@ class CategoryHydrator extends EntityHydrator
     protected function assign(EntityDefinition $definition, Entity $entity, string $root, array $row, Context $context): Entity
     {
         if (isset($row[$root . '.id'])) {
-            $entity->id = Uuid::fromBytesToHex($row[$root . '.id']);
+            $entity->id = IdBinding::toHex($row[$root . '.id']);
         }
         if (isset($row[$root . '.versionId'])) {
-            $entity->versionId = Uuid::fromBytesToHex($row[$root . '.versionId']);
+            $entity->versionId = IdBinding::toHex($row[$root . '.versionId']);
         }
         if (isset($row[$root . '.parentId'])) {
-            $entity->parentId = Uuid::fromBytesToHex($row[$root . '.parentId']);
+            $entity->parentId = IdBinding::toHex($row[$root . '.parentId']);
         }
         if (isset($row[$root . '.afterCategoryId'])) {
-            $entity->afterCategoryId = Uuid::fromBytesToHex($row[$root . '.afterCategoryId']);
+            $entity->afterCategoryId = IdBinding::toHex($row[$root . '.afterCategoryId']);
         }
         if (isset($row[$root . '.mediaId'])) {
-            $entity->mediaId = Uuid::fromBytesToHex($row[$root . '.mediaId']);
+            $entity->mediaId = IdBinding::toHex($row[$root . '.mediaId']);
         }
         if (isset($row[$root . '.displayNestedProducts'])) {
             $entity->displayNestedProducts = (bool) $row[$root . '.displayNestedProducts'];
@@ -57,10 +57,10 @@ class CategoryHydrator extends EntityHydrator
             $entity->active = (bool) $row[$root . '.active'];
         }
         if (isset($row[$root . '.cmsPageId'])) {
-            $entity->cmsPageId = Uuid::fromBytesToHex($row[$root . '.cmsPageId']);
+            $entity->cmsPageId = IdBinding::toHex($row[$root . '.cmsPageId']);
         }
         if (isset($row[$root . '.productStreamId'])) {
-            $entity->productStreamId = Uuid::fromBytesToHex($row[$root . '.productStreamId']);
+            $entity->productStreamId = IdBinding::toHex($row[$root . '.productStreamId']);
         }
         if (isset($row[$root . '.createdAt'])) {
             $entity->createdAt = new \DateTimeImmutable($row[$root . '.createdAt']);
@@ -70,7 +70,7 @@ class CategoryHydrator extends EntityHydrator
         }
 
         if (isset($row[$root . '.customEntityTypeId'])) {
-            $entity->customEntityTypeId = Uuid::fromBytesToHex($row[$root . '.customEntityTypeId']);
+            $entity->customEntityTypeId = IdBinding::toHex($row[$root . '.customEntityTypeId']);
         }
 
         $entity->media = $this->manyToOne($row, $root, $definition->getField('media'), $context);

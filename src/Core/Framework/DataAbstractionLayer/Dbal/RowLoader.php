@@ -4,6 +4,7 @@ namespace Shopware\Core\Framework\DataAbstractionLayer\Dbal;
 
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Query\QueryBuilder;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Log\Package;
 
 /**
@@ -40,7 +41,24 @@ class RowLoader
 
         $this->addPrimaryCondition($query, $primaryKeys);
 
-        return $query->executeQuery()->fetchAllAssociative();
+        $rows = $query->executeQuery()->fetchAllAssociative();
+
+        if (!IdBinding::isHexBinding()) {
+            return $rows;
+        }
+
+        // the primary key columns are compared with the primary keys of the commands, which are in the binding format (hex text)
+        $idColumns = array_keys($primaryKeys[0]);
+        foreach ($rows as &$row) {
+            foreach ($idColumns as $column) {
+                if (isset($row[$column]) && \is_string($row[$column])) {
+                    $row[$column] = IdBinding::toHex($row[$column]);
+                }
+            }
+        }
+        unset($row);
+
+        return $rows;
     }
 
     /**

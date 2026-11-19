@@ -5,6 +5,7 @@ namespace Shopware\Core\Framework\DataAbstractionLayer\Dbal;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Exception;
 use Doctrine\DBAL\ParameterType;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Adapter\Database\Dialect\SqlDialect;
 use Shopware\Core\Framework\Adapter\Database\Dialect\SqlDialectFactory;
 use Shopware\Core\Framework\DataAbstractionLayer\DataAbstractionLayerException;
@@ -17,6 +18,7 @@ use Shopware\Core\Framework\DataAbstractionLayer\EntityTranslationDefinition;
 use Shopware\Core\Framework\DataAbstractionLayer\Event\EntityDeleteEvent;
 use Shopware\Core\Framework\DataAbstractionLayer\Event\EntityWriteEvent;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\FkField;
+use Shopware\Core\Framework\DataAbstractionLayer\Field\IdField;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\ManyToOneAssociationField;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\StorageAware;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\VersionField;
@@ -369,7 +371,7 @@ class EntityWriteGateway implements EntityWriteGatewayInterface
             }
             if ($versionField) {
                 $query->andWhere('version_id = ?');
-                $params[] = Uuid::fromHexToBytes($parameters->getContext()->getContext()->getVersionId());
+                $params[] = IdBinding::value($parameters->getContext()->getContext()->getVersionId());
             }
 
             $query->setParameters($params);
@@ -528,7 +530,10 @@ class EntityWriteGateway implements EntityWriteGatewayInterface
 
         $states = [];
         foreach ($primaryKeys as $entity => $ids) {
-            $states[$entity] = $this->rowLoader->load($entity, $ids);
+            $states[$entity] = $this->normalizeIdColumns(
+                $this->definitionInstanceRegistry->getByEntityName($entity),
+                $this->rowLoader->load($entity, $ids)
+            );
         }
 
         foreach ($commands as $command) {
@@ -546,6 +551,39 @@ class EntityWriteGateway implements EntityWriteGatewayInterface
                 $this->calculateChangeSet($command, $states[$entity])
             );
         }
+    }
+
+    /**
+     * The loaded rows are compared with the primary keys and payloads of the commands, which hold ids in the binding format of the connection.
+     * On PostgreSQL a `SELECT *` returns uuid text, so the id columns are converted to the same format.
+     *
+     * @param list<array<string, mixed>> $rows
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function normalizeIdColumns(EntityDefinition $definition, array $rows): array
+    {
+        if (!IdBinding::isHexBinding()) {
+            return $rows;
+        }
+
+        $idColumns = [];
+        foreach ($definition->getFields() as $field) {
+            if ($field instanceof StorageAware && ($field instanceof IdField || $field instanceof FkField)) {
+                $idColumns[$field->getStorageName()] = true;
+            }
+        }
+
+        foreach ($rows as &$row) {
+            foreach ($row as $column => $value) {
+                if (isset($idColumns[$column]) && \is_string($value)) {
+                    $row[$column] = IdBinding::toHex($value);
+                }
+            }
+        }
+        unset($row);
+
+        return $rows;
     }
 
     /**

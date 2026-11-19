@@ -2,8 +2,8 @@
 
 namespace Shopware\Core\Framework\DataAbstractionLayer\Write;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\DataAbstractionLayerException;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\EntityDefinitionQueryHelper;
 use Shopware\Core\Framework\DataAbstractionLayer\DefinitionInstanceRegistry;
@@ -25,7 +25,6 @@ use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\UpdateCommand;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\WriteCommand;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\WriteCommandQueue;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 
 /**
  * @internal
@@ -294,14 +293,14 @@ class EntityWriteResultFactory
     private function fetchParentIds(EntityDefinition $definition, array $rawData): array
     {
         $fetchQuery = \sprintf(
-            'SELECT DISTINCT LOWER(HEX(parent_id)) as id FROM %s WHERE id IN (:ids)',
+            'SELECT DISTINCT ' . IdBinding::text('parent_id') . ' as id FROM %s WHERE id IN (:ids)',
             EntityDefinitionQueryHelper::escape($definition->getEntityName())
         );
 
         $parentIds = $this->connection->fetchAllAssociative(
             $fetchQuery,
-            ['ids' => Uuid::fromHexToBytesList(array_column($rawData, 'id'))],
-            ['ids' => ArrayParameterType::BINARY]
+            ['ids' => IdBinding::values(array_column($rawData, 'id'))],
+            ['ids' => IdBinding::listType()]
         );
 
         $ids = array_unique(array_filter(array_column($parentIds, 'id')));
@@ -576,7 +575,7 @@ class EntityWriteResultFactory
     {
         $query = $this->connection->createQueryBuilder();
         $query->select(
-            'LOWER(HEX(' . EntityDefinitionQueryHelper::escape($fkField->getStorageName()) . '))'
+            IdBinding::text(EntityDefinitionQueryHelper::escape($fkField->getStorageName()))
         );
         $query->from(EntityDefinitionQueryHelper::escape($definition->getEntityName()));
 
@@ -602,7 +601,7 @@ class EntityWriteResultFactory
                 EntityDefinitionQueryHelper::escape($primaryKey->getStorageName()) . ' = :' . $key
             );
 
-            $query->setParameter($key, Uuid::fromHexToBytes($rawData[$property]));
+            $query->setParameter($key, IdBinding::value($rawData[$property]));
         }
 
         $fk = $query->executeQuery()->fetchOne();

@@ -2,8 +2,8 @@
 
 namespace Shopware\Core\Service\Subscriber;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\App\AppDefinition;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\DeleteCommand;
@@ -106,7 +106,7 @@ readonly class ServiceWriteProtectionSubscriber implements EventSubscriberInterf
         return $this->connection->fetchFirstColumn(
             'SELECT `id` FROM `app` WHERE `id` IN (:ids) AND `self_managed` = 1',
             ['ids' => $ids],
-            ['ids' => ArrayParameterType::BINARY]
+            ['ids' => IdBinding::listType()]
         );
     }
 

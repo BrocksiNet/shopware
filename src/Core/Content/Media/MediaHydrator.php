@@ -2,12 +2,12 @@
 
 namespace Shopware\Core\Content\Media;
 
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\EntityHydrator;
 use Shopware\Core\Framework\DataAbstractionLayer\Entity;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityDefinition;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 
 #[Package('discovery')]
 class MediaHydrator extends EntityHydrator
@@ -15,13 +15,13 @@ class MediaHydrator extends EntityHydrator
     protected function assign(EntityDefinition $definition, Entity $entity, string $root, array $row, Context $context): Entity
     {
         if (isset($row[$root . '.id'])) {
-            $entity->id = Uuid::fromBytesToHex($row[$root . '.id']);
+            $entity->id = IdBinding::toHex($row[$root . '.id']);
         }
         if (isset($row[$root . '.userId'])) {
-            $entity->userId = Uuid::fromBytesToHex($row[$root . '.userId']);
+            $entity->userId = IdBinding::toHex($row[$root . '.userId']);
         }
         if (isset($row[$root . '.mediaFolderId'])) {
-            $entity->mediaFolderId = Uuid::fromBytesToHex($row[$root . '.mediaFolderId']);
+            $entity->mediaFolderId = IdBinding::toHex($row[$root . '.mediaFolderId']);
         }
         if (isset($row[$root . '.mimeType'])) {
             $entity->mimeType = $row[$root . '.mimeType'];

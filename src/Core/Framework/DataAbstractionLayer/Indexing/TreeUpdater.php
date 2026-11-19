@@ -2,10 +2,10 @@
 
 namespace Shopware\Core\Framework\DataAbstractionLayer\Indexing;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Query\QueryBuilder;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\DataAbstractionLayerException;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\EntityDefinitionQueryHelper;
@@ -18,7 +18,6 @@ use Shopware\Core\Framework\DataAbstractionLayer\Util\StatementHelper;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Uuid\Exception\InvalidUuidException;
 use Shopware\Core\Framework\Uuid\Exception\InvalidUuidLengthException;
-use Shopware\Core\Framework\Uuid\Uuid;
 
 #[Package('framework')]
 class TreeUpdater
@@ -37,7 +36,7 @@ class TreeUpdater
      */
     public function batchUpdate(array $updateIds, string $entity, Context $context, bool $recursive = false): void
     {
-        $updateIds = Uuid::fromHexToBytesList(array_unique($updateIds));
+        $updateIds = IdBinding::values(array_unique($updateIds));
         if ($updateIds === []) {
             return;
         }
@@ -49,7 +48,7 @@ class TreeUpdater
         // the batch update does not support versioning, so fallback to single updates
         if ($definition->isVersionAware() && $context->getVersionId() !== Defaults::LIVE_VERSION) {
             foreach ($updateIds as $id) {
-                $this->singleUpdate(Uuid::fromBytesToHex($id), $entity, $context, $recursive);
+                $this->singleUpdate(IdBinding::toHex($id), $entity, $context, $recursive);
             }
 
             return;
@@ -70,9 +69,9 @@ class TreeUpdater
         $definition = $this->registry->getByEntityName($entity);
 
         $parent = $this->loadParents(
-            Uuid::fromHexToBytes($parentId),
+            IdBinding::value($parentId),
             $definition,
-            Uuid::fromHexToBytes($context->getVersionId())
+            IdBinding::value($context->getVersionId())
         );
 
         if ($parent === []) {
@@ -82,7 +81,7 @@ class TreeUpdater
         $this->updateTree($parent, $definition, $context);
 
         if (!$recursive) {
-            return [Uuid::fromBytesToHex($parent['id'])];
+            return [IdBinding::toHex($parent['id'])];
         }
 
         return $this->updateRecursive($parent, $definition, $context);
@@ -99,7 +98,7 @@ class TreeUpdater
 
         $this->updateTree($entity, $definition, $context);
 
-        $ids[] = Uuid::fromBytesToHex($entity['id']);
+        $ids[] = IdBinding::toHex($entity['id']);
 
         $children = $this->getChildren($entity, $definition, $context);
 
@@ -126,7 +125,7 @@ class TreeUpdater
         $query->select(...$this->getFieldsToSelect($definition));
         $query->andWhere('parent_id = :id');
         $query->setParameter('id', $parent['id']);
-        $this->makeQueryVersionAware($definition, Uuid::fromHexToBytes($context->getVersionId()), $query);
+        $this->makeQueryVersionAware($definition, IdBinding::value($context->getVersionId()), $query);
 
         return $query->executeQuery()->fetchAllAssociative();
     }
@@ -164,7 +163,7 @@ class TreeUpdater
 
         $query->andWhere('id = :id');
         $query->setParameter('id', $entity['id']);
-        $this->makeQueryVersionAware($definition, Uuid::fromHexToBytes($context->getVersionId()), $query);
+        $this->makeQueryVersionAware($definition, IdBinding::value($context->getVersionId()), $query);
 
         RetryableQuery::retryable($this->connection, static function () use ($query): void {
             $query->executeStatement();
@@ -185,7 +184,7 @@ class TreeUpdater
         }
 
         try {
-            $path[] = Uuid::fromBytesToHex($parent[$field->getPathField()]);
+            $path[] = IdBinding::toHex($parent[$field->getPathField()]);
         } catch (InvalidUuidException|InvalidUuidLengthException) {
             $path[] = $parent[$field->getPathField()];
         }
@@ -234,7 +233,7 @@ class TreeUpdater
             $fields[] = 'parent_version_id';
         }
 
-        return $definition->getFields()
+        $fields = $definition->getFields()
             ->filterInstance(TreePathField::class)
             /** @phpstan-ignore argument.type (Collection only contains `TreePathField`) */
             ->reduce(static function (array $fields, TreePathField $field) {
@@ -244,6 +243,16 @@ class TreeUpdater
 
                 return $fields;
             }, $fields);
+
+        // id columns are selected as text on PostgreSQL, so no value is rewritten at the connection
+        $idColumns = ['id', 'parent_id', 'version_id', 'parent_version_id'];
+
+        return array_map(
+            static fn (string $field): string => \in_array($field, $idColumns, true)
+                ? IdBinding::selectText($field) . ' AS ' . $field
+                : $field,
+            $fields
+        );
     }
 
     private function makeQueryVersionAware(EntityDefinition $definition, string $versionId, QueryBuilder $query): void
@@ -310,10 +319,10 @@ class TreeUpdater
         $escaped = EntityDefinitionQueryHelper::escape($definition->getEntityName());
         $column = EntityDefinitionQueryHelper::escape($column);
         $query->from($escaped);
-        $query->select('id', 'parent_id');
+        $query->select(IdBinding::selectText('id') . ' AS id', IdBinding::selectText('parent_id') . ' AS parent_id');
         $query->andWhere($column . ' IN (:ids)');
-        $query->setParameter('ids', $ids, ArrayParameterType::BINARY);
-        $this->makeQueryVersionAware($definition, Uuid::fromHexToBytes($context->getVersionId()), $query);
+        $query->setParameter('ids', $ids, IdBinding::listType());
+        $this->makeQueryVersionAware($definition, IdBinding::value($context->getVersionId()), $query);
 
         $fetchedIds = [];
         foreach ($query->executeQuery()->fetchAllAssociative() as $entity) {
@@ -393,7 +402,7 @@ class TreeUpdater
         ];
 
         if ($definition->getField('version_id')) {
-            $update['version'] = Uuid::fromHexToBytes($context->getVersionId());
+            $update['version'] = IdBinding::value($context->getVersionId());
         }
 
         if ($pathField !== null) {
@@ -446,7 +455,7 @@ class TreeUpdater
         if ($parent !== null) {
             $path = $parent['path'] ?? '';
             $path = array_filter(explode('|', (string) $path));
-            $path[] = Uuid::fromBytesToHex($parent['id']);
+            $path[] = IdBinding::toHex($parent['id']);
             $entity['path'] = '|' . implode('|', $path) . '|';
         }
 

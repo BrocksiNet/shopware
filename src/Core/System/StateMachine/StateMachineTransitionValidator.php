@@ -3,12 +3,12 @@
 namespace Shopware\Core\System\StateMachine;
 
 use Doctrine\DBAL\Connection;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\InsertCommand;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\UpdateCommand;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Validation\PreWriteValidationEvent;
 use Shopware\Core\Framework\Feature;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\Framework\Validation\WriteConstraintViolationException;
 use Shopware\Core\System\StateMachine\Aggregation\StateMachineTransition\StateMachineTransitionDefinition;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
@@ -76,7 +76,7 @@ class StateMachineTransitionValidator implements EventSubscriberInterface
 
         $seen = [];
         foreach ($transitions as $transition) {
-            $key = \sprintf('%s|%s|%s', Uuid::fromBytesToHex($transition['state_machine_id']), Uuid::fromBytesToHex($transition['from_state_id']), $transition['action_name']);
+            $key = \sprintf('%s|%s|%s', IdBinding::toHex($transition['state_machine_id']), IdBinding::toHex($transition['from_state_id']), $transition['action_name']);
 
             if (isset($seen[$key]) || $this->conflictsWithExistingTransition($transition)) {
                 $violations->add($this->buildViolation($transition));
@@ -166,8 +166,8 @@ class StateMachineTransitionValidator implements EventSubscriberInterface
         $template = 'The action "{{ actionName }}" of state machine "{{ stateMachineId }}" already has a transition from state "{{ fromStateId }}" to a different destination state. A state machine action must have exactly one destination state per source state.';
         $parameters = [
             '{{ actionName }}' => $transition['action_name'],
-            '{{ stateMachineId }}' => Uuid::fromBytesToHex($transition['state_machine_id']),
-            '{{ fromStateId }}' => Uuid::fromBytesToHex($transition['from_state_id']),
+            '{{ stateMachineId }}' => IdBinding::toHex($transition['state_machine_id']),
+            '{{ fromStateId }}' => IdBinding::toHex($transition['from_state_id']),
         ];
 
         return new ConstraintViolation(

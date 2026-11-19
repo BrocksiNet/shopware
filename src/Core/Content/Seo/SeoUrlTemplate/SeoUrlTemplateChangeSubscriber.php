@@ -2,13 +2,12 @@
 
 namespace Shopware\Core\Content\Seo\SeoUrlTemplate;
 
-use Doctrine\DBAL\ArrayParameterType;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Framework\DataAbstractionLayer\Event\EntityWriteEvent;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\InsertCommand;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\UpdateCommand;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\Messenger\MessageBusInterface;
 
@@ -67,7 +66,7 @@ class SeoUrlTemplateChangeSubscriber implements EventSubscriberInterface
                 $insertedRoutes[] = [
                     'routeName' => (string) ($payload['route_name'] ?? ''),
                     'entityName' => (string) ($payload['entity_name'] ?? ''),
-                    'salesChannelId' => \is_string($salesChannelId) ? Uuid::fromBytesToHex($salesChannelId) : null,
+                    'salesChannelId' => \is_string($salesChannelId) ? IdBinding::toHex($salesChannelId) : null,
                 ];
 
                 continue;
@@ -145,17 +144,17 @@ class SeoUrlTemplateChangeSubscriber implements EventSubscriberInterface
     private function loadRoutesForTemplates(array $templateIds): array
     {
         $bytes = array_values(array_map(
-            static fn (string $id): string => Uuid::fromHexToBytes($id),
+            static fn (string $id): string => IdBinding::value($id),
             $templateIds
         ));
 
         /** @var list<array{routeName: string, entityName: string, salesChannelId: string|null}> $rows */
         $rows = $this->connection->fetchAllAssociative(
-            'SELECT DISTINCT route_name AS routeName, entity_name AS entityName, LOWER(HEX(sales_channel_id)) AS salesChannelId
+            'SELECT DISTINCT route_name AS routeName, entity_name AS entityName, ' . IdBinding::text('sales_channel_id') . ' AS salesChannelId
              FROM seo_url_template
              WHERE id IN (:ids)',
             ['ids' => $bytes],
-            ['ids' => ArrayParameterType::BINARY]
+            ['ids' => IdBinding::listType()]
         );
 
         return $rows;

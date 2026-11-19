@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Shopware\Core\Framework\DataAbstractionLayer\FieldSerializer;
 
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\DataAbstractionLayerException;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\Field;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\Flag\PrimaryKey;
@@ -64,7 +65,7 @@ class IdFieldSerializer extends AbstractFieldSerializer
         }
 
         $parameters->getContext()->set($parameters->getDefinition()->getEntityName(), $data->getKey(), $value);
-        yield $field->getStorageName() => Uuid::fromHexToBytes($value);
+        yield $field->getStorageName() => IdBinding::value($value);
     }
 
     public function decode(Field $field, mixed $value): ?string
@@ -73,6 +74,6 @@ class IdFieldSerializer extends AbstractFieldSerializer
             return null;
         }
 
-        return Uuid::fromBytesToHex($value);
+        return IdBinding::toHex($value);
     }
 }

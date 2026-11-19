@@ -2,6 +2,7 @@
 
 namespace Shopware\Core\Framework\DataAbstractionLayer\Write\Command;
 
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityDefinition;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\Field;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\IdField;
@@ -10,7 +11,6 @@ use Shopware\Core\Framework\DataAbstractionLayer\Field\StorageAware;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\VersionField;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\EntityExistence;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 
 /**
  * @internal
@@ -138,7 +138,7 @@ abstract class WriteCommand
                 continue;
             }
 
-            $this->decodedPrimaryKey[$primaryKey->getPropertyName()] = Uuid::fromBytesToHex($this->primaryKey[$primaryKey->getStorageName()]);
+            $this->decodedPrimaryKey[$primaryKey->getPropertyName()] = IdBinding::toHex($this->primaryKey[$primaryKey->getStorageName()]);
         }
     }
 }

@@ -330,11 +330,11 @@ EOF;
 
 namespace #namespace#;
 
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\EntityHydrator;
 use Shopware\Core\Framework\DataAbstractionLayer\Entity;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityDefinition;
-use Shopware\Core\Framework\Uuid\Uuid;
 
 class #class# extends EntityHydrator
 {
@@ -401,7 +401,7 @@ EOF;
             case $field instanceof FkField:
             case $field instanceof VersionField:
             case $field instanceof ReferenceVersionField:
-                $inner = str_replace('#property#', $field->getPropertyName(), '$entity->#property# = Uuid::fromBytesToHex($row[$root . \'.#property#\']);');
+                $inner = str_replace('#property#', $field->getPropertyName(), '$entity->#property# = IdBinding::toHex($row[$root . \'.#property#\']);');
 
                 break;
             case $field instanceof StringField:

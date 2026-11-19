@@ -2,6 +2,7 @@
 
 namespace Shopware\Core\Framework\Webhook\Authorization;
 
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Api\Acl\AclRoleLoader;
 use Shopware\Core\Framework\Api\Acl\AclRoles;
 use Shopware\Core\Framework\Api\Acl\ApiCaller;
@@ -13,7 +14,6 @@ use Shopware\Core\Framework\DataAbstractionLayer\Write\Validation\WriteOutcome;
 use Shopware\Core\Framework\HttpException;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Util\Json;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\Framework\Validation\WriteConstraintViolationException;
 use Shopware\Core\Framework\Webhook\AclPrivilegeCollection;
 use Shopware\Core\Framework\Webhook\Authorization\Subscription\Subscriber;
@@ -56,7 +56,7 @@ class WriteAuthorizer
 
         $rows = [];
         foreach ($this->writeOutcome->touchedRows($commands, self::COLUMNS) as $row) {
-            $rows[Uuid::fromBytesToHex($row->primaryKey['id'])] = $row;
+            $rows[IdBinding::toHex($row->primaryKey['id'])] = $row;
         }
 
         $violations = $this->getModificationViolations(array_filter($rows, $this->changesStoredWebhook(...)), $context);

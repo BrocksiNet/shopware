@@ -6,6 +6,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\MockObject\Stub;
 use PHPUnit\Framework\TestCase;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Api\Context\AdminApiSource;
 use Shopware\Core\Framework\Api\Context\SalesChannelApiSource;
 use Shopware\Core\Framework\Context;
@@ -71,7 +72,7 @@ class UpdatedByFieldSerializerTest extends TestCase
             $parameters
         ));
 
-        static::assertSame($userId, Uuid::fromBytesToHex($result['updated_by_id'] ?? ''));
+        static::assertSame($userId, IdBinding::toHex($result['updated_by_id'] ?? ''));
     }
 
     public function testEncodeWithInvalidField(): void

@@ -2,12 +2,12 @@
 
 namespace Shopware\Tests\Unit\Core\System\SalesChannel\Validation;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\DeleteCommand;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\InsertCommand;
@@ -60,8 +60,8 @@ class SalesChannelValidatorTest extends TestCase
             ->method('fetchAllAssociative')
             ->with(
                 static::isString(),
-                ['ids' => [Uuid::fromHexToBytes($salesChannelId)]],
-                ['ids' => ArrayParameterType::BINARY]
+                ['ids' => [IdBinding::value($salesChannelId)]],
+                ['ids' => IdBinding::listType()]
             )
             ->willReturn([]);
 
@@ -71,10 +71,10 @@ class SalesChannelValidatorTest extends TestCase
                 new InsertCommand(
                     $this->definitionRegistry->getByEntityName(SalesChannelDefinition::ENTITY_NAME),
                     [
-                        'type_id' => Uuid::fromHexToBytes($typeId),
-                        'language_id' => Uuid::fromHexToBytes($languageId),
+                        'type_id' => IdBinding::value($typeId),
+                        'language_id' => IdBinding::value($languageId),
                     ],
-                    ['id' => Uuid::fromHexToBytes($salesChannelId)],
+                    ['id' => IdBinding::value($salesChannelId)],
                     static::createStub(EntityExistence::class),
                     '/0'
                 ),
@@ -135,10 +135,10 @@ class SalesChannelValidatorTest extends TestCase
                 new InsertCommand(
                     $this->definitionRegistry->getByEntityName(SalesChannelDefinition::ENTITY_NAME),
                     [
-                        'type_id' => Uuid::fromHexToBytes(Defaults::SALES_CHANNEL_TYPE_PRODUCT_COMPARISON),
-                        'language_id' => Uuid::fromHexToBytes($languageId),
+                        'type_id' => IdBinding::value(Defaults::SALES_CHANNEL_TYPE_PRODUCT_COMPARISON),
+                        'language_id' => IdBinding::value($languageId),
                     ],
-                    ['id' => Uuid::fromHexToBytes($salesChannelId)],
+                    ['id' => IdBinding::value($salesChannelId)],
                     static::createStub(EntityExistence::class),
                     '/0'
                 ),
@@ -146,8 +146,8 @@ class SalesChannelValidatorTest extends TestCase
                     $this->definitionRegistry->getByEntityName(SalesChannelLanguageDefinition::ENTITY_NAME),
                     [],
                     [
-                        'sales_channel_id' => Uuid::fromHexToBytes($salesChannelId),
-                        'language_id' => Uuid::fromHexToBytes($languageId),
+                        'sales_channel_id' => IdBinding::value($salesChannelId),
+                        'language_id' => IdBinding::value($languageId),
                     ],
                     static::createStub(EntityExistence::class),
                     '/0/languages/0'
@@ -240,8 +240,8 @@ class SalesChannelValidatorTest extends TestCase
             [
                 new InsertCommand(
                     $this->definitionRegistry->getByEntityName(SalesChannelDefinition::ENTITY_NAME),
-                    ['currency_id' => Uuid::fromHexToBytes($currencyId)],
-                    ['id' => Uuid::fromHexToBytes($salesChannelId)],
+                    ['currency_id' => IdBinding::value($currencyId)],
+                    ['id' => IdBinding::value($salesChannelId)],
                     static::createStub(EntityExistence::class),
                     '/0'
                 ),
@@ -268,10 +268,10 @@ class SalesChannelValidatorTest extends TestCase
                 new InsertCommand(
                     $this->definitionRegistry->getByEntityName(SalesChannelDefinition::ENTITY_NAME),
                     [
-                        'type_id' => Uuid::fromHexToBytes($typeId),
-                        'currency_id' => Uuid::fromHexToBytes(Uuid::randomHex()),
+                        'type_id' => IdBinding::value($typeId),
+                        'currency_id' => IdBinding::value(Uuid::randomHex()),
                     ],
-                    ['id' => Uuid::fromHexToBytes(Uuid::randomHex())],
+                    ['id' => IdBinding::value(Uuid::randomHex())],
                     static::createStub(EntityExistence::class),
                     '/0'
                 ),
@@ -300,10 +300,10 @@ class SalesChannelValidatorTest extends TestCase
                 new InsertCommand(
                     $this->definitionRegistry->getByEntityName(SalesChannelDefinition::ENTITY_NAME),
                     [
-                        'type_id' => Uuid::fromHexToBytes($typeId),
-                        'currency_id' => Uuid::fromHexToBytes($currencyId),
+                        'type_id' => IdBinding::value($typeId),
+                        'currency_id' => IdBinding::value($currencyId),
                     ],
-                    ['id' => Uuid::fromHexToBytes($salesChannelId)],
+                    ['id' => IdBinding::value($salesChannelId)],
                     static::createStub(EntityExistence::class),
                     '/0'
                 ),
@@ -344,10 +344,10 @@ class SalesChannelValidatorTest extends TestCase
                 new InsertCommand(
                     $this->definitionRegistry->getByEntityName(SalesChannelDefinition::ENTITY_NAME),
                     [
-                        'type_id' => Uuid::fromHexToBytes($pluginTypeId),
-                        'currency_id' => Uuid::fromHexToBytes(Uuid::randomHex()),
+                        'type_id' => IdBinding::value($pluginTypeId),
+                        'currency_id' => IdBinding::value(Uuid::randomHex()),
                     ],
-                    ['id' => Uuid::fromHexToBytes(Uuid::randomHex())],
+                    ['id' => IdBinding::value(Uuid::randomHex())],
                     static::createStub(EntityExistence::class),
                     '/0'
                 ),
@@ -374,8 +374,8 @@ class SalesChannelValidatorTest extends TestCase
                 new DeleteCommand(
                     $this->definitionRegistry->getByEntityName(SalesChannelCurrencyDefinition::ENTITY_NAME),
                     [
-                        'sales_channel_id' => Uuid::fromHexToBytes($salesChannelId),
-                        'currency_id' => Uuid::fromHexToBytes($defaultId),
+                        'sales_channel_id' => IdBinding::value($salesChannelId),
+                        'currency_id' => IdBinding::value($defaultId),
                     ],
                     static::createStub(EntityExistence::class)
                 ),
@@ -400,8 +400,8 @@ class SalesChannelValidatorTest extends TestCase
             [
                 new UpdateCommand(
                     $this->definitionRegistry->getByEntityName(SalesChannelDefinition::ENTITY_NAME),
-                    ['currency_id' => Uuid::fromHexToBytes($newDefaultId)],
-                    ['id' => Uuid::fromHexToBytes($salesChannelId)],
+                    ['currency_id' => IdBinding::value($newDefaultId)],
+                    ['id' => IdBinding::value($salesChannelId)],
                     static::createStub(EntityExistence::class),
                     '/0'
                 ),
@@ -429,8 +429,8 @@ class SalesChannelValidatorTest extends TestCase
             [
                 new UpdateCommand(
                     $this->definitionRegistry->getByEntityName(SalesChannelDefinition::ENTITY_NAME),
-                    ['currency_id' => Uuid::fromHexToBytes(Uuid::randomHex())],
-                    ['id' => Uuid::fromHexToBytes($salesChannelId)],
+                    ['currency_id' => IdBinding::value(Uuid::randomHex())],
+                    ['id' => IdBinding::value($salesChannelId)],
                     static::createStub(EntityExistence::class),
                     '/0'
                 ),
@@ -455,8 +455,8 @@ class SalesChannelValidatorTest extends TestCase
                 new DeleteCommand(
                     $this->definitionRegistry->getByEntityName(SalesChannelCurrencyDefinition::ENTITY_NAME),
                     [
-                        'sales_channel_id' => Uuid::fromHexToBytes($salesChannelId),
-                        'currency_id' => Uuid::fromHexToBytes($defaultId),
+                        'sales_channel_id' => IdBinding::value($salesChannelId),
+                        'currency_id' => IdBinding::value($defaultId),
                     ],
                     static::createStub(EntityExistence::class)
                 ),
@@ -485,8 +485,8 @@ class SalesChannelValidatorTest extends TestCase
                     $this->definitionRegistry->getByEntityName(SalesChannelCurrencyDefinition::ENTITY_NAME),
                     [],
                     [
-                        'sales_channel_id' => Uuid::fromHexToBytes($salesChannelId),
-                        'currency_id' => Uuid::fromHexToBytes($currencyId),
+                        'sales_channel_id' => IdBinding::value($salesChannelId),
+                        'currency_id' => IdBinding::value($currencyId),
                     ],
                     static::createStub(EntityExistence::class),
                     '/0/currencies/0'
@@ -535,8 +535,8 @@ class SalesChannelValidatorTest extends TestCase
     {
         return new UpdateCommand(
             $this->definitionRegistry->getByEntityName(SalesChannelDefinition::ENTITY_NAME),
-            ['language_id' => Uuid::fromHexToBytes($languageId)],
-            ['id' => Uuid::fromHexToBytes($salesChannelId)],
+            ['language_id' => IdBinding::value($languageId)],
+            ['id' => IdBinding::value($salesChannelId)],
             static::createStub(EntityExistence::class),
             '/0'
         );
@@ -547,8 +547,8 @@ class SalesChannelValidatorTest extends TestCase
         return new DeleteCommand(
             $this->definitionRegistry->getByEntityName(SalesChannelLanguageDefinition::ENTITY_NAME),
             [
-                'sales_channel_id' => Uuid::fromHexToBytes($salesChannelId),
-                'language_id' => Uuid::fromHexToBytes($languageId),
+                'sales_channel_id' => IdBinding::value($salesChannelId),
+                'language_id' => IdBinding::value($languageId),
             ],
             static::createStub(EntityExistence::class)
         );

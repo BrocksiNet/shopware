@@ -8,10 +8,16 @@ use PhpParser\Node\Expr\BinaryOp\Concat;
 use PhpParser\Node\Expr\ClassConstFetch;
 use PhpParser\Node\Expr\StaticCall;
 use PhpParser\Node\Identifier;
+use PhpParser\Node\InterpolatedStringPart;
 use PhpParser\Node\Name;
 use PhpParser\Node\Name\FullyQualified;
+use PhpParser\Node\Param;
+use PhpParser\Node\Scalar\InterpolatedString;
 use PhpParser\Node\Scalar\String_;
+use PhpParser\Node\Stmt\ClassConst;
 use PhpParser\Node\Stmt\ClassMethod;
+use PhpParser\Node\Stmt\Const_;
+use PhpParser\Node\Stmt\Property;
 use PhpParser\NodeFinder;
 use PhpParser\NodeTraverser;
 use PhpParser\NodeVisitorAbstract;
@@ -32,13 +38,17 @@ use Symplify\RuleDocGenerator\ValueObject\RuleDefinition;
  *
  * - `'... LOWER(HEX(col)) ...'` (plain quoted strings) -> `'...' . IdBinding::text('col') . '...'`
  *
- * Not covered: `LOWER(HEX())` inside heredoc, nowdoc and interpolated strings, `UNHEX()`, expressions other than a plain column reference.
+ * - the same inside heredoc, nowdoc and interpolated strings (only the literal parts are split)
+ *
+ * Not covered: `UNHEX()`, expressions other than a plain column reference.
  *
  * @internal
  */
 #[Package('framework')]
 final class BinaryUuidToIdBindingRector extends AbstractRector
 {
+    private const LOWER_HEX = '/LOWER\(\s*HEX\(\s*([\w.`]+)\s*\)\s*\)/i';
+
     private const BINDING_CALLS = ['fromHexToBytes', 'fromHexToBytesList'];
 
     private const RENAME = [
@@ -55,11 +65,31 @@ final class BinaryUuidToIdBindingRector extends AbstractRector
 
     public function getNodeTypes(): array
     {
-        return [StaticCall::class, ClassMethod::class, String_::class];
+        return [StaticCall::class, ClassMethod::class, String_::class, InterpolatedString::class, ClassConst::class, Const_::class, Property::class, Param::class];
     }
 
     public function refactor(Node $node): ?Node
     {
+        if ($node instanceof ClassConst || $node instanceof Const_ || $node instanceof Property || $node instanceof Param) {
+            // a constant expression cannot call IdBinding::text(), mark the strings below as untouchable
+            (new NodeTraverser(new class extends NodeVisitorAbstract {
+                public function enterNode(Node $n): ?Node
+                {
+                    if ($n instanceof String_ || $n instanceof InterpolatedString) {
+                        $n->setAttribute('idbinding_skip', true);
+                    }
+
+                    return null;
+                }
+            }))->traverse([$node]);
+
+            return null;
+        }
+
+        if (($node instanceof String_ || $node instanceof InterpolatedString) && $node->getAttribute('idbinding_skip') === true) {
+            return null;
+        }
+
         if ($node instanceof StaticCall) {
             if (!$this->isName($node->class, Uuid::class) || !$node->name instanceof Identifier) {
                 return null;
@@ -78,6 +108,10 @@ final class BinaryUuidToIdBindingRector extends AbstractRector
 
         if ($node instanceof String_) {
             return $this->rewriteSqlText($node);
+        }
+
+        if ($node instanceof InterpolatedString) {
+            return $this->rewriteInterpolatedSqlText($node);
         }
 
         if (!$node instanceof ClassMethod || !$this->bindsIds($node)) {
@@ -114,14 +148,60 @@ final class BinaryUuidToIdBindingRector extends AbstractRector
         return $changed ? $node : null;
     }
 
-    private function rewriteSqlText(String_ $node): ?Node
+    /**
+     * `"... LOWER(HEX(col)) {$x} ..."` and heredocs with interpolation: only the literal parts are split, the interpolated expressions stay where they are.
+     */
+    private function rewriteInterpolatedSqlText(InterpolatedString $node): ?Node
     {
-        $kind = $node->getAttribute('kind');
-        if ($kind === String_::KIND_HEREDOC || $kind === String_::KIND_NOWDOC) {
+        $result = null;
+        $pending = [];
+        $changed = false;
+        $flush = static function () use (&$pending, &$result): void {
+            if ($pending === []) {
+                return;
+            }
+
+            $expr = new InterpolatedString($pending);
+            $result = $result === null ? $expr : new Concat($result, $expr);
+            $pending = [];
+        };
+
+        foreach ($node->parts as $part) {
+            $split = $part instanceof InterpolatedStringPart ? preg_split(self::LOWER_HEX, $part->value, -1, \PREG_SPLIT_DELIM_CAPTURE) : false;
+            if ($split === false || \count($split) < 3) {
+                $pending[] = $part;
+
+                continue;
+            }
+
+            $changed = true;
+            foreach ($split as $i => $chunk) {
+                if ($i % 2 === 0) {
+                    if ($chunk !== '') {
+                        $pending[] = new InterpolatedStringPart($chunk);
+                    }
+
+                    continue;
+                }
+
+                $flush();
+                $text = new StaticCall(new FullyQualified(IdBinding::class), 'text', [new Arg(new String_($chunk))]);
+                $result = $result === null ? $text : new Concat($result, $text);
+            }
+        }
+
+        if (!$changed) {
             return null;
         }
 
-        $parts = preg_split('/LOWER\(\s*HEX\(\s*([\w.`]+)\s*\)\s*\)/i', $node->value, -1, \PREG_SPLIT_DELIM_CAPTURE);
+        $flush();
+
+        return $result;
+    }
+
+    private function rewriteSqlText(String_ $node): ?Node
+    {
+        $parts = preg_split(self::LOWER_HEX, $node->value, -1, \PREG_SPLIT_DELIM_CAPTURE);
         if ($parts === false || \count($parts) < 3) {
             return null;
         }

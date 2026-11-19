@@ -6,6 +6,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Shopware\Core\Content\Product\ProductDefinition;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\Field;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\Flag\PrimaryKey;
@@ -54,19 +55,19 @@ class IdFieldSerializerTest extends TestCase
         yield 'field is pk and specified' => [
             'field' => (new IdField('media_id', 'mediaId'))->addFlags(new PrimaryKey()),
             'value' => $ids->get('media-1'),
-            'expected' => $ids->getBytes('media-1'),
+            'expected' => IdBinding::value($ids->get('media-1')),
         ];
 
         yield 'field is required and specified' => [
             'field' => (new IdField('media_id', 'mediaId'))->addFlags(new Required()),
             'value' => $ids->get('media-1'),
-            'expected' => $ids->getBytes('media-1'),
+            'expected' => IdBinding::value($ids->get('media-1')),
         ];
 
         yield 'field is pk and required and specified' => [
             'field' => (new IdField('media_id', 'mediaId'))->addFlags(new PrimaryKey(), new Required()),
             'value' => $ids->get('media-1'),
-            'expected' => $ids->getBytes('media-1'),
+            'expected' => IdBinding::value($ids->get('media-1')),
         ];
 
         yield 'field is not required, nor pk (null should be accepted)' => [
@@ -89,7 +90,7 @@ class IdFieldSerializerTest extends TestCase
 
         static::assertArrayHasKey('media_id', $encoded);
 
-        static::assertTrue(Uuid::isValid(Uuid::fromBytesToHex($encoded['media_id'])));
+        static::assertTrue(Uuid::isValid(IdBinding::toHex($encoded['media_id'])));
     }
 
     public static function idShouldBeGeneratedCasesProvider(): \Generator

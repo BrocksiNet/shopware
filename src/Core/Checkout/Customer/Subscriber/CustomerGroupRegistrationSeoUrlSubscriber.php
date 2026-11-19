@@ -8,6 +8,7 @@ use Shopware\Core\Checkout\Customer\Aggregate\CustomerGroupTranslation\CustomerG
 use Shopware\Core\Content\Seo\SeoUrl\SeoUrlCollection;
 use Shopware\Core\Content\Seo\SeoUrlPersister;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Event\EntityDeletedEvent;
@@ -272,7 +273,7 @@ class CustomerGroupRegistrationSeoUrlSubscriber implements EventSubscriberInterf
             // the previous sales channel of updated (moved) and deleted domains
             $previousSalesChannelId = $writeResult->getChangeSet()?->getBefore('sales_channel_id');
             if (\is_string($previousSalesChannelId)) {
-                $previousSalesChannelId = bin2hex($previousSalesChannelId);
+                $previousSalesChannelId = IdBinding::toHex($previousSalesChannelId);
                 $salesChannelIds[$previousSalesChannelId] = $previousSalesChannelId;
                 $found = true;
             }

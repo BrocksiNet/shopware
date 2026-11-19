@@ -2,11 +2,11 @@
 
 namespace Shopware\Core\Framework\DataAbstractionLayer\Version\Cleanup;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Psr\Clock\ClockInterface;
 use Psr\Log\LoggerInterface;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\MessageQueue\ScheduledTask\ScheduledTaskCollection;
@@ -57,7 +57,7 @@ final class CleanupVersionTaskHandler extends ScheduledTaskHandler
             if ($protectedVersionIds !== []) {
                 $query .= ' AND id NOT IN (:protectedVersionIds)';
                 $parameters['protectedVersionIds'] = $protectedVersionIds;
-                $types['protectedVersionIds'] = ArrayParameterType::BINARY;
+                $types['protectedVersionIds'] = IdBinding::listType();
             }
 
             $result = $this->connection->executeStatement($query . ' LIMIT 1000', $parameters, $types);
@@ -71,7 +71,7 @@ final class CleanupVersionTaskHandler extends ScheduledTaskHandler
             if ($protectedVersionIds !== []) {
                 $query .= ' AND version_id NOT IN (:protectedVersionIds)';
                 $parameters['protectedVersionIds'] = $protectedVersionIds;
-                $types['protectedVersionIds'] = ArrayParameterType::BINARY;
+                $types['protectedVersionIds'] = IdBinding::listType();
             }
 
             $result = $this->connection->executeStatement($query . ' LIMIT 1000', $parameters, $types);
@@ -90,7 +90,7 @@ final class CleanupVersionTaskHandler extends ScheduledTaskHandler
                 continue;
             }
 
-            $protectedVersionIds[$versionId] = Uuid::fromHexToBytes($versionId);
+            $protectedVersionIds[$versionId] = IdBinding::value($versionId);
         }
 
         return array_values($protectedVersionIds);

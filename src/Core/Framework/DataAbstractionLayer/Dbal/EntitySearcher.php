@@ -4,11 +4,14 @@ namespace Shopware\Core\Framework\DataAbstractionLayer\Dbal;
 
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityDefinition;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\AutoIncrementField;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\Field;
+use Shopware\Core\Framework\DataAbstractionLayer\Field\FkField;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\Flag\PrimaryKey;
+use Shopware\Core\Framework\DataAbstractionLayer\Field\IdField;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\ReferenceVersionField;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\StorageAware;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\VersionField;
@@ -70,9 +73,16 @@ class EntitySearcher implements EntitySearcherInterface
         }
 
         foreach ($fields as $field) {
-            $query->addSelect(
-                EntityDefinitionQueryHelper::escape($table) . '.' . EntityDefinitionQueryHelper::escape($field->getStorageName())
-            );
+            $column = EntityDefinitionQueryHelper::escape($table) . '.' . EntityDefinitionQueryHelper::escape($field->getStorageName());
+
+            if ($field instanceof IdField || $field instanceof FkField) {
+                // hex text on databases without a 16 byte id, decoded by the serializer through `IdBinding::toHex()`
+                $query->addSelect(IdBinding::selectText($column) . ' as ' . EntityDefinitionQueryHelper::escape($field->getStorageName()));
+
+                continue;
+            }
+
+            $query->addSelect($column);
         }
 
         $query = $this->criteriaQueryBuilder->build($query, $definition, $criteria, $context);

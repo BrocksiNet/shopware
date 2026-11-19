@@ -5,6 +5,7 @@ namespace Shopware\Core\Content\Rule;
 use Shopware\Core\Content\Rule\Aggregate\RuleCondition\RuleConditionCollection;
 use Shopware\Core\Content\Rule\Aggregate\RuleCondition\RuleConditionDefinition;
 use Shopware\Core\Content\Rule\Aggregate\RuleCondition\RuleConditionEntity;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\App\Aggregate\AppScriptCondition\AppScriptConditionCollection;
 use Shopware\Core\Framework\App\Aggregate\AppScriptCondition\AppScriptConditionEntity;
 use Shopware\Core\Framework\Context;
@@ -21,7 +22,6 @@ use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Rule\Collector\RuleConditionRegistry;
 use Shopware\Core\Framework\Rule\Exception\InvalidConditionException;
 use Shopware\Core\Framework\Rule\ScriptRule;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\Framework\Validation\WriteConstraintViolationException;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\Validator\Constraint;
@@ -234,7 +234,7 @@ class RuleValidator implements EventSubscriberInterface
         $conditions = $this->getSavedConditions($commandQueue, $context);
 
         foreach ($commandQueue as $command) {
-            $id = Uuid::fromBytesToHex($command->getPrimaryKey()['id']);
+            $id = IdBinding::toHex($command->getPrimaryKey()['id']);
             $condition = $conditions->get($id);
 
             $this->validateCondition($condition, $command, $writeException, $context);
@@ -249,7 +249,7 @@ class RuleValidator implements EventSubscriberInterface
         $ids = array_map(static function ($command) {
             $uuidBytes = $command->getPrimaryKey()['id'];
 
-            return Uuid::fromBytesToHex($uuidBytes);
+            return IdBinding::toHex($uuidBytes);
         }, $commandQueue);
 
         $criteria = new Criteria($ids);
@@ -291,7 +291,7 @@ class RuleValidator implements EventSubscriberInterface
     ): void {
         $script = null;
         if (isset($payload['script_id'])) {
-            $scriptId = Uuid::fromBytesToHex($payload['script_id']);
+            $scriptId = IdBinding::toHex($payload['script_id']);
             $script = $this->appScriptConditionRepository->search(new Criteria([$scriptId]), $context)->getEntities()->get($scriptId);
         } elseif ($condition && $condition->getAppScriptCondition()) {
             $script = $condition->getAppScriptCondition();

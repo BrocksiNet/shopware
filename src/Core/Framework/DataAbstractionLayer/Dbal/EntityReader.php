@@ -16,6 +16,7 @@ use Shopware\Core\Framework\DataAbstractionLayer\EntityDefinition;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\AssociationField;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\ChildrenAssociationField;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\Field;
+use Shopware\Core\Framework\DataAbstractionLayer\Field\FkField;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\Flag\AsArray;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\Flag\CascadeDelete;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\Flag\Extension;
@@ -24,6 +25,7 @@ use Shopware\Core\Framework\DataAbstractionLayer\Field\Flag\PrimaryKey;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\Flag\Required;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\Flag\Runtime;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\Flag\WriteProtected;
+use Shopware\Core\Framework\DataAbstractionLayer\Field\IdField;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\JsonField;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\ManyToManyAssociationField;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\ManyToOneAssociationField;
@@ -364,7 +366,11 @@ class EntityReader implements EntityReaderInterface
                     $query->addSelect(\sprintf('%s as %s', $parentAccessor, $parentFieldAlias));
                 }
                 // add selection for resolved parent-child inheritance field
-                $query->addSelect(\sprintf('COALESCE(%s, %s) as %s', $childAccessor, $parentAccessor, $fieldAlias));
+                $query->addSelect(\sprintf(
+                    '%s as %s',
+                    self::selectColumn($field, \sprintf('COALESCE(%s, %s)', $childAccessor, $parentAccessor)),
+                    $fieldAlias
+                ));
 
                 continue;
             }
@@ -372,8 +378,7 @@ class EntityReader implements EntityReaderInterface
             // all other StorageAware fields are stored inside the main entity
             if ($field instanceof StorageAware) {
                 $query->addSelect(
-                    EntityDefinitionQueryHelper::escape($root) . '.'
-                    . EntityDefinitionQueryHelper::escape($field->getStorageName()) . ' as '
+                    self::selectColumn($field, EntityDefinitionQueryHelper::escape($root) . '.' . EntityDefinitionQueryHelper::escape($field->getStorageName())) . ' as '
                     . EntityDefinitionQueryHelper::escape($root . '.' . $field->getPropertyName())
                 );
             }
@@ -389,6 +394,18 @@ class EntityReader implements EntityReaderInterface
                 $excludedFields,
             );
         }
+    }
+
+    /**
+     * Id columns are selected as hex text where the database has no 16 byte form, so the result needs no rewrite at the connection and the hydrator reads them with `IdBinding::toHex()`.
+     */
+    private static function selectColumn(Field $field, string $accessor): string
+    {
+        if ($field instanceof IdField || $field instanceof FkField) {
+            return IdBinding::selectText($accessor);
+        }
+
+        return $accessor;
     }
 
     /**
@@ -1214,8 +1231,8 @@ class EntityReader implements EntityReaderInterface
         // create a wrapper query which select the root primary key and the grouped reference ids
         $wrapper = $this->connection->createQueryBuilder();
         $wrapper->select(
-            'LOWER(HEX(' . $root . '.id)) as id',
-            'LOWER(HEX(child.id)) as child_id',
+            IdBinding::text($root . '.id') . ' as id',
+            IdBinding::text('child.id') . ' as child_id',
         );
 
         foreach ($orderByParts as $i => $sorting) {
@@ -1247,7 +1264,7 @@ class EntityReader implements EntityReaderInterface
             }
         }
 
-        $wrapper->setParameter('rootIds', $bytes, $this->dialect()->idListParameterType());
+        $wrapper->setParameter('rootIds', $bytes, IdBinding::listType());
 
         $limit = (int) $fieldCriteria->getOffset() + (int) $fieldCriteria->getLimit();
         $offset = (int) $fieldCriteria->getOffset() + 1;

@@ -2,6 +2,7 @@
 
 namespace Shopware\Core\Framework\DataAbstractionLayer\Write;
 
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Api\Sync\SyncOperation;
 use Shopware\Core\Framework\DataAbstractionLayer\DataAbstractionLayerException;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\EntityForeignKeyResolver;
@@ -25,7 +26,6 @@ use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\WriteCommandQueue
 use Shopware\Core\Framework\DataAbstractionLayer\Write\DataStack\KeyValuePair;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Validation\RestrictDeleteViolationException;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\System\Language\LanguageLoaderInterface;
 
 /**
@@ -324,7 +324,7 @@ class EntityWriter implements EntityWriterInterface
             $isEnforced = $flag !== null ? $flag->isEnforcedByConstraint() : true;
 
             foreach ($restrictions as $key) {
-                $payload = [($affectedDefinition->getPrimaryKeys()->first()?->getPropertyName() ?? 'id') => Uuid::fromHexToBytes($key), $field => null];
+                $payload = [($affectedDefinition->getPrimaryKeys()->first()?->getPropertyName() ?? 'id') => IdBinding::value($key), $field => null];
 
                 $primary = EntityHydrator::encodePrimaryKey($affectedDefinition, ['id' => $key], $writeContext->getContext());
 
