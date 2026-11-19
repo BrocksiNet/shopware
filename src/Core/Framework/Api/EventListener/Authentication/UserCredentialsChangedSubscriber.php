@@ -5,13 +5,13 @@ namespace Shopware\Core\Framework\Api\EventListener\Authentication;
 use Doctrine\DBAL\Connection;
 use Psr\Clock\ClockInterface;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Api\OAuth\AuthCodeRepository;
 use Shopware\Core\Framework\Api\OAuth\RefreshTokenRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityWriteResult;
 use Shopware\Core\Framework\DataAbstractionLayer\Event\EntityDeletedEvent;
 use Shopware\Core\Framework\DataAbstractionLayer\Event\EntityWrittenEvent;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\System\User\UserEvents;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
@@ -75,7 +75,7 @@ class UserCredentialsChangedSubscriber implements EventSubscriberInterface
         $this->connection->update('user', [
             'last_updated_password_at' => $this->clock->now()->format(Defaults::STORAGE_DATE_TIME_FORMAT),
         ], [
-            'id' => Uuid::fromHexToBytes($userId),
+            'id' => IdBinding::value($userId),
         ]);
     }
 

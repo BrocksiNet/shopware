@@ -3,13 +3,13 @@
 namespace Shopware\Core\Framework\App\Lifecycle\Handler;
 
 use Doctrine\DBAL\Connection;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\App\Aggregate\FlowAction\AppFlowActionCollection;
 use Shopware\Core\Framework\App\Flow\Action\Action;
 use Shopware\Core\Framework\App\Lifecycle\Context\AppPersistContext;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 
 /**
  * @internal only for use by the app-system
@@ -44,8 +44,8 @@ class FlowActionLifecycleHandler extends AbstractLifecycleHandler
             return;
         }
 
-        $existingFlowActions = $this->connection->fetchAllKeyValue('SELECT name, LOWER(HEX(id)) FROM app_flow_action WHERE app_id = :appId', [
-            'appId' => Uuid::fromHexToBytes($context->app->getId()),
+        $existingFlowActions = $this->connection->fetchAllKeyValue('SELECT name, ' . IdBinding::text('id') . ' FROM app_flow_action WHERE app_id = :appId', [
+            'appId' => IdBinding::value($context->app->getId()),
         ]);
 
         $flowActions = $flowAction->getActions()?->getActions() ?? [];

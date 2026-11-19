@@ -10,6 +10,7 @@ use Shopware\Core\Content\Media\File\FileNameProvider;
 use Shopware\Core\Content\Media\File\FileSaver;
 use Shopware\Core\Content\Media\File\MediaFile;
 use Shopware\Core\Content\Media\MediaDefinition;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsFilter;
@@ -141,7 +142,7 @@ class MediaGenerator implements DemodataGeneratorInterface
     private function getIds(): array
     {
         /** @var list<string> $ids */
-        $ids = $this->connection->fetchFirstColumn('SELECT LOWER(HEX(id)) as id FROM tag LIMIT 500');
+        $ids = $this->connection->fetchFirstColumn('SELECT ' . IdBinding::text('id') . ' as id FROM tag LIMIT 500');
 
         return $ids;
     }

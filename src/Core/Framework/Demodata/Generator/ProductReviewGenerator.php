@@ -6,6 +6,7 @@ use Doctrine\DBAL\Connection;
 use Shopware\Core\Checkout\Customer\Service\ProductReviewCountService;
 use Shopware\Core\Content\Product\Aggregate\ProductReview\ProductReviewDefinition;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\EntityWriterInterface;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\WriteContext;
 use Shopware\Core\Framework\Demodata\DemodataContext;
@@ -46,7 +47,7 @@ class ProductReviewGenerator implements DemodataGeneratorInterface
 
         $customerIds = $this->getCustomerIds();
         $productIds = $this->getProductIds();
-        $salesChannelIds = $this->connection->fetchFirstColumn('SELECT LOWER(HEX(id)) FROM sales_channel');
+        $salesChannelIds = $this->connection->fetchFirstColumn('SELECT ' . IdBinding::text('id') . ' FROM sales_channel');
         if ($salesChannelIds === []) {
             throw DemodataException::wrongExecutionOrder();
         }
@@ -105,7 +106,7 @@ class ProductReviewGenerator implements DemodataGeneratorInterface
      */
     private function getCustomerIds(): array
     {
-        $sql = 'SELECT LOWER(HEX(id)) as id FROM customer LIMIT 200';
+        $sql = 'SELECT ' . IdBinding::text('id') . ' as id FROM customer LIMIT 200';
 
         $customerIds = $this->connection->fetchAllAssociative($sql);
 
@@ -117,9 +118,9 @@ class ProductReviewGenerator implements DemodataGeneratorInterface
      */
     private function getProductIds(): array
     {
-        $sql = 'SELECT LOWER(HEX(id)) as id FROM product WHERE version_id = :liveVersionId LIMIT 200';
+        $sql = 'SELECT ' . IdBinding::text('id') . ' as id FROM product WHERE version_id = :liveVersionId LIMIT 200';
 
-        $productIds = $this->connection->fetchAllAssociative($sql, ['liveVersionId' => Uuid::fromHexToBytes(Defaults::LIVE_VERSION)]);
+        $productIds = $this->connection->fetchAllAssociative($sql, ['liveVersionId' => IdBinding::value(Defaults::LIVE_VERSION)]);
 
         return array_column($productIds, 'id');
     }

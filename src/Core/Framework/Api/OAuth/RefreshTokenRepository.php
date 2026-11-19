@@ -7,6 +7,7 @@ use League\OAuth2\Server\Entities\RefreshTokenEntityInterface;
 use League\OAuth2\Server\Repositories\RefreshTokenRepositoryInterface;
 use Psr\Clock\ClockInterface;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Deprecation\BCChange\BecomesInternal;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Uuid\Uuid;
@@ -60,7 +61,7 @@ class RefreshTokenRepository implements RefreshTokenRepositoryInterface
                 ])
                 ->setParameters([
                     'id' => Uuid::randomBytes(),
-                    'userId' => Uuid::fromHexToBytes($userIdentifier),
+                    'userId' => IdBinding::value($userIdentifier),
                     'tokenId' => $refreshTokenEntity->getIdentifier(),
                     'familyId' => $familyId ?? Uuid::randomBytes(),
                     'issuedAt' => $this->clock->now()->format(Defaults::STORAGE_DATE_TIME_FORMAT),
@@ -156,8 +157,8 @@ class RefreshTokenRepository implements RefreshTokenRepositoryInterface
     {
         $this->connection->createQueryBuilder()
             ->delete('refresh_token')
-            ->where('user_id = UNHEX(:userId)')
-            ->setParameter('userId', $userId)
+            ->where('user_id = :userId')
+            ->setParameter('userId', IdBinding::value($userId), IdBinding::type())
             ->executeStatement();
     }
 

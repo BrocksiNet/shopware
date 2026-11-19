@@ -7,6 +7,7 @@ namespace Shopware\Core\Framework\Demodata\Generator;
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Content\Newsletter\Aggregate\NewsletterRecipient\NewsletterRecipientDefinition;
 use Shopware\Core\Content\Newsletter\SalesChannel\NewsletterSubscribeRoute;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\EntityWriterInterface;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\WriteContext;
 use Shopware\Core\Framework\Demodata\DemodataContext;
@@ -38,7 +39,7 @@ class NewsletterRecipientGenerator implements DemodataGeneratorInterface
     {
         $context->getConsole()->progressStart($numberOfItems);
 
-        $salesChannelIds = $this->connection->fetchFirstColumn('SELECT LOWER(HEX(id)) FROM sales_channel');
+        $salesChannelIds = $this->connection->fetchFirstColumn('SELECT ' . IdBinding::text('id') . ' FROM sales_channel');
         if ($salesChannelIds === []) {
             throw DemodataException::wrongExecutionOrder();
         }

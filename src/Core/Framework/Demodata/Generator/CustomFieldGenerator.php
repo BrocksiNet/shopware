@@ -4,6 +4,7 @@ namespace Shopware\Core\Framework\Demodata\Generator;
 
 use Doctrine\DBAL\Connection;
 use Faker\Generator;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\DefinitionInstanceRegistry;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\Demodata\DemodataContext;
@@ -218,7 +219,7 @@ class CustomFieldGenerator implements DemodataGeneratorInterface
         $repo = $this->definitionRegistry->getRepository($entityName);
 
         $ids = $this->connection->fetchFirstColumn(
-            \sprintf('SELECT LOWER(HEX(id)) FROM `%s` ORDER BY rand() LIMIT %d', $entityName, $count)
+            \sprintf('SELECT ' . IdBinding::text('id') . ' FROM `%s` ORDER BY rand() LIMIT %d', $entityName, $count)
         );
 
         $chunkSize = 50;

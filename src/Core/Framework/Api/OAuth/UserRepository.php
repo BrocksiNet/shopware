@@ -6,11 +6,11 @@ use Doctrine\DBAL\Connection;
 use League\OAuth2\Server\Entities\ClientEntityInterface;
 use League\OAuth2\Server\Entities\UserEntityInterface;
 use League\OAuth2\Server\Repositories\UserRepositoryInterface;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Api\OAuth\User\User;
 use Shopware\Core\Framework\Deprecation\BCChange\BecomesInternal;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Sso\Config\LoginConfigService;
-use Shopware\Core\Framework\Uuid\Uuid;
 
 /**
  * OAuth integrations should rely on {@see UserRepositoryInterface} instead of this concrete Shopware class.
@@ -66,6 +66,9 @@ class UserRepository implements UserRepositoryInterface
             return null;
         }
 
-        return new User(Uuid::fromBytesToHex($user['id']));
+        /** @var non-empty-string $userId */
+        $userId = IdBinding::toHex($user['id']);
+
+        return new User($userId);
     }
 }

@@ -3,6 +3,7 @@
 namespace Shopware\Core\Framework\App\Lifecycle\Handler;
 
 use Doctrine\DBAL\Connection;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\App\Aggregate\FlowEvent\AppFlowEventCollection;
 use Shopware\Core\Framework\App\Flow\Event\Event;
 use Shopware\Core\Framework\App\Lifecycle\Context\AppActivationContext;
@@ -11,7 +12,6 @@ use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Util\Filesystem;
-use Shopware\Core\Framework\Uuid\Uuid;
 
 /**
  * @internal only for use by the app-system
@@ -43,15 +43,15 @@ class FlowEventLifecycleHandler extends AbstractLifecycleHandler
         $this->connection->executeStatement(
             'UPDATE `flow` SET `active` = false WHERE `event_name` IN (SELECT `name` FROM `app_flow_event` WHERE `app_id` = :appId);',
             [
-                'appId' => Uuid::fromHexToBytes($context->app->getId()),
+                'appId' => IdBinding::value($context->app->getId()),
             ],
         );
     }
 
     public function updateEvents(Event $flowEvent, string $appId, Context $context, string $defaultLocale): void
     {
-        $existingFlowEvents = $this->connection->fetchAllKeyValue('SELECT name, LOWER(HEX(id)) FROM app_flow_event WHERE app_id = :appId;', [
-            'appId' => Uuid::fromHexToBytes($appId),
+        $existingFlowEvents = $this->connection->fetchAllKeyValue('SELECT name, ' . IdBinding::text('id') . ' FROM app_flow_event WHERE app_id = :appId;', [
+            'appId' => IdBinding::value($appId),
         ]);
 
         $flowEvents = $flowEvent->getCustomEvents()?->getCustomEvents() ?? [];

@@ -8,6 +8,7 @@ use Shopware\Core\Content\Product\Aggregate\ProductVisibility\ProductVisibilityD
 use Shopware\Core\Content\Product\DataAbstractionLayer\StatesUpdater;
 use Shopware\Core\Content\Product\ProductDefinition;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\DefinitionInstanceRegistry;
 use Shopware\Core\Framework\DataAbstractionLayer\Indexing\EntityIndexerRegistry;
@@ -375,7 +376,7 @@ class ProductGenerator implements DemodataGeneratorInterface
      */
     private function getProperties(): array
     {
-        $options = $this->connection->fetchAllAssociative('SELECT LOWER(HEX(id)) as id, LOWER(HEX(property_group_id)) as property_group_id FROM property_group_option LIMIT 5000');
+        $options = $this->connection->fetchAllAssociative('SELECT ' . IdBinding::text('id') . ' as id, ' . IdBinding::text('property_group_id') . ' as property_group_id FROM property_group_option LIMIT 5000');
 
         $grouped = [];
         foreach ($options as $option) {
@@ -390,7 +391,7 @@ class ProductGenerator implements DemodataGeneratorInterface
      */
     private function buildVisibilities(): array
     {
-        $ids = $this->connection->fetchAllAssociative('SELECT LOWER(HEX(id)) as id FROM sales_channel LIMIT 100');
+        $ids = $this->connection->fetchAllAssociative('SELECT ' . IdBinding::text('id') . ' as id FROM sales_channel LIMIT 100');
 
         return array_map(static fn ($id) => ['salesChannelId' => $id['id'], 'visibility' => ProductVisibilityDefinition::VISIBILITY_ALL], $ids);
     }
@@ -414,7 +415,7 @@ class ProductGenerator implements DemodataGeneratorInterface
      */
     private function getIds(string $table): array
     {
-        return $this->connection->fetchFirstColumn('SELECT LOWER(HEX(id)) as id FROM ' . $table . ' LIMIT 500');
+        return $this->connection->fetchFirstColumn('SELECT ' . IdBinding::text('id') . ' as id FROM ' . $table . ' LIMIT 500');
     }
 
     /**
@@ -424,7 +425,7 @@ class ProductGenerator implements DemodataGeneratorInterface
     {
         /** @var list<array{id: string}> $result */
         $result = $this->connection->fetchAllAssociative('
-            SELECT LOWER(HEX(category.id)) as id
+            SELECT ' . IdBinding::text('category.id') . ' as id
             FROM category
              LEFT JOIN product_category pc
                ON pc.category_id = category.id
@@ -455,7 +456,7 @@ class ProductGenerator implements DemodataGeneratorInterface
 
     private function getInstantDeliveryId(): ?string
     {
-        $id = $this->connection->fetchOne('SELECT LOWER(HEX(delivery_time_id)) FROM delivery_time_translation WHERE `name` = "Instant download" LIMIT 1');
+        $id = $this->connection->fetchOne('SELECT ' . IdBinding::text('delivery_time_id') . ' FROM delivery_time_translation WHERE `name` = "Instant download" LIMIT 1');
 
         return \is_string($id) ? $id : null;
     }

@@ -7,6 +7,7 @@ use Faker\Generator;
 use Shopware\Core\Content\Category\CategoryCollection;
 use Shopware\Core\Content\Category\CategoryDefinition;
 use Shopware\Core\Content\Cms\CmsPageCollection;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Indexing\EntityIndexerRegistry;
@@ -141,7 +142,7 @@ class CategoryGenerator implements DemodataGeneratorInterface
      */
     private function getIds(string $table): array
     {
-        return $this->connection->fetchFirstColumn('SELECT LOWER(HEX(id)) as id FROM ' . $table . ' LIMIT 500');
+        return $this->connection->fetchFirstColumn('SELECT ' . IdBinding::text('id') . ' as id FROM ' . $table . ' LIMIT 500');
     }
 
     private function randomDepartment(Generator $faker, int $max = 3, bool $fixedAmount = false, bool $unique = true): string

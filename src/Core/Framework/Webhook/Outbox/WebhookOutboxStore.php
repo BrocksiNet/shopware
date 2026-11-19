@@ -8,6 +8,7 @@ use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\DBAL\Types\Types;
 use Psr\Clock\ClockInterface;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\RetryableTransaction;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Uuid\Uuid;
@@ -62,7 +63,7 @@ class WebhookOutboxStore
     public function backfillDelivery(OutboxInsert $insert): ?OutboxEntry
     {
         return RetryableTransaction::retryable($this->connection, function () use ($insert): ?OutboxEntry {
-            $eventLogId = Uuid::fromHexToBytes($insert->webhookEventId);
+            $eventLogId = IdBinding::value($insert->webhookEventId);
 
             if ($this->hasDeliveryRow($insert->webhookEventId)) {
                 return null;
@@ -144,7 +145,7 @@ class WebhookOutboxStore
 
         return array_map(
             static fn (array $row) => new OutboxEntry(
-                webhookEventId: Uuid::fromBytesToHex($row['webhook_event_log_id']),
+                webhookEventId: IdBinding::toHex($row['webhook_event_log_id']),
                 sequence: (int) $row['id'],
                 executionCount: (int) $row['execution_count'],
                 deliveryStatus: (string) $row['delivery_status'],
@@ -158,7 +159,7 @@ class WebhookOutboxStore
     {
         return (bool) $this->connection->fetchOne(
             'SELECT 1 FROM webhook_delivery WHERE webhook_event_log_id = :id',
-            ['id' => Uuid::fromHexToBytes($eventLogId)]
+            ['id' => IdBinding::value($eventLogId)]
         );
     }
 
@@ -171,7 +172,7 @@ class WebhookOutboxStore
     public function markRunning(string $eventLogId): ?OutboxEntry
     {
         $now = $this->clock->now();
-        $id = Uuid::fromHexToBytes($eventLogId);
+        $id = IdBinding::value($eventLogId);
         $nowFormatted = $now->format(Defaults::STORAGE_DATE_TIME_FORMAT);
 
         $affected = RetryableTransaction::retryable($this->connection, function () use ($id, $now, $nowFormatted): int {
@@ -268,7 +269,7 @@ class WebhookOutboxStore
                     'status' => WebhookEventLogDefinition::STATUS_PENDING_RETRY,
                     'nextRetryAt' => $retryAt->format(Defaults::STORAGE_DATE_TIME_FORMAT),
                     'now' => $this->clock->now()->format(Defaults::STORAGE_DATE_TIME_FORMAT),
-                    'id' => Uuid::fromHexToBytes($entry->webhookEventId),
+                    'id' => IdBinding::value($entry->webhookEventId),
                 ]
             );
 
@@ -298,7 +299,7 @@ class WebhookOutboxStore
                 [
                     'status' => WebhookEventLogDefinition::STATUS_QUEUED,
                     'now' => $this->clock->now()->format(Defaults::STORAGE_DATE_TIME_FORMAT),
-                    'id' => Uuid::fromHexToBytes($entry->webhookEventId),
+                    'id' => IdBinding::value($entry->webhookEventId),
                 ]
             );
 
@@ -347,7 +348,7 @@ class WebhookOutboxStore
     public function markFailedAfterRetryExhaustedIfIdle(string $eventLogId): bool
     {
         return RetryableTransaction::retryable($this->connection, function () use ($eventLogId): bool {
-            $id = Uuid::fromHexToBytes($eventLogId);
+            $id = IdBinding::value($eventLogId);
 
             $delivery = $this->connection->fetchAssociative(
                 'SELECT delivery_status, next_retry_at FROM webhook_delivery WHERE webhook_event_log_id = :id FOR UPDATE',
@@ -390,7 +391,7 @@ class WebhookOutboxStore
                    AND delivery_status IN (:queuedStatus, :pendingRetryStatus)
                  FOR UPDATE',
                 [
-                    'id' => Uuid::fromHexToBytes($entry->webhookEventId),
+                    'id' => IdBinding::value($entry->webhookEventId),
                     'sequence' => $entry->sequence,
                     'executionCount' => $entry->executionCount,
                     'queuedStatus' => WebhookEventLogDefinition::STATUS_QUEUED,
@@ -465,7 +466,7 @@ class WebhookOutboxStore
     {
         // an old message before the rework, would have only an event_log record. We need to handle that gracefully.
         return RetryableTransaction::retryable($this->connection, function () use ($insert, $initialStatus): ?OutboxEntry {
-            $eventLogId = Uuid::fromHexToBytes($insert->webhookEventId);
+            $eventLogId = IdBinding::value($insert->webhookEventId);
 
             try {
                 // own savepoint: PostgreSQL aborts the whole transaction after a failed statement, MySQL does not
@@ -491,7 +492,7 @@ class WebhookOutboxStore
 
         $webhookId = $this->connection->fetchOne(
             'SELECT id FROM webhook WHERE id = :webhookId',
-            ['webhookId' => Uuid::fromHexToBytes($insert->webhookId)]
+            ['webhookId' => IdBinding::value($insert->webhookId)]
         );
 
         $this->connection->insert('webhook_delivery', [
@@ -537,7 +538,7 @@ class WebhookOutboxStore
      */
     private function updateEventLog(string $eventLogId, string $status, ?DeliveryResponse $response): bool
     {
-        $id = Uuid::fromHexToBytes($eventLogId);
+        $id = IdBinding::value($eventLogId);
 
         if ($response === null) {
             $affected = (int) $this->connection->executeStatement(
@@ -598,7 +599,7 @@ class WebhookOutboxStore
                AND delivery_status = :status
              FOR UPDATE',
             [
-                'id' => Uuid::fromHexToBytes($entry->webhookEventId),
+                'id' => IdBinding::value($entry->webhookEventId),
                 'sequence' => $entry->sequence,
                 'executionCount' => $entry->executionCount,
                 'status' => WebhookEventLogDefinition::STATUS_RUNNING,
@@ -614,7 +615,7 @@ class WebhookOutboxStore
     {
         $this->connection->executeStatement(
             'DELETE FROM webhook_delivery WHERE webhook_event_log_id = :id',
-            ['id' => Uuid::fromHexToBytes($eventLogId)]
+            ['id' => IdBinding::value($eventLogId)]
         );
     }
 
@@ -650,7 +651,7 @@ class WebhookOutboxStore
                 'status' => $status,
                 'createdAt' => $createdAt,
                 'serializedMessage' => $serializedMessage,
-                'webhookId' => Uuid::fromHexToBytes($webhookId),
+                'webhookId' => IdBinding::value($webhookId),
             ]
         );
 

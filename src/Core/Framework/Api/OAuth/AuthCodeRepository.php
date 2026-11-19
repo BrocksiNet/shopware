@@ -7,6 +7,7 @@ use League\OAuth2\Server\Entities\AuthCodeEntityInterface;
 use League\OAuth2\Server\Repositories\AuthCodeRepositoryInterface;
 use Psr\Clock\ClockInterface;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Uuid\Uuid;
 
@@ -44,7 +45,7 @@ class AuthCodeRepository implements AuthCodeRepositoryInterface
         $this->connection->insert('oauth_auth_code', [
             'id' => Uuid::randomBytes(),
             'code_id' => $authCodeEntity->getIdentifier(),
-            'user_id' => Uuid::fromHexToBytes($userIdentifier),
+            'user_id' => IdBinding::value($userIdentifier),
             'client_id' => $authCodeEntity->getClient()->getIdentifier(),
             'issued_at' => $this->clock->now()->format(Defaults::STORAGE_DATE_TIME_FORMAT),
             'expires_at' => $authCodeEntity->getExpiryDateTime()->format(Defaults::STORAGE_DATE_TIME_FORMAT),
@@ -92,7 +93,7 @@ class AuthCodeRepository implements AuthCodeRepositoryInterface
 
     public function revokeAuthCodesForUser(string $userId): void
     {
-        $this->connection->delete('oauth_auth_code', ['user_id' => Uuid::fromHexToBytes($userId)]);
+        $this->connection->delete('oauth_auth_code', ['user_id' => IdBinding::value($userId)]);
     }
 
     private function cleanUpExpiredAuthCodes(): void

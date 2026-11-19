@@ -3,9 +3,9 @@
 namespace Shopware\Core\Framework\Webhook\Service;
 
 use Doctrine\DBAL\Connection;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\App\DeletedApps\DeletedAppsGateway;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\Framework\Webhook\Message\WebhookEventMessage;
 
 /**
@@ -43,7 +43,7 @@ class WebhookSigningSecretResolver
     {
         $secret = $this->connection->fetchOne(
             'SELECT `app_secret` FROM `app` WHERE `id` = :id',
-            ['id' => Uuid::fromHexToBytes($appId)]
+            ['id' => IdBinding::value($appId)]
         );
 
         return \is_string($secret) ? $this->emptyToNull($secret) : null;

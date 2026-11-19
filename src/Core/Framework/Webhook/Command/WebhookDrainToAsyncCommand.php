@@ -6,9 +6,9 @@ use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Types\Types;
 use Psr\Log\LoggerInterface;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Feature;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\Framework\Webhook\EventLog\WebhookEventLogDefinition;
 use Shopware\Core\Framework\Webhook\Message\WebhookEventMessage;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -188,7 +188,7 @@ final readonly class WebhookDrainToAsyncCommand
 
         if (!$message instanceof WebhookEventMessage) {
             $this->logger->warning('webhook:drain-to-async: failed to unserialize message; marking event log failed', [
-                'webhookEventId' => Uuid::fromBytesToHex($eventLogId),
+                'webhookEventId' => IdBinding::toHex($eventLogId),
             ]);
             $this->markUnrecoverable($eventLogId);
 

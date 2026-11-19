@@ -2,11 +2,11 @@
 
 namespace Shopware\Core\Framework\Webhook\Authorization;
 
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Api\Acl\ApiCaller;
 use Shopware\Core\Framework\Api\Context\AdminApiSource;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Util\Json;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\Framework\Webhook\Authorization\Subscription\SubscriberType;
 
 /**
@@ -51,9 +51,9 @@ final readonly class WebhookSubscription
         };
 
         return new self(
-            Uuid::fromBytesToHex($row['id']),
+            IdBinding::toHex($row['id']),
             $ownerType,
-            Uuid::fromBytesToHex($ownerId),
+            IdBinding::toHex($ownerId),
             $row['event_name'],
             $row['acl_role_ids'] !== null ? Json::decodeToList($row['acl_role_ids']) : null,
         );

@@ -5,6 +5,7 @@ namespace Shopware\Core\Framework\Sso\UserService;
 use Doctrine\DBAL\Connection;
 use Psr\Clock\ClockInterface;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
@@ -111,7 +112,7 @@ final readonly class UserService
             ->update('oauth_user')
             ->set('token', ':token')
             ->where('user_id = :userId')
-            ->setParameter('userId', Uuid::fromHexToBytes($userId))
+            ->setParameter('userId', IdBinding::value($userId))
             ->setParameter('token', null)
             ->executeStatement();
     }
@@ -123,7 +124,7 @@ final readonly class UserService
             ->from('oauth_user', 'oauth_user')
             ->join('oauth_user', 'user', 'user', 'oauth_user.user_id = user.id')
             ->where('oauth_user.user_id = :userId')
-            ->setParameter('userId', Uuid::fromHexToBytes($userId))
+            ->setParameter('userId', IdBinding::value($userId))
             ->executeQuery()
             ->fetchAssociative();
 
@@ -159,7 +160,7 @@ final readonly class UserService
                 'expiry' => $userSearchResult->expiry->format(Defaults::STORAGE_DATE_TIME_FORMAT),
                 'updated_at' => $this->clock->now()->format(Defaults::STORAGE_DATE_TIME_FORMAT),
             ],
-            ['id' => Uuid::fromHexToBytes($userSearchResult->id)]
+            ['id' => IdBinding::value($userSearchResult->id)]
         );
     }
 
@@ -199,7 +200,7 @@ final readonly class UserService
             'oauth_user',
             [
                 'id' => Uuid::randomBytes(),
-                'user_id' => Uuid::fromHexToBytes($userSearchResult->userId),
+                'user_id' => IdBinding::value($userSearchResult->userId),
                 'user_sub' => $userSearchResult->sub,
                 'token' => \json_encode($userSearchResult->token, \JSON_THROW_ON_ERROR),
                 'expiry' => $userSearchResult->expiry->format(Defaults::STORAGE_DATE_TIME_FORMAT),

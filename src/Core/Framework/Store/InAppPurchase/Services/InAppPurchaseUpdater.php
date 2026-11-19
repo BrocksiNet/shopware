@@ -5,6 +5,7 @@ namespace Shopware\Core\Framework\Store\InAppPurchase\Services;
 use Doctrine\DBAL\Connection;
 use GuzzleHttp\ClientInterface;
 use Psr\Log\LoggerInterface;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Store\Authentication\AbstractStoreRequestOptionsProvider;
@@ -96,7 +97,7 @@ class InAppPurchaseUpdater
     private function fetchAppList(): array
     {
         return $this->connection->fetchAllKeyValue('
-            SELECT `name`, LOWER(HEX(`id`)) AS `id`
+            SELECT `name`, ' . IdBinding::text('`id`') . ' AS `id`
             FROM `app`
             WHERE `active` = 1');
     }

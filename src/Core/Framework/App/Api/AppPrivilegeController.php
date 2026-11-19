@@ -3,6 +3,7 @@
 namespace Shopware\Core\Framework\App\Api;
 
 use Doctrine\DBAL\Connection;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Api\Context\AdminApiSource;
 use Shopware\Core\Framework\App\AppException;
 use Shopware\Core\Framework\App\Privileges\Privileges;
@@ -100,7 +101,7 @@ class AppPrivilegeController
 
     private function fetchAppId(string $appName): string
     {
-        $id = $this->connection->fetchOne('SELECT LOWER(HEX(id)) FROM app WHERE name = ?', [$appName]);
+        $id = $this->connection->fetchOne('SELECT ' . IdBinding::text('id') . ' FROM app WHERE name = ?', [$appName]);
 
         if (!$id) {
             throw AppException::notFoundByField($appName, 'name');

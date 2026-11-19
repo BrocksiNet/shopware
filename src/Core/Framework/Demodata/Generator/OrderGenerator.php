@@ -13,6 +13,7 @@ use Shopware\Core\Checkout\Cart\SalesChannel\CartService;
 use Shopware\Core\Checkout\Order\OrderDefinition;
 use Shopware\Core\Checkout\Promotion\Cart\PromotionItemBuilder;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\EntityWriterInterface;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\WriteContext;
 use Shopware\Core\Framework\Demodata\DemodataContext;
@@ -60,15 +61,15 @@ class OrderGenerator implements DemodataGeneratorInterface
     public function generate(int $numberOfItems, DemodataContext $context, array $options = []): void
     {
         $this->faker = $context->getFaker();
-        $salesChannelIds = $this->connection->fetchFirstColumn('SELECT LOWER(HEX(id)) FROM sales_channel');
+        $salesChannelIds = $this->connection->fetchFirstColumn('SELECT ' . IdBinding::text('id') . ' FROM sales_channel');
         if ($salesChannelIds === []) {
             throw DemodataException::wrongExecutionOrder();
         }
 
-        $paymentMethodIds = $this->connection->fetchFirstColumn('SELECT LOWER(HEX(id)) FROM payment_method');
-        $productIds = $this->connection->fetchFirstColumn('SELECT LOWER(HEX(id)) as id FROM `product` ORDER BY RAND() LIMIT 1000');
+        $paymentMethodIds = $this->connection->fetchFirstColumn('SELECT ' . IdBinding::text('id') . ' FROM payment_method');
+        $productIds = $this->connection->fetchFirstColumn('SELECT ' . IdBinding::text('id') . ' as id FROM `product` ORDER BY RAND() LIMIT 1000');
         $promotionCodes = $this->connection->fetchFirstColumn('SELECT `code` FROM `promotion` ORDER BY RAND() LIMIT 1000');
-        $customerIds = $this->connection->fetchFirstColumn('SELECT LOWER(HEX(id)) as id FROM customer LIMIT 10');
+        $customerIds = $this->connection->fetchFirstColumn('SELECT ' . IdBinding::text('id') . ' as id FROM customer LIMIT 10');
         $tags = $this->getTagIds();
         $writeContext = WriteContext::createFromContext($context->getContext());
 
@@ -164,7 +165,7 @@ class OrderGenerator implements DemodataGeneratorInterface
      */
     private function getTagIds(): array
     {
-        return $this->connection->fetchFirstColumn('SELECT LOWER(HEX(id)) as id FROM tag LIMIT 500');
+        return $this->connection->fetchFirstColumn('SELECT ' . IdBinding::text('id') . ' as id FROM tag LIMIT 500');
     }
 
     /**

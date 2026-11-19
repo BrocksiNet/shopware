@@ -9,6 +9,7 @@ use Lcobucci\JWT\UnencryptedToken;
 use Lcobucci\JWT\Validation\RequiredConstraintsViolated;
 use League\OAuth2\Server\Exception\OAuthServerException;
 use League\OAuth2\Server\Repositories\AccessTokenRepositoryInterface;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Api\ApiException;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Uuid\Uuid;
@@ -110,7 +111,7 @@ readonly class SymfonyBearerTokenValidator
             ->select('last_updated_password_at', 'active')
             ->from('user')
             ->where('id = :userId')
-            ->setParameter('userId', Uuid::fromHexToBytes($userId))
+            ->setParameter('userId', IdBinding::value($userId))
             ->executeQuery()
             ->fetchAssociative();
 

@@ -4,12 +4,12 @@ namespace Shopware\Core\Framework\App\Privileges;
 
 use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\App\AppException;
 use Shopware\Core\Framework\App\Event\AppPermissionsUpdated;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\RetryableTransaction;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
 /**
@@ -138,12 +138,10 @@ class Privileges
     {
         /** @var array<string, string> $privileges */
         $privileges = $this->connection->fetchAllKeyValue(
-            <<<'SQL'
-                SELECT LOWER(HEX(app.id)) AS app_id, requested_privileges
-                FROM app
-                WHERE id IN (:ids)
-            SQL,
-            ['ids' => Uuid::fromHexToBytesList($appIds)],
+            '    SELECT ' . IdBinding::text('app.id') . ' AS app_id, requested_privileges
+    FROM app
+    WHERE id IN (:ids)',
+            ['ids' => IdBinding::values($appIds)],
             ['ids' => ArrayParameterType::STRING]
         );
 
@@ -159,7 +157,7 @@ class Privileges
             'UPDATE `acl_role` SET `privileges` = :privileges WHERE id = (SELECT acl_role_id FROM app WHERE id = :id)',
             [
                 'privileges' => json_encode($privileges, \JSON_THROW_ON_ERROR),
-                'id' => Uuid::fromHexToBytes($appId),
+                'id' => IdBinding::value($appId),
             ]
         );
 
@@ -173,7 +171,7 @@ class Privileges
     {
         $existingPrivileges = $this->connection->fetchOne(
             'SELECT privileges FROM `acl_role` WHERE id = (SELECT acl_role_id FROM app WHERE id = :id)',
-            ['id' => Uuid::fromHexToBytes($appId)]
+            ['id' => IdBinding::value($appId)]
         );
 
         $existingPrivileges = json_decode($existingPrivileges, true, flags: \JSON_THROW_ON_ERROR);
@@ -219,13 +217,11 @@ class Privileges
     {
         /** @var array<string, array{privileges: string, requested_privileges: string}> $privileges */
         $privileges = $this->connection->fetchAllAssociativeIndexed(
-            <<<'SQL'
-                SELECT LOWER(HEX(a.id)), privileges, requested_privileges
-                FROM `acl_role` r
-                INNER JOIN `app` a ON a.acl_role_id = r.id
-                WHERE a.id IN (:appIds)
-            SQL,
-            ['appIds' => Uuid::fromHexToBytesList($appIds)],
+            '    SELECT ' . IdBinding::text('a.id') . ', privileges, requested_privileges
+    FROM `acl_role` r
+    INNER JOIN `app` a ON a.acl_role_id = r.id
+    WHERE a.id IN (:appIds)',
+            ['appIds' => IdBinding::values($appIds)],
             ['appIds' => ArrayParameterType::STRING]
         );
 
@@ -252,7 +248,7 @@ class Privileges
             SQL,
                     [
                         'privileges' => json_encode($privileges, \JSON_THROW_ON_ERROR),
-                        'id' => Uuid::fromHexToBytes($appId),
+                        'id' => IdBinding::value($appId),
                     ]
                 );
 
@@ -264,7 +260,7 @@ class Privileges
             SQL,
                     [
                         'requestedPrivileges' => json_encode($requestedPrivileges, \JSON_THROW_ON_ERROR),
-                        'id' => Uuid::fromHexToBytes($appId),
+                        'id' => IdBinding::value($appId),
                     ]
                 );
             }

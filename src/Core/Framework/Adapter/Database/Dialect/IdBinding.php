@@ -102,6 +102,8 @@ final class IdBinding
 
     /**
      * Id as read from a column: 16 bytes, uuid text with dashes or hex text, returned as lower case 32 character hex.
+     *
+     * @return ($id is non-empty-string ? non-empty-string : string)
      */
     public static function toHex(string $id): string
     {

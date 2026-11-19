@@ -2,12 +2,12 @@
 
 namespace Shopware\Core\Framework\Webhook\Authorization\Ownership;
 
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Api\Acl\ApiCaller;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\InsertCommand;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\WriteCommand;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Validation\PreWriteValidationEvent;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\Framework\Webhook\WebhookDefinition;
 use Shopware\Core\Framework\Webhook\WebhookException;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
@@ -40,7 +40,7 @@ class RecordOwnerSubscriber implements EventSubscriberInterface
 
         foreach ($inserts as $insert) {
             if ($owner !== null) {
-                $insert->addPayload(self::ownerColumn($owner), Uuid::fromHexToBytes($owner->id));
+                $insert->addPayload(self::ownerColumn($owner), IdBinding::value($owner->id));
 
                 continue;
             }

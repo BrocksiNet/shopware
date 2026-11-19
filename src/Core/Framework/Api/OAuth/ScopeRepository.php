@@ -10,6 +10,7 @@ use League\OAuth2\Server\Grant\ClientCredentialsGrant;
 use League\OAuth2\Server\Grant\PasswordGrant;
 use League\OAuth2\Server\Grant\RefreshTokenGrant;
 use League\OAuth2\Server\Repositories\ScopeRepositoryInterface;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Api\OAuth\Client\ApiClient;
 use Shopware\Core\Framework\Api\OAuth\Scope\AdminScope;
 use Shopware\Core\Framework\Api\OAuth\Scope\UserVerifiedScope;
@@ -118,8 +119,8 @@ class ScopeRepository implements ScopeRepositoryInterface
         $isAdmin = $this->connection->createQueryBuilder()
             ->select('admin')
             ->from('user')
-            ->where('id = UNHEX(:accessKey)')
-            ->setParameter('accessKey', $userIdentifier)
+            ->where('id = :accessKey')
+            ->setParameter('accessKey', $userIdentifier !== null ? IdBinding::value($userIdentifier) : null, IdBinding::type())
             ->setMaxResults(1)
             ->executeQuery()
             ->fetchOne();

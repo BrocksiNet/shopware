@@ -5,11 +5,11 @@ namespace Shopware\Core\Framework\App\Lifecycle;
 use Doctrine\DBAL\Connection;
 use Psr\Clock\ClockInterface;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\App\Manifest\Xml\Permission\Permissions;
 use Shopware\Core\Framework\App\Privileges\Privileges;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 
 /**
  * @internal only for use by the app-system
@@ -48,7 +48,7 @@ class PermissionLifecycleService
         $this->connection->executeStatement(
             'DELETE FROM `acl_role` WHERE id = :id',
             [
-                'id' => Uuid::fromHexToBytes($roleId),
+                'id' => IdBinding::value($roleId),
             ]
         );
     }
@@ -58,7 +58,7 @@ class PermissionLifecycleService
         $this->connection->executeStatement(
             'UPDATE `acl_role` SET `deleted_at` = :datetime WHERE id = :id',
             [
-                'id' => Uuid::fromHexToBytes($roleId),
+                'id' => IdBinding::value($roleId),
                 'datetime' => $this->clock->now()->format(Defaults::STORAGE_DATE_TIME_FORMAT),
             ]
         );

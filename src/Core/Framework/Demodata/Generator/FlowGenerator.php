@@ -19,6 +19,7 @@ use Shopware\Core\Content\Flow\Dispatching\Action\RemoveOrderTagAction;
 use Shopware\Core\Content\Flow\Dispatching\Action\SendMailAction;
 use Shopware\Core\Content\Flow\Dispatching\Action\SetOrderStateAction;
 use Shopware\Core\Content\Flow\FlowDefinition;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\DefinitionInstanceRegistry;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
@@ -320,7 +321,7 @@ class FlowGenerator implements DemodataGeneratorInterface
             return $this->ids[$table];
         }
 
-        $ids = $this->connection->fetchFirstColumn('SELECT LOWER(HEX(id)) as id FROM ' . $table . ' LIMIT 500');
+        $ids = $this->connection->fetchFirstColumn('SELECT ' . IdBinding::text('id') . ' as id FROM ' . $table . ' LIMIT 500');
 
         return $this->ids[$table] = $ids;
     }
@@ -335,7 +336,7 @@ class FlowGenerator implements DemodataGeneratorInterface
         }
 
         /** @var non-empty-array<string, array{id: string}> $result */
-        $result = $this->connection->fetchAllKeyValue('SELECT LOWER(HEX(id)), name as id FROM tag LIMIT 500');
+        $result = $this->connection->fetchAllKeyValue('SELECT ' . IdBinding::text('id') . ', name as id FROM tag LIMIT 500');
 
         return $this->tags = $result;
     }

@@ -3,6 +3,7 @@
 namespace Shopware\Core\Framework\Mcp\AllowList;
 
 use Doctrine\DBAL\Connection;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Api\Util\AccessKeyHelper;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Uuid\Uuid;
@@ -128,7 +129,7 @@ class McpAllowlistProvider
     {
         $row = $this->connection->fetchAssociative(
             'SELECT `mcp_allowlist`, `admin` FROM `user` WHERE `id` = :id AND `active` = 1',
-            ['id' => Uuid::fromHexToBytes($userId)],
+            ['id' => IdBinding::value($userId)],
         );
 
         // Unknown or inactive: not a verified administrator, so no bypass.
@@ -155,7 +156,7 @@ class McpAllowlistProvider
             return McpAllowlist::blocked();
         }
 
-        return $this->forUserId(Uuid::fromBytesToHex($userId));
+        return $this->forUserId(IdBinding::toHex($userId));
     }
 
     private function fromAllowlist(McpAllowlist $allowlist): McpAllowlist

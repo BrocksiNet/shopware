@@ -5,6 +5,7 @@ namespace Shopware\Core\Framework\Script\Execution;
 use Doctrine\DBAL\Connection;
 use Shopware\Core\DevOps\Environment\EnvironmentHelper;
 use Shopware\Core\Framework\Adapter\Cache\CacheCompressor;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\App\Lifecycle\Handler\ScriptLifecycleHandler;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Util\Hasher;
@@ -120,13 +121,13 @@ class ScriptLoader implements EventSubscriberInterface, ResetInterface
 
         /** @var list<ScriptInfo> $scripts */
         $scripts = $this->connection->fetchAllAssociative('
-            SELECT LOWER(HEX(`script`.`app_id`)) as `app_id`,
+            SELECT ' . IdBinding::text('`script`.`app_id`') . ' as `app_id`,
                    `script`.`name` AS scriptName,
                    `script`.`script` AS script,
                    `script`.`hook` AS hook,
                    `app`.`name` AS appName,
                    `app`.`version` AS appVersion,
-                   LOWER(HEX(`app`.`integration_id`)) AS integrationId,
+                   ' . IdBinding::text('`app`.`integration_id`') . ' AS integrationId,
                    IFNULL(`script`.`updated_at`, `script`.`created_at`) AS lastModified,
                    IF(`script`.`active` = 1 AND (`app`.id IS NULL OR `app`.`active` = 1), 1, 0) AS active
             FROM `script`

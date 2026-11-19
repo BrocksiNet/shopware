@@ -6,6 +6,7 @@ use Doctrine\DBAL\Connection;
 use Faker\Generator;
 use Shopware\Core\Checkout\Promotion\Aggregate\PromotionDiscount\PromotionDiscountEntity;
 use Shopware\Core\Checkout\Promotion\PromotionDefinition;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\DefinitionInstanceRegistry;
 use Shopware\Core\Framework\DataAbstractionLayer\Indexing\EntityIndexerRegistry;
@@ -138,7 +139,7 @@ class PromotionGenerator implements DemodataGeneratorInterface
      */
     private function getSalesChannels(): array
     {
-        $ids = $this->connection->fetchAllAssociative('SELECT LOWER(HEX(id)) as id FROM `sales_channel` LIMIT 100');
+        $ids = $this->connection->fetchAllAssociative('SELECT ' . IdBinding::text('id') . ' as id FROM `sales_channel` LIMIT 100');
 
         return array_map(static fn ($id) => ['salesChannelId' => $id['id'], 'priority' => 1], $ids);
     }

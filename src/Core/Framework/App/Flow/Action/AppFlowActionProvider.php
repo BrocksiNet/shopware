@@ -5,12 +5,12 @@ namespace Shopware\Core\Framework\App\Flow\Action;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Exception;
 use Shopware\Core\Content\Flow\Dispatching\StorableFlow;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Adapter\Twig\StringTemplateRenderer;
 use Shopware\Core\Framework\App\AppException;
 use Shopware\Core\Framework\App\Exception\InvalidAppFlowActionVariableException;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\Framework\Webhook\BusinessEventEncoder;
 
 #[Package('framework')]
@@ -91,7 +91,7 @@ class AppFlowActionProvider
     {
         return $this->connection->fetchAssociative(
             'SELECT `parameters`, `headers` FROM `app_flow_action` WHERE id = :id',
-            ['id' => Uuid::fromHexToBytes($appFlowActionId)]
+            ['id' => IdBinding::value($appFlowActionId)]
         ) ?: [];
     }
 }

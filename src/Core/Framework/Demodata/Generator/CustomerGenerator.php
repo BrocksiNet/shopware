@@ -7,6 +7,7 @@ use Faker\Generator;
 use Shopware\Core\Checkout\Customer\Aggregate\CustomerGroup\CustomerGroupCollection;
 use Shopware\Core\Checkout\Customer\CustomerDefinition;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\EntityWriterInterface;
@@ -83,12 +84,12 @@ class CustomerGenerator implements DemodataGeneratorInterface
         $id = Uuid::randomHex();
         $shippingAddressId = Uuid::randomHex();
         $billingAddressId = Uuid::randomHex();
-        $salutationId = Uuid::fromBytesToHex($this->getRandomSalutationId());
+        $salutationId = IdBinding::toHex($this->getRandomSalutationId());
         $countries = $this->connection->fetchFirstColumn('SELECT id FROM country WHERE active = 1');
         if ($countries === []) {
             throw DemodataException::wrongExecutionOrder();
         }
-        $salesChannelIds = $this->connection->fetchFirstColumn('SELECT LOWER(HEX(id)) FROM sales_channel');
+        $salesChannelIds = $this->connection->fetchFirstColumn('SELECT ' . IdBinding::text('id') . ' FROM sales_channel');
         if ($salesChannelIds === []) {
             throw DemodataException::wrongExecutionOrder();
         }
@@ -110,7 +111,7 @@ class CustomerGenerator implements DemodataGeneratorInterface
                 [
                     'id' => $shippingAddressId,
                     'customerId' => $id,
-                    'countryId' => Uuid::fromBytesToHex($countries[array_rand($countries)]),
+                    'countryId' => IdBinding::toHex($countries[array_rand($countries)]),
                     'salutationId' => $salutationId,
                     'firstName' => 'Max',
                     'lastName' => 'Mustermann',
@@ -121,7 +122,7 @@ class CustomerGenerator implements DemodataGeneratorInterface
                 [
                     'id' => $billingAddressId,
                     'customerId' => $id,
-                    'countryId' => Uuid::fromBytesToHex($countries[array_rand($countries)]),
+                    'countryId' => IdBinding::toHex($countries[array_rand($countries)]),
                     'salutationId' => $salutationId,
                     'firstName' => 'Max',
                     'lastName' => 'Mustermann',
@@ -147,7 +148,7 @@ class CustomerGenerator implements DemodataGeneratorInterface
         $customerGroups = [TestDefaults::FALLBACK_CUSTOMER_GROUP, $netCustomerGroupId];
         $tags = $this->getTagIds();
 
-        $salesChannelIds = $this->connection->fetchFirstColumn('SELECT LOWER(HEX(id)) FROM sales_channel');
+        $salesChannelIds = $this->connection->fetchFirstColumn('SELECT ' . IdBinding::text('id') . ' FROM sales_channel');
         if ($salesChannelIds === []) {
             throw DemodataException::wrongExecutionOrder();
         }
@@ -159,7 +160,7 @@ class CustomerGenerator implements DemodataGeneratorInterface
             $id = Uuid::randomHex();
             $firstName = $context->getFaker()->firstName();
             $lastName = $context->getFaker()->format('lastName');
-            $salutationId = Uuid::fromBytesToHex($this->getRandomSalutationId());
+            $salutationId = IdBinding::toHex($this->getRandomSalutationId());
             $title = $this->getRandomTitle();
 
             $addresses = [];
@@ -168,7 +169,7 @@ class CustomerGenerator implements DemodataGeneratorInterface
             for ($x = 1; $x < $aCount; ++$x) {
                 $addresses[] = [
                     'id' => Uuid::randomHex(),
-                    'countryId' => Uuid::fromBytesToHex($context->getFaker()->randomElement($countries)),
+                    'countryId' => IdBinding::toHex($context->getFaker()->randomElement($countries)),
                     'salutationId' => $salutationId,
                     'title' => $title,
                     'firstName' => $firstName,
@@ -256,7 +257,7 @@ class CustomerGenerator implements DemodataGeneratorInterface
      */
     private function getTagIds(): array
     {
-        return $this->connection->fetchFirstColumn('SELECT LOWER(HEX(id)) as id FROM tag LIMIT 500');
+        return $this->connection->fetchFirstColumn('SELECT ' . IdBinding::text('id') . ' as id FROM tag LIMIT 500');
     }
 
     private function getRandomSalutationId(): string

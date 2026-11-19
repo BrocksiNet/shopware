@@ -6,6 +6,7 @@ use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Psr\Clock\ClockInterface;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\App\AppException;
 use Shopware\Core\Framework\App\Flow\Action\Action;
 use Shopware\Core\Framework\App\Lifecycle\Context\AppPersistContext;
@@ -60,7 +61,7 @@ class WebhookLifecycleHandler extends AbstractLifecycleHandler
      */
     private function deleteApiWebhooks(string $integrationId): void
     {
-        $this->connection->delete('webhook', ['owner_integration_id' => Uuid::fromHexToBytes($integrationId)]);
+        $this->connection->delete('webhook', ['owner_integration_id' => IdBinding::value($integrationId)]);
         $this->cacheClearer->clearWebhookCache();
     }
 
@@ -91,7 +92,7 @@ class WebhookLifecycleHandler extends AbstractLifecycleHandler
         }
 
         foreach ($updates as $id => $update) {
-            $this->connection->update('webhook', $update, ['id' => Uuid::fromHexToBytes($id)]);
+            $this->connection->update('webhook', $update, ['id' => IdBinding::value($id)]);
         }
 
         foreach ($inserts as $insert) {
@@ -109,7 +110,7 @@ class WebhookLifecycleHandler extends AbstractLifecycleHandler
     {
         $this->connection->executeStatement(
             'DELETE FROM webhook WHERE id IN (:ids)',
-            ['ids' => Uuid::fromHexToBytesList(array_keys($toBeRemoved))],
+            ['ids' => IdBinding::values(array_keys($toBeRemoved))],
             ['ids' => ArrayParameterType::STRING],
         );
     }
@@ -119,15 +120,13 @@ class WebhookLifecycleHandler extends AbstractLifecycleHandler
      */
     private function getExistingWebhooks(string $appId): array
     {
-        $sql = <<<'SQL'
-            SELECT
-                LOWER(HEX(w.id)) as webhookId,
-                w.name as webhookName
-            FROM webhook w
-            LEFT JOIN app a ON (a.id = w.app_id)
-            WHERE LOWER(HEX(a.id)) = :appId
-
-        SQL;
+        $sql = '    SELECT
+        ' . IdBinding::text('w.id') . ' as webhookId,
+        w.name as webhookName
+    FROM webhook w
+    LEFT JOIN app a ON (a.id = w.app_id)
+    WHERE ' . IdBinding::text('a.id') . ' = :appId
+';
 
         /** @var array<string, string> $webhooks */
         $webhooks = $this->connection->fetchAllKeyValue(
@@ -152,7 +151,7 @@ class WebhookLifecycleHandler extends AbstractLifecycleHandler
             'only_live_version' => \array_key_exists('onlyLiveVersion', $webhook) ? (int) $webhook['onlyLiveVersion'] : 0,
             'error_count' => \array_key_exists('errorCount', $webhook) ? $webhook['errorCount'] : 0,
             'active' => 1,
-            'app_id' => Uuid::fromHexToBytes($appId),
+            'app_id' => IdBinding::value($appId),
         ];
     }
 

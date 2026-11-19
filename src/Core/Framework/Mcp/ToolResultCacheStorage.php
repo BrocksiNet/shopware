@@ -6,6 +6,7 @@ use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\ParameterType;
 use Psr\Clock\ClockInterface;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Mcp\Result\McpToolResultPointer;
 use Shopware\Core\Framework\Mcp\Result\McpToolResultPointerSigner;
@@ -71,7 +72,7 @@ class ToolResultCacheStorage
 
         $row = $this->connection->fetchAssociative(
             'SELECT `content`, `mime_type` FROM `mcp_tool_result_cache` WHERE `id` = :id',
-            ['id' => Uuid::fromHexToBytes($id)],
+            ['id' => IdBinding::value($id)],
         );
 
         return $row === false ? null : $this->toResult($row);
@@ -92,7 +93,7 @@ class ToolResultCacheStorage
             'created_at' => $this->clock->now()->format(Defaults::STORAGE_DATE_TIME_FORMAT),
         ]);
 
-        return Uuid::fromBytesToHex($id);
+        return IdBinding::toHex($id);
     }
 
     /**
@@ -111,7 +112,7 @@ class ToolResultCacheStorage
         $row = $this->connection->fetchAssociative(
             'SELECT `content`, `mime_type` FROM `mcp_tool_result_cache` WHERE `id` = :id AND `session_id` = :sessionId AND `created_at` >= :since',
             [
-                'id' => Uuid::fromHexToBytes($id),
+                'id' => IdBinding::value($id),
                 'sessionId' => $sessionId,
                 'since' => $this->clock->now()->modify(\sprintf('-%d seconds', McpToolResultPointerSigner::TTL_SECONDS))->format(Defaults::STORAGE_DATE_TIME_FORMAT),
             ],

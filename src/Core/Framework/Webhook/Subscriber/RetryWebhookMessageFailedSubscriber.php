@@ -3,9 +3,9 @@
 namespace Shopware\Core\Framework\Webhook\Subscriber;
 
 use Doctrine\DBAL\Connection;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Feature;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\Framework\Webhook\Message\WebhookEventMessage;
 use Shopware\Core\Framework\Webhook\Outbox\WebhookOutboxStore;
 use Shopware\Core\Framework\Webhook\WebhookFailureStrategy;
@@ -69,7 +69,7 @@ class RetryWebhookMessageFailedSubscriber implements EventSubscriberInterface
 
         $rows = $this->connection->fetchAllAssociative(
             'SELECT active, error_count FROM webhook WHERE id = :id',
-            ['id' => Uuid::fromHexToBytes($webhookId)]
+            ['id' => IdBinding::value($webhookId)]
         );
 
         /** @var array{active: int, error_count: int} $webhook */
@@ -84,7 +84,7 @@ class RetryWebhookMessageFailedSubscriber implements EventSubscriberInterface
             WebhookFailureStrategy::Ignore => $this->handleIgnore($webhook),
         };
 
-        $this->connection->update('webhook', $params, ['id' => Uuid::fromHexToBytes($webhookId)]);
+        $this->connection->update('webhook', $params, ['id' => IdBinding::value($webhookId)]);
     }
 
     /**

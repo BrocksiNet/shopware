@@ -5,6 +5,7 @@ namespace Shopware\Core\Framework\Routing;
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Checkout\Cart\Price\Struct\CartPrice;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Api\Context\AdminApiSource;
 use Shopware\Core\Framework\Api\Context\ContextSource;
 use Shopware\Core\Framework\Api\Context\SalesChannelApiSource;
@@ -208,10 +209,10 @@ class ApiRequestContextResolver implements RequestContextResolverInterface
             throw RoutingException::languageNotFound($languageId);
         }
         $data = $this->connection->createQueryBuilder()
-            ->select('LOWER(HEX(language.parent_id))')
+            ->select(IdBinding::text('language.parent_id'))
             ->from('language')
             ->where('language.id = :id')
-            ->setParameter('id', Uuid::fromHexToBytes($languageId))
+            ->setParameter('id', IdBinding::value($languageId))
             ->executeQuery()
             ->fetchFirstColumn();
 
@@ -232,7 +233,7 @@ class ApiRequestContextResolver implements RequestContextResolverInterface
             ->executeQuery()
             ->fetchOne();
 
-        return Uuid::fromBytesToHex($id);
+        return IdBinding::toHex($id);
     }
 
     private function getSalesChannelIdByAccessKey(string $clientId): string
@@ -245,7 +246,7 @@ class ApiRequestContextResolver implements RequestContextResolverInterface
             ->executeQuery()
             ->fetchOne();
 
-        return Uuid::fromBytesToHex($id);
+        return IdBinding::toHex($id);
     }
 
     private function getIntegrationIdByAccessKey(string $clientId): string
@@ -258,7 +259,7 @@ class ApiRequestContextResolver implements RequestContextResolverInterface
             ->executeQuery()
             ->fetchOne();
 
-        return Uuid::fromBytesToHex($id);
+        return IdBinding::toHex($id);
     }
 
     private function getAdminApiSource(?string $userId, ?string $integrationId = null): AdminApiSource
@@ -360,7 +361,7 @@ class ApiRequestContextResolver implements RequestContextResolverInterface
             LEFT JOIN `acl_user_role` AS `mapping` ON `mapping`.`user_id` = `user`.`id`
             LEFT JOIN `acl_role` AS `role` ON `role`.`id` = `mapping`.`acl_role_id`
             WHERE `user`.`id` = :id
-        ', ['id' => Uuid::fromHexToBytes($userId)]);
+        ', ['id' => IdBinding::value($userId)]);
 
         if ($rows === []) {
             return ['active' => false, 'admin' => false, 'permissions' => []];
@@ -387,7 +388,7 @@ class ApiRequestContextResolver implements RequestContextResolverInterface
     {
         return (bool) $this->connection->fetchOne(
             'SELECT admin FROM `integration` WHERE id = :id',
-            ['id' => Uuid::fromHexToBytes($integrationId)]
+            ['id' => IdBinding::value($integrationId)]
         );
     }
 
@@ -395,7 +396,7 @@ class ApiRequestContextResolver implements RequestContextResolverInterface
     {
         $rounding = $this->connection->fetchAssociative(
             'SELECT item_rounding FROM currency WHERE id = :id',
-            ['id' => Uuid::fromHexToBytes($currencyId)]
+            ['id' => IdBinding::value($currencyId)]
         );
         if ($rounding === false) {
             if (!Feature::isActive('v6.8.0.0')) {
@@ -428,7 +429,7 @@ class ApiRequestContextResolver implements RequestContextResolverInterface
             FROM `acl_role`
             INNER JOIN `app` ON `app`.`acl_role_id` = `acl_role`.`id`
             WHERE `app`.`integration_id` = :integrationId
-        ', ['integrationId' => Uuid::fromHexToBytes($integrationId)]);
+        ', ['integrationId' => IdBinding::value($integrationId)]);
 
         if ($app === false) {
             return null;
@@ -450,7 +451,7 @@ class ApiRequestContextResolver implements RequestContextResolverInterface
             ->from('integration_role', 'mapping')
             ->innerJoin('mapping', 'acl_role', 'role', 'mapping.acl_role_id = role.id')
             ->where('mapping.integration_id = :integrationId')
-            ->setParameter('integrationId', Uuid::fromHexToBytes($integrationId))
+            ->setParameter('integrationId', IdBinding::value($integrationId))
             ->executeQuery()
             ->fetchFirstColumn();
 
@@ -471,7 +472,7 @@ class ApiRequestContextResolver implements RequestContextResolverInterface
             ->innerJoin('app', 'integration', 'integration', 'integration.id = app.integration_id')
             ->where('integration.id = :integrationId')
             ->andWhere('app.active = 1')
-            ->setParameter('integrationId', Uuid::fromHexToBytes($integrationId))
+            ->setParameter('integrationId', IdBinding::value($integrationId))
             ->executeQuery()
             ->fetchOne();
 

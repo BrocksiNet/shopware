@@ -2,10 +2,10 @@
 
 namespace Shopware\Core\Framework\App\Feature;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Psr\Clock\ClockInterface;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Util\Json;
 use Shopware\Core\Framework\Uuid\Uuid;
@@ -45,7 +45,7 @@ class AppFeatureStorage
         $definition = $this->registry->forFeature($featureClass);
 
         $rows = $this->connection->fetchAllAssociative(
-            'SELECT LOWER(HEX(`app_feature`.`app_id`)) AS `app_id`,
+            'SELECT ' . IdBinding::text('`app_feature`.`app_id`') . ' AS `app_id`,
                     `app`.`name` AS `app_name`,
                     `app`.`active` AS `app_active`,
                     `app`.`version` AS `app_version`,
@@ -77,7 +77,7 @@ class AppFeatureStorage
         $definition = $this->registry->forFeature($featureClass);
 
         $rows = $this->connection->fetchAllAssociative(
-            'SELECT LOWER(HEX(`app_feature`.`app_id`)) AS `app_id`,
+            'SELECT ' . IdBinding::text('`app_feature`.`app_id`') . ' AS `app_id`,
                     `app`.`name` AS `app_name`,
                     `app`.`active` AS `app_active`,
                     `app`.`version` AS `app_version`,
@@ -88,7 +88,7 @@ class AppFeatureStorage
              INNER JOIN `app` ON `app`.`id` = `app_feature`.`app_id`
              WHERE `app_feature`.`app_id` = :appId AND `app_feature`.`type` = :type
              ORDER BY `app_feature`.`name`',
-            ['appId' => Uuid::fromHexToBytes($appId), 'type' => $definition->getType()]
+            ['appId' => IdBinding::value($appId), 'type' => $definition->getType()]
         );
 
         return $this->hydrate($definition, $rows);
@@ -103,13 +103,13 @@ class AppFeatureStorage
      */
     public function syncForApp(string $appId, string $appName, array $rows): void
     {
-        $appIdBytes = Uuid::fromHexToBytes($appId);
+        $appIdBytes = IdBinding::value($appId);
         $now = $this->clock->now()->format(Defaults::STORAGE_DATE_TIME_FORMAT);
 
         $this->connection->transactional(function (Connection $connection) use ($appIdBytes, $appName, $rows, $now): void {
             $existing = [];
             $stored = $connection->fetchAllAssociative(
-                'SELECT LOWER(HEX(`id`)) AS `id`, `type`, `name` FROM `app_feature` WHERE `app_id` = :appId',
+                'SELECT ' . IdBinding::text('`id`') . ' AS `id`, `type`, `name` FROM `app_feature` WHERE `app_id` = :appId',
                 ['appId' => $appIdBytes]
             );
             foreach ($stored as $row) {
@@ -123,7 +123,7 @@ class AppFeatureStorage
                     $connection->update('app_feature', [
                         'payload' => Json::encode($row['payload']),
                         'updated_at' => $now,
-                    ], ['id' => Uuid::fromHexToBytes($id)]);
+                    ], ['id' => IdBinding::value($id)]);
 
                     unset($existing[$row['type']][$row['name']]);
 
@@ -144,7 +144,7 @@ class AppFeatureStorage
             $staleIds = [];
             foreach ($existing as $idsByName) {
                 foreach ($idsByName as $id) {
-                    $staleIds[] = Uuid::fromHexToBytes($id);
+                    $staleIds[] = IdBinding::value($id);
                 }
             }
 
@@ -152,7 +152,7 @@ class AppFeatureStorage
                 $connection->executeStatement(
                     'DELETE FROM `app_feature` WHERE `id` IN (:ids)',
                     ['ids' => $staleIds],
-                    ['ids' => ArrayParameterType::BINARY]
+                    ['ids' => IdBinding::listType()]
                 );
             }
         });
@@ -167,7 +167,7 @@ class AppFeatureStorage
     {
         $this->connection->executeStatement(
             'UPDATE `app_feature` SET `app_id` = :appId WHERE `app_id` IS NULL AND `app_name` = :appName',
-            ['appId' => Uuid::fromHexToBytes($appId), 'appName' => $appName]
+            ['appId' => IdBinding::value($appId), 'appName' => $appName]
         );
     }
 
@@ -178,7 +178,7 @@ class AppFeatureStorage
     {
         $this->connection->executeStatement(
             'DELETE FROM `app_feature` WHERE `app_id` = :appId',
-            ['appId' => Uuid::fromHexToBytes($appId)]
+            ['appId' => IdBinding::value($appId)]
         );
     }
 
@@ -193,7 +193,7 @@ class AppFeatureStorage
 
         $id = $this->connection->fetchOne(
             'SELECT `id` FROM `app_feature` WHERE `app_id` = :appId AND `type` = :type AND `name` = :name',
-            ['appId' => Uuid::fromHexToBytes($appId), 'type' => $definition->getType(), 'name' => $name]
+            ['appId' => IdBinding::value($appId), 'type' => $definition->getType(), 'name' => $name]
         );
 
         if ($id === false) {

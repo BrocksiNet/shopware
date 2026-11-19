@@ -2,10 +2,10 @@
 
 namespace Shopware\Core\Framework\Webhook;
 
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\App\Event\ManifestChangedEvent;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityCollection;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 
 /**
  * @extends EntityCollection<WebhookEntity>
@@ -28,7 +28,7 @@ class WebhookCollection extends EntityCollection
     {
         return array_values($this->fmap(static function (WebhookEntity $webhook): ?string {
             if ($webhook->getApp()) {
-                return Uuid::fromHexToBytes($webhook->getApp()->getAclRoleId());
+                return IdBinding::value($webhook->getApp()->getAclRoleId());
             }
 
             return null;

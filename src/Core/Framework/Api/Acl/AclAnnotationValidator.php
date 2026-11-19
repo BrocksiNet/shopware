@@ -3,11 +3,11 @@
 namespace Shopware\Core\Framework\Api\Acl;
 
 use Doctrine\DBAL\Connection;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Api\ApiException;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Routing\KernelListenerPriorities;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\PlatformRequest;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\HttpFoundation\Request;
@@ -86,7 +86,7 @@ class AclAnnotationValidator implements EventSubscriberInterface
                 INNER JOIN `app_action_button` ON `app`.`id` = `app_action_button`.`app_id`
                 WHERE `app_action_button`.`id` = :id
             ',
-            ['id' => Uuid::fromHexToBytes($actionId)],
+            ['id' => IdBinding::value($actionId)],
         );
 
         return 'app.' . $appName;

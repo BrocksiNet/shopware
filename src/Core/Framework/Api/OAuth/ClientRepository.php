@@ -8,12 +8,12 @@ use League\OAuth2\Server\Exception\OAuthServerException;
 use League\OAuth2\Server\Repositories\ClientRepositoryInterface;
 use Psr\Clock\ClockInterface;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Api\OAuth\Client\ApiClient;
 use Shopware\Core\Framework\Api\OAuth\Client\PublicClientRegistry;
 use Shopware\Core\Framework\Api\Util\AccessKeyHelper;
 use Shopware\Core\Framework\Deprecation\BCChange\BecomesInternal;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 
 /**
  * OAuth integrations should rely on {@see ClientRepositoryInterface} instead of this concrete Shopware class.
@@ -101,7 +101,7 @@ class ClientRepository implements ClientRepositoryInterface
         return new ApiClient(
             $clientIdentifier,
             true,
-            name: $userId !== null ? Uuid::fromBytesToHex($userId) : $accessKey['label'] ?? '',
+            name: $userId !== null ? IdBinding::toHex($userId) : $accessKey['label'] ?? '',
             confidential: true
         );
     }

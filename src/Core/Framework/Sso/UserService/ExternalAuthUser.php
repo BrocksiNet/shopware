@@ -3,9 +3,9 @@
 namespace Shopware\Core\Framework\Sso\UserService;
 
 use League\OAuth2\Server\Entities\UserEntityInterface;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Sso\SsoException;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Symfony\Component\Validator\Constraints\Collection;
 use Symfony\Component\Validator\Constraints\Email;
 use Symfony\Component\Validator\Constraints\NotBlank;
@@ -77,8 +77,8 @@ final readonly class ExternalAuthUser implements UserEntityInterface
      */
     public static function createFromDatabaseQuery(array $data): self
     {
-        $data['id'] = Uuid::fromBytesToHex($data['id']);
-        $data['user_id'] = Uuid::fromBytesToHex($data['user_id']);
+        $data['id'] = IdBinding::toHex($data['id']);
+        $data['user_id'] = IdBinding::toHex($data['user_id']);
         $data['expiry'] = new \DateTimeImmutable($data['expiry']);
         if (\array_key_exists('token', $data) && \is_string($data['token'])) {
             $data['token'] = json_decode($data['token'], true);

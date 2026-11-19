@@ -6,12 +6,12 @@ use Doctrine\DBAL\Connection;
 use GuzzleHttp\Promise\PromiseInterface;
 use Psr\Http\Message\RequestInterface;
 use Psr\Http\Message\ResponseInterface;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Api\Context\AdminApiSource;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Store\Authentication\StoreRequestOptionsProvider;
 use Shopware\Core\Framework\Store\Exception\StoreSessionExpiredException;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\PlatformRequest;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\RequestStack;
@@ -96,7 +96,7 @@ class StoreSessionExpiredMiddleware implements MiddlewareInterface
 
         $this->connection->executeStatement(
             'UPDATE user SET store_token = NULL WHERE id = :userId',
-            ['userId' => Uuid::fromHexToBytes($userId)]
+            ['userId' => IdBinding::value($userId)]
         );
     }
 }

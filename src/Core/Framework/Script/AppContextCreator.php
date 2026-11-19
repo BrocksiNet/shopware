@@ -3,11 +3,11 @@
 namespace Shopware\Core\Framework\Script;
 
 use Doctrine\DBAL\Connection;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Script\Execution\Hook;
 use Shopware\Core\Framework\Script\Execution\Script;
-use Shopware\Core\Framework\Uuid\Uuid;
 
 /**
  * @internal
@@ -64,7 +64,7 @@ class AppContextCreator
             FROM `acl_role`
             INNER JOIN `app` ON `app`.`acl_role_id` = `acl_role`.`id`
             WHERE `app`.`id` = :appId
-        ', ['appId' => Uuid::fromHexToBytes($appId)]);
+        ', ['appId' => IdBinding::value($appId)]);
 
         if (!$privileges) {
             return [];
