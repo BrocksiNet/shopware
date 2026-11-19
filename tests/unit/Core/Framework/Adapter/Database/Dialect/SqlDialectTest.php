@@ -147,7 +147,7 @@ class SqlDialectTest extends TestCase
 
         static::assertSame('jsonb_path_query_first("t"."c", \'$.a.b\'::jsonpath)', $dialect->jsonExtract('"t"."c"', '$.a.b'));
         static::assertSame('(jsonb_build_array(jsonb_path_query_first(c, \'$.a\'::jsonpath)) ->> 0)', $dialect->jsonExtractText('c', '$.a'));
-        static::assertSame('((jsonb_build_array(jsonb_path_query_first(c, \'$.a\'::jsonpath)) ->> 0)::numeric)', $dialect->jsonExtractNumber('c', '$.a'));
+        static::assertSame('((jsonb_build_array(jsonb_path_query_first((c)::jsonb, \'$.a\'::jsonpath)) ->> 0)::numeric)', $dialect->jsonExtractNumber('c', '$.a'));
         static::assertSame(
             'jsonb_set(COALESCE(c, \'{}\'::jsonb), \'{"a","b-c"}\'::text[], ?, true)',
             $dialect->jsonSet('c', '$."a"."b-c"', '?')

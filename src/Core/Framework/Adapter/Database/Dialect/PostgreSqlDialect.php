@@ -91,7 +91,8 @@ class PostgreSqlDialect implements SqlDialect
 
     public function jsonExtractNumber(string $jsonColumnSql, string $path): string
     {
-        return '(' . $this->jsonExtractText($jsonColumnSql, $path) . '::numeric)';
+        // The cast is a no-op for jsonb columns and needed for json stored as text (`cheapest_price_accessor`), `jsonb_path_query_first` has no text overload.
+        return '(' . $this->jsonExtractText('(' . $jsonColumnSql . ')::jsonb', $path) . '::numeric)';
     }
 
     public function jsonSet(string $jsonColumnSql, string $path, string $valueSql): string
