@@ -41,6 +41,15 @@ class IdBindingTest extends TestCase
         static::assertSame(ArrayParameterType::STRING, IdBinding::listType());
     }
 
+    public function testTextExpression(): void
+    {
+        IdBinding::useHexBinding(false);
+        static::assertSame('LOWER(HEX(p.id))', IdBinding::text('p.id'));
+
+        IdBinding::useHexBinding(true);
+        static::assertSame('REPLACE(p.id::text, \'-\', \'\')', IdBinding::text('p.id'));
+    }
+
     public function testToHexAcceptsBytesUuidTextAndHex(): void
     {
         $uuid = '0190a3b2-c4d5-7e6f-8091-a2b3c4d5e6f7';

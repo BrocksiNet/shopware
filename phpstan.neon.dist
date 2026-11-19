@@ -28,6 +28,9 @@ parameters:
         - src/**/node_modules/*
         - tests/**/node_modules/*
 
+        # Rector rules, the Rector classes live in vendor-bin and are not part of the analysed autoload
+        - src/Core/DevOps/StaticAnalyze/Rector/*
+
         # PHPStan rule test files
         - tests/devops/Core/DevOps/StaticAnalyse/PHPStan/Rules/data/*
 

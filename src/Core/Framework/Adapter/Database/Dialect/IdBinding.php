@@ -61,6 +61,14 @@ final class IdBinding
     }
 
     /**
+     * SQL expression that selects an id column as lower case 32 character hex text (same as `SqlDialect::idToText()`).
+     */
+    public static function text(string $columnSql): string
+    {
+        return self::isHexBinding() ? \sprintf('REPLACE(%s::text, \'-\', \'\')', $columnSql) : \sprintf('LOWER(HEX(%s))', $columnSql);
+    }
+
+    /**
      * Id as read from a column: 16 bytes, uuid text with dashes or hex text, returned as lower case 32 character hex.
      */
     public static function toHex(string $id): string
