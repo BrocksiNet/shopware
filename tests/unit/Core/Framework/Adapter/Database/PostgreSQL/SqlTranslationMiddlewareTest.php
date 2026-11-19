@@ -28,6 +28,8 @@ class SqlTranslationMiddlewareTest extends TestCase
     protected function setUp(): void
     {
         $this->log = [];
+        // the test bootstrap enables the per statement savepoints on PostgreSQL, these tests cover the production behaviour
+        putenv('SHOPWARE_PG_STATEMENT_SAVEPOINTS');
     }
 
     public function testExecDdlInsideTransactionUsesSavepoint(): void
