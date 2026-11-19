@@ -255,6 +255,9 @@ END $$;
 -- UUID() returns the textual form, like MySQL
 CREATE OR REPLACE FUNCTION uuid() RETURNS text LANGUAGE sql VOLATILE PARALLEL SAFE AS $$ SELECT gen_random_uuid()::text $$;
 
+-- RAND() without seed, ORDER BY RAND() in the demo data generator
+CREATE OR REPLACE FUNCTION rand() RETURNS double precision LANGUAGE sql VOLATILE PARALLEL RESTRICTED AS $$ SELECT random() $$;
+
 -- JSON_VALID(): a jsonb value is valid by construction, text is checked
 CREATE OR REPLACE FUNCTION json_valid(jsonb) RETURNS boolean LANGUAGE sql IMMUTABLE PARALLEL SAFE AS $$ SELECT $1 IS NOT NULL $$;
 CREATE OR REPLACE FUNCTION json_valid(text) RETURNS boolean LANGUAGE plpgsql IMMUTABLE PARALLEL SAFE AS $$
