@@ -222,10 +222,11 @@ class UpdateRewriter
         $depth = 0;
         for ($i = 0; $i < $length; ++$i) {
             $char = $sql[$i];
-            if ($char === '\'' || $char === '"') {
-                $escaped = $char === '\'' && $i > 0 && $sql[$i - 1] === 'E';
+            if ($char === '\'' || $char === '"' || $char === '`') {
+                // MySQL treats a backslash inside a single quoted string as escape character, the translator emits E'...' for them
+                $escapes = $char === '\'';
                 for (++$i; $i < $length; ++$i) {
-                    if ($escaped && $sql[$i] === '\\') {
+                    if ($escapes && $sql[$i] === '\\') {
                         ++$i;
                     } elseif ($sql[$i] === $char) {
                         if (($sql[$i + 1] ?? '') !== $char) {
@@ -234,6 +235,18 @@ class UpdateRewriter
                         ++$i;
                     }
                 }
+
+                continue;
+            }
+            if (($char === '-' && ($sql[$i + 1] ?? '') === '-') || $char === '#') {
+                $end = strpos($sql, "\n", $i);
+                $i = $end === false ? $length : $end;
+
+                continue;
+            }
+            if ($char === '/' && ($sql[$i + 1] ?? '') === '*') {
+                $end = strpos($sql, '*/', $i + 2);
+                $i = $end === false ? $length : $end + 1;
 
                 continue;
             }

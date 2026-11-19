@@ -96,14 +96,9 @@ class DdlRewriter
         $length = \strlen($s);
         for ($i = 0; $i < $length; ++$i) {
             $char = $s[$i];
-            if ($char === '\'' || $char === '"') {
-                $i = self::skipQuoted($s, $i);
-
-                continue;
-            }
-            if ($char === '-' && ($s[$i + 1] ?? '') === '-') {
-                $end = strpos($s, "\n", $i);
-                $i = $end === false ? $length : $end;
+            $skipped = self::skipLiteralOrComment($s, $i);
+            if ($skipped !== null) {
+                $i = $skipped;
 
                 continue;
             }
@@ -610,12 +605,12 @@ class DdlRewriter
                 } else {
                     $extra[] = 'CHECK (' . $inner . ')';
                 }
-                $w[0] ??= '';
                 $i = $close + 1;
 
                 continue;
             } else {
                 preg_match('/^\S+/', $tail, $w);
+                $w[0] ??= '';
                 $extra[] = $w[0];
             }
             $i += \strlen($w[0]);
@@ -940,8 +935,9 @@ class DdlRewriter
         $length = \strlen($s);
         for ($i = $open; $i < $length; ++$i) {
             $char = $s[$i];
-            if ($char === '\'' || $char === '"') {
-                $i = self::skipQuoted($s, $i);
+            $skipped = self::skipLiteralOrComment($s, $i);
+            if ($skipped !== null) {
+                $i = $skipped;
 
                 continue;
             }
@@ -950,6 +946,30 @@ class DdlRewriter
             } elseif ($char === ')' && --$depth === 0) {
                 return $i;
             }
+        }
+
+        return null;
+    }
+
+    /**
+     * @return int|null index of the last character of the string, quoted identifier or comment that starts at $i, null when none starts there
+     */
+    private static function skipLiteralOrComment(string $s, int $i): ?int
+    {
+        $char = $s[$i];
+        if ($char === '\'' || $char === '"' || $char === '`') {
+            return self::skipQuoted($s, $i);
+        }
+        $next = $s[$i + 1] ?? '';
+        if (($char === '-' && $next === '-') || $char === '#') {
+            $end = strpos($s, "\n", $i);
+
+            return $end === false ? \strlen($s) : $end;
+        }
+        if ($char === '/' && $next === '*') {
+            $end = strpos($s, '*/', $i + 2);
+
+            return $end === false ? \strlen($s) : $end + 1;
         }
 
         return null;

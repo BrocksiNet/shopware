@@ -70,6 +70,14 @@ class BooleanAssignmentRewriterTest extends TestCase
             'INSERT INTO "t" ("name", "flag") VALUES (\'a, (b\', 1)',
             'INSERT INTO "t" ("name", "flag") VALUES (\'a, (b\', TRUE)',
         ];
+        yield 'string with an escaped quote, a comma and a parenthesis' => [
+            'INSERT INTO "t" ("name", "flag") VALUES (E\'a\\\'b, (c\', 1)',
+            'INSERT INTO "t" ("name", "flag") VALUES (E\'a\\\'b, (c\', TRUE)',
+        ];
+        yield 'comment with a comma and a parenthesis' => [
+            'INSERT INTO "t" ("name", "flag") VALUES (? /* x, ( */, 1)',
+            'INSERT INTO "t" ("name", "flag") VALUES (? /* x, ( */, TRUE)',
+        ];
         yield 'column count mismatch is unchanged' => [
             'INSERT INTO "t" ("id", "flag") VALUES (?)',
             'INSERT INTO "t" ("id", "flag") VALUES (?)',

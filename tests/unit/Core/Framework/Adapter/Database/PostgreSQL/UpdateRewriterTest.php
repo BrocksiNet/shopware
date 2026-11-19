@@ -54,6 +54,21 @@ class UpdateRewriterTest extends TestCase
             'UPDATE a SET x = b.y FROM b WHERE (c) AND (w)',
         ];
 
+        yield 'escaped quote and comma inside a string do not end the assignment' => [
+            'UPDATE a, b SET a.x = \'it\\\'s, ok\', a.y = b.y WHERE w',
+            'UPDATE a SET x = \'it\\\'s, ok\', y = b.y FROM b WHERE w',
+        ];
+
+        yield 'comment with parenthesis and keyword does not hide the where clause' => [
+            'UPDATE a INNER JOIN b ON c SET a.x = b.y /* ( WHERE */ WHERE w',
+            'UPDATE a SET x = b.y /* ( WHERE */ FROM b WHERE (c) AND (w)',
+        ];
+
+        yield 'backtick identifier with a keyword is not a keyword' => [
+            'UPDATE a INNER JOIN b ON c SET a.x = `WHERE`.y WHERE w',
+            'UPDATE a SET x = `WHERE`.y FROM b WHERE (c) AND (w)',
+        ];
+
         yield 'plain update is unchanged' => [
             'UPDATE a SET x = 1 WHERE w',
             'UPDATE a SET x = 1 WHERE w',
