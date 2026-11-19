@@ -26,7 +26,7 @@ use Shopware\Core\Framework\Log\Package;
 class TimingMiddleware implements Middleware
 {
     /**
-     * @var array<string, array{ns: int, calls: int}>
+     * @var array<string, array{ns: int, calls: int, stmts: int}>
      */
     public static array $totals = [];
 
@@ -34,7 +34,7 @@ class TimingMiddleware implements Middleware
 
     public function __construct(private readonly string $label, private readonly string $file)
     {
-        self::$totals[$label] = ['ns' => 0, 'calls' => 0];
+        self::$totals[$label] = ['ns' => 0, 'calls' => 0, 'stmts' => 0];
 
         if (!self::$registered) {
             self::$registered = true;
@@ -72,6 +72,7 @@ class TimingMiddleware implements Middleware
                         $t = hrtime(true);
                         $statement = parent::prepare($sql);
                         TimingMiddleware::add($this->label, $t);
+                        ++TimingMiddleware::$totals[$this->label]['stmts'];
 
                         return $this->wrapStatement($statement);
                     }
@@ -81,6 +82,7 @@ class TimingMiddleware implements Middleware
                         $t = hrtime(true);
                         $result = parent::query($sql);
                         TimingMiddleware::add($this->label, $t);
+                        ++TimingMiddleware::$totals[$this->label]['stmts'];
 
                         return $this->wrapResult($result);
                     }
@@ -90,6 +92,7 @@ class TimingMiddleware implements Middleware
                         $t = hrtime(true);
                         $r = parent::exec($sql);
                         TimingMiddleware::add($this->label, $t);
+                        ++TimingMiddleware::$totals[$this->label]['stmts'];
 
                         return $r;
                     }
