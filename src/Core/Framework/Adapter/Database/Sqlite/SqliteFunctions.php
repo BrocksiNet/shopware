@@ -69,6 +69,29 @@ class SqliteFunctions
 
             return strtolower($mode) === 'all' ? 1 : 0;
         });
+        $create('UUID', static fn () => sprintf('%08x-%04x-%04x-%04x-%012x', random_int(0, 0xffffffff), random_int(0, 0xffff), random_int(0x4000, 0x4fff), random_int(0x8000, 0xbfff), random_int(0, 0xffffffffffff)), 0);
+        $create('JSON_CONTAINS', static function (?string $target, ?string $candidate): ?int {
+            if ($target === null || $candidate === null) {
+                return null;
+            }
+            $t = json_decode($target, true);
+            $c = json_decode($candidate, true);
+            if (\is_array($t) && array_is_list($t)) {
+                return (int) \in_array($c, $t, false);
+            }
+
+            return (int) ($t == $c);
+        }, 2);
+        $create('JSON_ARRAY_APPEND', static function (?string $json, string $path, mixed $value): ?string {
+            $data = json_decode((string) $json, true);
+            $v = \is_string($value) && ($d = json_decode($value, true)) !== null ? $d : $value;
+            if ($path === '$') {
+                $data = \is_array($data) && array_is_list($data) ? $data : [$data];
+                $data[] = $v;
+            }
+
+            return json_encode($data);
+        }, 3);
         $create('IF', static fn ($c, $a, $b) => $c ? $a : $b, 3);
         $create('UNHEX', static fn (?string $s) => $s === null ? null : (ctype_xdigit($s) && \strlen($s) % 2 === 0 ? hex2bin($s) : null), 1);
         $create('FIND_IN_SET', static function (?string $needle, ?string $list): ?int {
