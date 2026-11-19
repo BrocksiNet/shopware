@@ -16,6 +16,11 @@ class SqliteFunctions
     {
         $create = static fn (string $name, callable $fn, int $args = -1) => $pdo->sqliteCreateFunction($name, $fn, $args, \PDO::SQLITE_DETERMINISTIC);
 
+        foreach (['utf8mb4_unicode_ci', 'utf8_unicode_ci', 'utf8mb4_unicode_520_ci', 'utf8mb4_0900_as_cs', 'utf8mb4_general_ci', 'utf8mb4_0900_ai_ci', 'utf8_general_ci', 'utf8mb4_bin'] as $collation) {
+            $bin = $collation === 'utf8mb4_bin';
+            $pdo->sqliteCreateCollation($collation, static fn (string $a, string $b): int => $bin ? strcmp($a, $b) : strcmp(mb_strtolower($a), mb_strtolower($b)));
+        }
+
         $create('CONCAT', static function (...$args): ?string {
             foreach ($args as $arg) {
                 if ($arg === null) {
@@ -27,6 +32,42 @@ class SqliteFunctions
         });
         $create('CONCAT_WS', static function (?string $sep, ...$args): ?string {
             return $sep === null ? null : implode($sep, array_map('strval', array_filter($args, static fn ($a) => $a !== null)));
+        });
+        $create('JSON_UNQUOTE', static function (mixed $v): mixed {
+            if (!\is_string($v) || $v === '' || $v[0] !== '"') {
+                return $v;
+            }
+
+            return json_decode($v, true) ?? $v;
+        }, 1);
+        $create('CHAR_LENGTH', static fn (?string $s) => $s === null ? null : mb_strlen($s), 1);
+        $create('CHARACTER_LENGTH', static fn (?string $s) => $s === null ? null : mb_strlen($s), 1);
+        $create('REVERSE', static fn (?string $s) => $s === null ? null : implode('', array_reverse(mb_str_split($s))), 1);
+        $create('DATABASE', static fn () => 'main', 0);
+        $create('JSON_CONTAINS_PATH', static function (?string $json, string $mode, string ...$paths): ?int {
+            if ($json === null) {
+                return null;
+            }
+            $data = json_decode($json, true);
+            foreach ($paths as $path) {
+                $node = $data;
+                $found = \is_array($node);
+                foreach (array_filter(explode('.', ltrim($path, '$.'))) as $key) {
+                    if (!\is_array($node) || !\array_key_exists($key, $node)) {
+                        $found = false;
+                        break;
+                    }
+                    $node = $node[$key];
+                }
+                if ($found && strtolower($mode) === 'one') {
+                    return 1;
+                }
+                if (!$found && strtolower($mode) === 'all') {
+                    return 0;
+                }
+            }
+
+            return strtolower($mode) === 'all' ? 1 : 0;
         });
         $create('IF', static fn ($c, $a, $b) => $c ? $a : $b, 3);
         $create('UNHEX', static fn (?string $s) => $s === null ? null : (ctype_xdigit($s) && \strlen($s) % 2 === 0 ? hex2bin($s) : null), 1);
