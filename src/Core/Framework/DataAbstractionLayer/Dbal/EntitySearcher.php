@@ -94,6 +94,12 @@ class EntitySearcher implements EntitySearcherInterface
         if ($query->hasState(Criteria::SCORE_FIELD) && $criteria->getGroupFields() !== []) {
             $query = $this->buildScoreRankedQuery($query, $definition, $criteria, $context, $table, $fields);
         } else {
+            if ($query->hasState(Criteria::SCORE_FIELD) && $this->connection->getDatabasePlatform() instanceof PostgreSQLPlatform) {
+                // the score is an aggregate (SUM / COUNT), the criteria query builder drops the grouping for `limit 1` on the
+                // assumption that MySQL returns one arbitrary row, PostgreSQL rejects the ungrouped plain columns
+                $query->addState(EntityDefinitionQueryHelper::HAS_TO_MANY_JOIN);
+            }
+
             $this->queryHelper->addGroupBy($definition, $criteria, $context, $query, $table);
 
             if ($this->connection->getDatabasePlatform() instanceof PostgreSQLPlatform) {
