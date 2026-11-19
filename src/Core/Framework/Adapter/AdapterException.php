@@ -18,6 +18,8 @@ use Twig\Source;
 #[Package('checkout')]
 class AdapterException extends HttpException
 {
+    public const MISSING_CONFLICT_TARGET = 'FRAMEWORK__MISSING_CONFLICT_TARGET';
+
     public const UNEXPECTED_TWIG_EXPRESSION = 'FRAMEWORK__UNEXPECTED_TWIG_EXPRESSION';
     public const MISSING_EXTENDING_TWIG_TEMPLATE = 'FRAMEWORK__MISSING_EXTENDING_TWIG_TEMPLATE';
     public const TEMPLATE_SCOPE_DEFINITION_ERROR = 'FRAMEWORK__TEMPLATE_SCOPE_DEFINITION_ERROR';
@@ -50,6 +52,16 @@ class AdapterException extends HttpException
     final public const INVALID_CACHE_POLICY_CONFIGURATION = 'FRAMEWORK__INVALID_CACHE_POLICY_CONFIGURATION';
 
     #[ReturnTypeNarrowing(version: 'v6.8.0', newType: 'self')]
+    public static function missingConflictTarget(string $table, string $reason): self
+    {
+        return new self(
+            Response::HTTP_INTERNAL_SERVER_ERROR,
+            self::MISSING_CONFLICT_TARGET,
+            'The upsert into "{{ table }}" needs conflict columns: {{ reason }}',
+            ['table' => $table, 'reason' => $reason]
+        );
+    }
+
     public static function unsupportedOperator(string $operator, string $class): self|UnsupportedOperatorException
     {
         if (!Feature::isActive('v6.8.0.0')) {

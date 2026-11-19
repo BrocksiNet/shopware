@@ -24,6 +24,28 @@ interface SqlDialect
 
     public const SQLITE = 'sqlite';
 
+    public const JSON_TYPE_STRING = 'string';
+
+    public const JSON_TYPE_FLOAT = 'float';
+
+    public const JSON_TYPE_BOOL = 'bool';
+
+    public const JSON_TYPE_DATETIME = 'datetime';
+
+    public const JSON_TYPE_DATE = 'date';
+
+    public const JSON_BIND_STRING = 'string';
+
+    public const JSON_BIND_INT = 'int';
+
+    public const JSON_BIND_FLOAT = 'float';
+
+    public const JSON_BIND_BOOL = 'bool';
+
+    public const JSON_BIND_OBJECT = 'object';
+
+    public const JSON_BIND_ARRAY = 'array';
+
     /**
      * One of the platform constants above.
      */
@@ -82,4 +104,17 @@ interface SqlDialect
      * `$separator` is a plain string, the dialect quotes it.
      */
     public function groupConcat(string $expressionSql, string $separator = ',', ?string $orderBySql = null): string;
+
+    /**
+     * Accessor for a value inside a JSON column: the value at `$path` (`$.a.b`, hyphenated keys quoted as `$.a."b-c"`)
+     * converted to `$type` (one of the JSON_TYPE_* constants), a JSON null becomes SQL NULL.
+     * `$path` is plain text, the dialect turns it into an SQL literal.
+     */
+    public function jsonValue(string $jsonColumnSql, string $path, string $type = self::JSON_TYPE_STRING): string;
+
+    /**
+     * Wraps a bound placeholder (or for `JSON_TYPE_BOOL` the literal `true` / `false`) so it can be used as the value of `jsonSet()`.
+     * `$type` is one of the JSON_BIND_* constants.
+     */
+    public function jsonBind(string $placeholderSql, string $type): string;
 }
