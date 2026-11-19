@@ -62,6 +62,19 @@ class MySQLToPostgreSQLTranslator
     }
 
     /**
+     * MySQL: INTERVAL :days DAY (a number or placeholder and a unit), PostgreSQL only knows INTERVAL '1 day'.
+     * The result is `:days * INTERVAL '1 day'`, DATE_ADD and DATE_SUB take it (see mysql-compat.sql).
+     */
+    private function rewriteInterval(string $sql): string
+    {
+        return preg_replace_callback(
+            '/\bINTERVAL\s+(:[A-Za-z_]\w*|\?|-?\d+)\s+(YEAR|QUARTER|MONTH|WEEK|DAY|HOUR|MINUTE|SECOND)\b/i',
+            static fn (array $m): string => '(' . $m[1] . ' * INTERVAL \'' . (strtoupper($m[2]) === 'QUARTER' ? '3 month' : '1 ' . strtolower($m[2])) . '\')',
+            $sql
+        ) ?? $sql;
+    }
+
+    /**
      * GROUP_CONCAT([DISTINCT] expr [ORDER BY ...] [SEPARATOR sep]) puts the separator last, the aggregate takes it as second
      * argument in front of ORDER BY: group_concat(expr, sep ORDER BY ...).
      * Left as it is, the separator would silently become one more sort key.
@@ -160,6 +173,10 @@ class MySQLToPostgreSQLTranslator
     {
         if (stripos($sql, 'group_concat') !== false) {
             $sql = $this->moveGroupConcatSeparator($sql);
+        }
+
+        if (stripos($sql, 'interval') !== false) {
+            $sql = $this->rewriteInterval($sql);
         }
 
         $caseMap = [];

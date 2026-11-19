@@ -13,6 +13,35 @@ use Shopware\Core\Framework\Adapter\Database\PostgreSQL\MySQLToPostgreSQLTransla
 #[CoversClass(MySQLToPostgreSQLTranslator::class)]
 class MySQLToPostgreSQLTranslatorTest extends TestCase
 {
+    #[DataProvider('intervalProvider')]
+    public function testIntervalWithPlaceholderOrNumber(string $mysql, string $expected): void
+    {
+        static::assertSame($expected, (new MySQLToPostgreSQLTranslator())->translate($mysql)[0]);
+    }
+
+    /**
+     * @return iterable<string, array{string, string}>
+     */
+    public static function intervalProvider(): iterable
+    {
+        yield 'named placeholder' => [
+            'UPDATE t SET d = DATE_ADD(d, INTERVAL :days DAY)',
+            'UPDATE t SET d = DATE_ADD(d, (:days * INTERVAL \'1 day\'))',
+        ];
+        yield 'number and lower case' => [
+            'SELECT DATE_SUB(d, interval 2 hour)',
+            'SELECT DATE_SUB(d, (2 * INTERVAL \'1 hour\'))',
+        ];
+        yield 'quarter' => [
+            'SELECT DATE_ADD(d, INTERVAL ? QUARTER)',
+            'SELECT DATE_ADD(d, (? * INTERVAL \'3 month\'))',
+        ];
+        yield 'postgres interval literal stays' => [
+            'SELECT d + INTERVAL \'1 day\'',
+            'SELECT d + INTERVAL \'1 day\'',
+        ];
+    }
+
     public function testBackticksBecomeDoubleQuotes(): void
     {
         [$sql] = (new MySQLToPostgreSQLTranslator())->translate('SELECT `id` FROM `product`');

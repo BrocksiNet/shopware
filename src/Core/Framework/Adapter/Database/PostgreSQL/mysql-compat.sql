@@ -316,3 +316,9 @@ CREATE OR REPLACE FUNCTION round(integer, integer) RETURNS numeric LANGUAGE sql 
     RETURN round($1::numeric, $2);
 CREATE OR REPLACE FUNCTION round(bigint, integer) RETURNS numeric LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE
     RETURN round($1::numeric, $2);
+
+-- DATE_ADD(ts, INTERVAL n UNIT) and DATE_SUB, the translator turns the interval into `n * INTERVAL '1 unit'`
+CREATE OR REPLACE FUNCTION date_add(timestamp, interval) RETURNS timestamp LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE
+    RETURN $1 + $2;
+CREATE OR REPLACE FUNCTION date_sub(timestamp, interval) RETURNS timestamp LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE
+    RETURN $1 - $2;
