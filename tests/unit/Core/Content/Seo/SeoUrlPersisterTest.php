@@ -2,7 +2,6 @@
 
 namespace Shopware\Tests\Unit\Core\Content\Seo;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Platforms\MySQLPlatform;
 use Doctrine\DBAL\Query\QueryBuilder;
@@ -11,6 +10,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Shopware\Core\Content\Seo\SeoUrlPersister;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\Log\Package;
@@ -257,7 +257,7 @@ class SeoUrlPersisterTest extends TestCase
 
         $id1 = Uuid::randomBytes();
         $id2 = Uuid::randomBytes();
-        $expectedIds = [$id1, $id2];
+        $expectedIds = IdBinding::values([Uuid::fromBytesToHex($id1), Uuid::fromBytesToHex($id2)]);
 
         $connection->expects($this->once())
             ->method('fetchAllAssociative')
@@ -287,7 +287,7 @@ class SeoUrlPersisterTest extends TestCase
             ->with(
                 'UPDATE seo_url SET is_canonical = 1, is_modified = 1 WHERE id IN (:ids)',
                 ['ids' => $expectedIds],
-                ['ids' => ArrayParameterType::BINARY]
+                ['ids' => IdBinding::listType()]
             );
 
         $seoChannel = new SalesChannelEntity();
