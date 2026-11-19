@@ -330,7 +330,7 @@ class EntityAggregator implements EntityAggregatorInterface
         if ($aggregation->getSorting()) {
             $this->addSorting($aggregation->getSorting(), $definition, $query, $context);
         } else {
-            $query->addOrderBy($accessor);
+            $query->addOrderBy('MIN(' . $accessor . ')');
         }
 
         if ($aggregation->getAggregation()) {
