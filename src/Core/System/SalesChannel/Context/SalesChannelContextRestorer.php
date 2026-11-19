@@ -9,6 +9,7 @@ use Shopware\Core\Checkout\Cart\CartRuleLoader;
 use Shopware\Core\Checkout\Cart\Order\OrderConverter;
 use Shopware\Core\Checkout\Order\OrderCollection;
 use Shopware\Core\Checkout\Order\OrderEntity;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Exception\InconsistentCriteriaIdsException;
@@ -84,13 +85,13 @@ class SalesChannelContextRestorer
     {
         $customer = $this->connection->createQueryBuilder()
             ->select(
-                'LOWER(HEX(language_id)) AS language_id',
-                'LOWER(HEX(customer_group_id)) AS customer_group_id',
-                'LOWER(HEX(sales_channel_id)) AS sales_channel_id',
+                IdBinding::text('language_id') . ' AS language_id',
+                IdBinding::text('customer_group_id') . ' AS customer_group_id',
+                IdBinding::text('sales_channel_id') . ' AS sales_channel_id',
             )
             ->from('customer')
             ->where('id = :id')
-            ->setParameter('id', Uuid::fromHexToBytes($customerId))
+            ->setParameter('id', IdBinding::value($customerId))
             ->executeQuery()
             ->fetchAssociative();
 

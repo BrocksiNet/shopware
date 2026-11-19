@@ -15,13 +15,13 @@ use Shopware\Core\Checkout\Customer\CustomerEntity;
 use Shopware\Core\Content\Rule\RuleCollection;
 use Shopware\Core\Content\Rule\RuleEntity;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Adapter\Translation\AbstractTranslator;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\Extensions\ExtensionDispatcher;
 use Shopware\Core\Framework\Feature;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Util\FloatComparator;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\Profiling\Profiler;
 use Shopware\Core\System\Country\CountryDefinition;
 use Shopware\Core\System\Country\CountryEntity;
@@ -316,7 +316,7 @@ class CartRuleLoader implements ResetInterface
 
         $currencyFactor = $this->connection->fetchOne(
             'SELECT `factor` FROM `currency` WHERE `id` = :currencyId',
-            ['currencyId' => Uuid::fromHexToBytes($currencyId)]
+            ['currencyId' => IdBinding::value($currencyId)]
         );
 
         if (!$currencyFactor) {

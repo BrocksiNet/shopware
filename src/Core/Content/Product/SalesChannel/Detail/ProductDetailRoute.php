@@ -21,6 +21,7 @@ use Shopware\Core\Content\Product\SalesChannel\SalesChannelProductCollection;
 use Shopware\Core\Content\Product\SalesChannel\SalesChannelProductDefinition;
 use Shopware\Core\Content\Product\SalesChannel\SalesChannelProductEntity;
 use Shopware\Core\Framework\Adapter\Cache\CacheTagCollector;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Adapter\Request\RequestParamHelper;
 use Shopware\Core\Framework\DataAbstractionLayer\Cache\EntityCacheKeyGenerator;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
@@ -263,8 +264,8 @@ class ProductDetailRoute extends AbstractProductDetailRoute
             WHERE id = :id
             AND version_id = :versionId',
             [
-                'id' => Uuid::fromHexToBytes($productId),
-                'versionId' => Uuid::fromHexToBytes($context->getVersionId()),
+                'id' => IdBinding::value($productId),
+                'versionId' => IdBinding::value($context->getVersionId()),
             ]
         );
 

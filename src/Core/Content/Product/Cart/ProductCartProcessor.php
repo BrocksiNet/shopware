@@ -2,7 +2,6 @@
 
 namespace Shopware\Core\Content\Product\Cart;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Checkout\Cart\Cart;
 use Shopware\Core\Checkout\Cart\CartBehavior;
@@ -28,12 +27,12 @@ use Shopware\Core\Content\Product\SalesChannel\Price\AbstractProductPriceCalcula
 use Shopware\Core\Content\Product\SalesChannel\SalesChannelProductEntity;
 use Shopware\Core\Content\Product\State;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\Cache\EntityCacheKeyGenerator;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\Flag\RuleAreas;
 use Shopware\Core\Framework\Feature;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Util\Hasher;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\Profiling\Profiler;
 use Shopware\Core\System\SalesChannel\SalesChannelContext;
 use Shopware\Core\System\Tax\TaxEntity;
@@ -523,13 +522,13 @@ class ProductCartProcessor implements CartProcessorInterface, CartDataCollectorI
         }
 
         $updates = $this->connection->fetchAllKeyValue(
-            'SELECT LOWER(HEX(id)) as id, IFNULL(updated_at, created_at) FROM product WHERE id IN (:ids) AND version_id = :liveVersionId',
+            'SELECT ' . IdBinding::text('id') . ' as id, IFNULL(updated_at, created_at) FROM product WHERE id IN (:ids) AND version_id = :liveVersionId',
             [
-                'ids' => Uuid::fromHexToBytesList(array_keys($changes)),
-                'liveVersionId' => Uuid::fromHexToBytes(Defaults::LIVE_VERSION),
+                'ids' => IdBinding::values(array_keys($changes)),
+                'liveVersionId' => IdBinding::value(Defaults::LIVE_VERSION),
             ],
             [
-                'ids' => ArrayParameterType::BINARY,
+                'ids' => IdBinding::listType(),
             ]
         );
 

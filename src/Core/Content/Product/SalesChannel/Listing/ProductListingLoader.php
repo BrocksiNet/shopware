@@ -2,7 +2,6 @@
 
 namespace Shopware\Core\Content\Product\SalesChannel\Listing;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Content\Product\Events\ProductListingPreviewCriteriaEvent;
 use Shopware\Core\Content\Product\Events\ProductListingResolvePreviewEvent;
@@ -16,6 +15,7 @@ use Shopware\Core\Content\Product\SalesChannel\ProductAvailableFilter;
 use Shopware\Core\Content\Product\SalesChannel\Search\ResolvedCriteriaProductSearchRoute;
 use Shopware\Core\Content\Product\SalesChannel\Suggest\ProductSuggestRoute;
 use Shopware\Core\Content\ProductStream\Service\AbstractProductStreamBuilder;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\EntitySearchResult;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\AndFilter;
@@ -30,7 +30,6 @@ use Shopware\Core\Framework\DataAbstractionLayer\Search\IdSearchResult;
 use Shopware\Core\Framework\Extensions\ExtensionDispatcher;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Struct\ArrayEntity;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\System\SalesChannel\Entity\SalesChannelRepository;
 use Shopware\Core\System\SalesChannel\SalesChannelContext;
 use Shopware\Core\System\SystemConfig\SystemConfigService;
@@ -234,8 +233,8 @@ class ProductListingLoader
             '# product-listing-loader::resolve-previews
             SELECT
                 parent.variant_listing_config as variantListingConfig,
-                LOWER(HEX(child.id)) as id,
-                LOWER(HEX(parent.id)) as parentId
+                ' . IdBinding::text('child.id') . ' as id,
+                ' . IdBinding::text('parent.id') . ' as parentId
              FROM product as child
                 INNER JOIN product as parent
                     ON parent.id = child.parent_id
@@ -243,10 +242,10 @@ class ProductListingLoader
              WHERE child.version_id = :version
              AND child.id IN (:ids)',
             [
-                'ids' => Uuid::fromHexToBytesList(array_values($ids)),
-                'version' => Uuid::fromHexToBytes($context->getContext()->getVersionId()),
+                'ids' => IdBinding::values(array_values($ids)),
+                'version' => IdBinding::value($context->getContext()->getVersionId()),
             ],
-            ['ids' => ArrayParameterType::BINARY]
+            ['ids' => IdBinding::listType()]
         );
 
         $mapping = [];

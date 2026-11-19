@@ -6,11 +6,11 @@ use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\ParameterType;
 use Shopware\Core\Content\Product\Stock\AbstractStockStorage;
 use Shopware\Core\Content\Product\Stock\StockLoadRequest;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\FetchModeHelper;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Plugin\Exception\DecorationPatternException;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\System\SalesChannel\SalesChannelContext;
 use Shopware\Core\System\SystemConfig\SystemConfigService;
 
@@ -91,18 +91,18 @@ class AvailableCombinationLoader extends AbstractAvailableCombinationLoader
         $query->andWhere('IFNULL(product.active, :parentActive) = :active');
         $query->andWhere('product.option_ids IS NOT NULL');
 
-        $query->setParameter('id', Uuid::fromHexToBytes($productId));
-        $query->setParameter('versionId', Uuid::fromHexToBytes($context->getVersionId()));
+        $query->setParameter('id', IdBinding::value($productId));
+        $query->setParameter('versionId', IdBinding::value($context->getVersionId()));
         $query->setParameter('active', true);
         $query->setParameter('parentActive', $parent['active'], ParameterType::BOOLEAN);
         $query->setParameter('parentIsCloseout', $parent['is_closeout'], ParameterType::BOOLEAN);
 
         $query->innerJoin('product', 'product_visibility', 'visibilities', 'product.visibilities = visibilities.product_id');
         $query->andWhere('visibilities.sales_channel_id = :salesChannelId');
-        $query->setParameter('salesChannelId', Uuid::fromHexToBytes($salesChannelId));
+        $query->setParameter('salesChannelId', IdBinding::value($salesChannelId));
 
         $query->select(
-            'LOWER(HEX(product.id))',
+            IdBinding::text('product.id'),
             'product.option_ids as options',
             'product.product_number as productNumber',
             'product.available',
@@ -128,8 +128,8 @@ class AvailableCombinationLoader extends AbstractAvailableCombinationLoader
         $query->where('id = :id');
         $query->andWhere('version_id = :versionId');
 
-        $query->setParameter('id', Uuid::fromHexToBytes($productId));
-        $query->setParameter('versionId', Uuid::fromHexToBytes($context->getVersionId()));
+        $query->setParameter('id', IdBinding::value($productId));
+        $query->setParameter('versionId', IdBinding::value($context->getVersionId()));
 
         $parent = $query->executeQuery()->fetchAssociative();
         if ($parent === false) {

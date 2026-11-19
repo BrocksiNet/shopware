@@ -8,11 +8,11 @@ use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Psr\Clock\ClockInterface;
 use Shopware\Core\Checkout\Cart\AbstractCartPersister;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\RetryableQuery;
 use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\RetryableTransaction;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Util\Random;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\System\SalesChannel\Event\SalesChannelContextTokenChangeEvent;
 use Shopware\Core\System\SalesChannel\SalesChannelContext;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
@@ -58,8 +58,8 @@ class SalesChannelContextPersister
         $data = [
             'token' => $token,
             'payload' => json_encode($parameters, \JSON_THROW_ON_ERROR),
-            'salesChannelId' => $salesChannelId ? Uuid::fromHexToBytes($salesChannelId) : null,
-            'customerId' => $customerId ? Uuid::fromHexToBytes($customerId) : null,
+            'salesChannelId' => $salesChannelId ? IdBinding::value($salesChannelId) : null,
+            'customerId' => $customerId ? IdBinding::value($customerId) : null,
             'updatedAt' => $this->clock->now()->format(Defaults::STORAGE_DATE_TIME_FORMAT),
         ];
 
@@ -144,8 +144,8 @@ class SalesChannelContextPersister
             $this->connection->insert('sales_channel_api_context', [
                 'token' => $newToken,
                 'payload' => json_encode([]),
-                'sales_channel_id' => Uuid::fromHexToBytes($context->getSalesChannelId()),
-                'customer_id' => $customer ? Uuid::fromHexToBytes($customer->getId()) : null,
+                'sales_channel_id' => IdBinding::value($context->getSalesChannelId()),
+                'customer_id' => $customer ? IdBinding::value($customer->getId()) : null,
                 'updated_at' => $this->clock->now()->format(Defaults::STORAGE_DATE_TIME_FORMAT),
             ]);
         }
@@ -165,16 +165,16 @@ class SalesChannelContextPersister
     {
         $qb = $this->connection->createQueryBuilder();
 
-        $qb->select('*');
+        $qb->select('token', 'payload', 'updated_at', IdBinding::text('sales_channel_id') . ' AS sales_channel_id', IdBinding::text('customer_id') . ' AS customer_id');
         $qb->from('sales_channel_api_context');
 
         $qb->where('sales_channel_id = :salesChannelId');
-        $qb->setParameter('salesChannelId', Uuid::fromHexToBytes($salesChannelId));
+        $qb->setParameter('salesChannelId', IdBinding::value($salesChannelId));
 
         if ($customerId !== null) {
             $qb->andWhere('(token = :token OR customer_id = :customerId)');
             $qb->setParameter('token', $token);
-            $qb->setParameter('customerId', Uuid::fromHexToBytes($customerId));
+            $qb->setParameter('customerId', IdBinding::value($customerId));
             $qb->setMaxResults(2);
         } else {
             $qb->andWhere('token = :token');
@@ -214,7 +214,7 @@ class SalesChannelContextPersister
             && \is_string($context['customer_id'] ?? null)
             && $context['customer_id'] !== ''
         ) {
-            $payload[SalesChannelContextService::CUSTOMER_ID] = Uuid::fromBytesToHex($context['customer_id']);
+            $payload[SalesChannelContextService::CUSTOMER_ID] = IdBinding::toHex($context['customer_id']);
         }
 
         return $payload;
@@ -237,7 +237,7 @@ class SalesChannelContextPersister
             ->where('customer_id = :customerId')
             ->setParameter('updatedAt', $this->clock->now()->format(Defaults::STORAGE_DATE_TIME_FORMAT))
             ->setParameter('payload', json_encode($revokeParams))
-            ->setParameter('customerId', Uuid::fromHexToBytes($customerId));
+            ->setParameter('customerId', IdBinding::value($customerId));
 
         // keep tokens valid, which are given in $preserveTokens
         if ($preserveTokens) {
@@ -259,8 +259,8 @@ class SalesChannelContextPersister
         foreach ($data as $row) {
             $customerIdFromRow = $row['customer_id'] ?? null;
             if (\is_string($customerIdFromRow) && $customerIdFromRow !== ''
-&& Uuid::fromBytesToHex($row['sales_channel_id']) === $salesChannelId
-&& Uuid::fromBytesToHex($customerIdFromRow) === $customerId
+&& IdBinding::toHex($row['sales_channel_id']) === $salesChannelId
+&& IdBinding::toHex($customerIdFromRow) === $customerId
             ) {
                 return $row;
             }
