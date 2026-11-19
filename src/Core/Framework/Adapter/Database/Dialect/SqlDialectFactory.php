@@ -5,7 +5,9 @@ namespace Shopware\Core\Framework\Adapter\Database\Dialect;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Platforms\MariaDBPlatform;
 use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
+use Doctrine\DBAL\Platforms\SQLitePlatform;
 use Shopware\Core\Framework\Adapter\Database\ConnectionFactory;
+use Shopware\Core\Framework\Adapter\Database\Sqlite\SqliteDialect;
 use Shopware\Core\Framework\Log\Package;
 
 /**
@@ -24,6 +26,10 @@ class SqlDialectFactory
 
         if ($platform instanceof PostgreSQLPlatform) {
             return new PostgreSqlDialect($connection);
+        }
+
+        if ($platform instanceof SQLitePlatform) {
+            return new SqliteDialect($connection);
         }
 
         if ($platform instanceof MariaDBPlatform) {
