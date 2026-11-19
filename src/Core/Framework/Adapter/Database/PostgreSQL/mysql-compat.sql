@@ -305,3 +305,14 @@ CREATE OR REPLACE FUNCTION mysql_compat_to_bool(numeric) RETURNS boolean LANGUAG
     RETURN $1 <> 0;
 CREATE OR REPLACE FUNCTION mysql_compat_to_bool(text) RETURNS boolean LANGUAGE sql IMMUTABLE PARALLEL SAFE
     RETURN CASE WHEN $1 = '' THEN false WHEN $1 ~ '^-?[0-9]+$' THEN $1::numeric <> 0 ELSE $1::boolean END;
+
+-- ROUND(double, n) and QUARTER(ts)
+CREATE OR REPLACE FUNCTION round(double precision, integer) RETURNS double precision LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE
+    RETURN round($1::numeric, $2)::double precision;
+CREATE OR REPLACE FUNCTION quarter(timestamp) RETURNS integer LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE
+    RETURN extract(quarter FROM $1)::integer;
+-- the double overload would win over numeric for integer arguments (double is the preferred numeric type), keep numeric for them
+CREATE OR REPLACE FUNCTION round(integer, integer) RETURNS numeric LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE
+    RETURN round($1::numeric, $2);
+CREATE OR REPLACE FUNCTION round(bigint, integer) RETURNS numeric LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE
+    RETURN round($1::numeric, $2);
