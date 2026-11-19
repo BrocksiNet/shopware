@@ -5,6 +5,8 @@ namespace Shopware\Core\Framework\DataAbstractionLayer\Dbal\FieldAccessorBuilder
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Checkout\Cart\Price\Struct\CartPrice;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\SqlDialect;
+use Shopware\Core\Framework\Adapter\Database\Dialect\SqlDialectFactory;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\EntityDefinitionQueryHelper;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\Field;
@@ -21,8 +23,10 @@ class PriceFieldAccessorBuilder implements FieldAccessorBuilderInterface
     /**
      * @internal
      */
-    public function __construct(private readonly Connection $connection)
-    {
+    public function __construct(
+        private readonly Connection $connection,
+        private ?SqlDialect $dialect = null
+    ) {
     }
 
     public function buildAccessor(string $root, Field $field, Context $context, string $accessor): ?string
@@ -77,13 +81,10 @@ class PriceFieldAccessorBuilder implements FieldAccessorBuilderInterface
          * We can indirectly cast to float by adding 0.0
          */
 
-        $template = '(JSON_UNQUOTE(JSON_EXTRACT(#root#.#field#, "$.c#currencyId#.#property#")) #factor#)';
+        $template = '(#extract# #factor#)';
 
         $variables = [
-            '#root#' => EntityDefinitionQueryHelper::escape($root),
-            '#field#' => EntityDefinitionQueryHelper::escape($field->getStorageName()),
-            '#currencyId#' => $currencyId,
-            '#property#' => $jsonAccessor,
+            '#extract#' => $this->extract($root, $field->getStorageName(), $currencyId, $jsonAccessor),
             '#factor#' => '+ 0.0',
         ];
 
@@ -91,10 +92,7 @@ class PriceFieldAccessorBuilder implements FieldAccessorBuilderInterface
 
         if ($currencyId !== Defaults::CURRENCY) {
             $variables = [
-                '#root#' => EntityDefinitionQueryHelper::escape($root),
-                '#field#' => EntityDefinitionQueryHelper::escape($field->getStorageName()),
-                '#currencyId#' => Defaults::CURRENCY,
-                '#property#' => $jsonAccessor,
+                '#extract#' => $this->extract($root, $field->getStorageName(), Defaults::CURRENCY, $jsonAccessor),
                 '#factor#' => $currencyFactor,
             ];
 
@@ -135,6 +133,16 @@ class PriceFieldAccessorBuilder implements FieldAccessorBuilderInterface
         }
 
         return $result;
+    }
+
+    private function extract(string $root, string $storageName, string $currencyId, string $property): string
+    {
+        $this->dialect ??= SqlDialectFactory::forConnection($this->connection);
+
+        return $this->dialect->jsonExtractNumber(
+            EntityDefinitionQueryHelper::escape($root) . '.' . EntityDefinitionQueryHelper::escape($storageName),
+            '$.c' . $currencyId . '.' . $property
+        );
     }
 
     private function useCashRounding(Context $context): bool

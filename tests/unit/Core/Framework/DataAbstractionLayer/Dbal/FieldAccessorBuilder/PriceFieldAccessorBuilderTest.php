@@ -4,14 +4,19 @@ namespace Shopware\Tests\Unit\Core\Framework\DataAbstractionLayer\Dbal\FieldAcce
 
 use Doctrine\DBAL\Connection;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Shopware\Core\Checkout\Cart\Price\Struct\CartPrice;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\MySqlDialect;
+use Shopware\Core\Framework\Adapter\Database\Dialect\PostgreSqlDialect;
+use Shopware\Core\Framework\Adapter\Database\Dialect\SqlDialect;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\FieldAccessorBuilder\PriceFieldAccessorBuilder;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\PriceField;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\StringField;
 use Shopware\Core\Framework\Log\Package;
+use Shopware\Core\Framework\Uuid\Uuid;
 
 /**
  * @internal
@@ -122,5 +127,27 @@ class PriceFieldAccessorBuilderTest extends TestCase
 
         static::assertNotNull($sql);
         static::assertStringContainsString('$.c' . Defaults::CURRENCY . '.percentage.gross', $sql);
+    }
+
+    #[DataProvider('dialects')]
+    public function testCurrencyFactorMultipliesNumericExtract(SqlDialect $dialect, string $expectedPath, string $expectedTail): void
+    {
+        $builder = new PriceFieldAccessorBuilder(static::createStub(Connection::class), $dialect);
+        $currencyId = Uuid::randomHex();
+
+        $sql = $builder->buildAccessor('product', new PriceField('price', 'price'), Context::createDefaultContext(), 'price.' . $currencyId);
+
+        static::assertNotNull($sql);
+        static::assertStringContainsString(\sprintf($expectedPath, $currencyId) . $expectedTail . ' + 0.0)', $sql);
+        static::assertStringContainsString(\sprintf($expectedPath, Defaults::CURRENCY) . $expectedTail . ' * (SELECT `factor` FROM `currency`', $sql);
+    }
+
+    /**
+     * @return iterable<string, array{SqlDialect, string, string}>
+     */
+    public static function dialects(): iterable
+    {
+        yield 'mysql' => [new MySqlDialect(), '\'$.c%s.gross\'', '))'];
+        yield 'postgresql' => [new PostgreSqlDialect(), '\'$.c%s.gross\'', '::jsonpath)) ->> 0)::numeric)'];
     }
 }

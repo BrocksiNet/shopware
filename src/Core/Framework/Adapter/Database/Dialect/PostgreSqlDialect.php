@@ -89,6 +89,11 @@ class PostgreSqlDialect implements SqlDialect
         return \sprintf('(jsonb_build_array(%s) ->> 0)', $this->jsonExtract($jsonColumnSql, $path));
     }
 
+    public function jsonExtractNumber(string $jsonColumnSql, string $path): string
+    {
+        return '(' . $this->jsonExtractText($jsonColumnSql, $path) . '::numeric)';
+    }
+
     public function jsonSet(string $jsonColumnSql, string $path, string $valueSql): string
     {
         return \sprintf(
@@ -148,6 +153,11 @@ class PostgreSqlDialect implements SqlDialect
         );
     }
 
+    public function caseInsensitive(string $columnSql): string
+    {
+        return \sprintf('lower(%s) COLLATE ucs_basic', $columnSql);
+    }
+
     /**
      * `$.a."b-c"` => `{a,"b-c"}`
      */
@@ -196,10 +206,5 @@ class PostgreSqlDialect implements SqlDialect
         }
 
         return $this->primaryKeys[$table] = $columns;
-    }
-
-    public function caseInsensitive(string $columnSql): string
-    {
-        return \sprintf('lower(%s) COLLATE ucs_basic', $columnSql);
     }
 }

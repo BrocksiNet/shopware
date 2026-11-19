@@ -80,6 +80,12 @@ interface SqlDialect
     public function jsonExtractText(string $jsonColumnSql, string $path): string;
 
     /**
+     * The value at the path for arithmetic and numeric comparison (`* factor`, `+ 0.0`, `CAST(... AS DECIMAL)`), SQL NULL if the path is missing or a JSON null.
+     * MySQL and MariaDB convert the unquoted text implicitly, PostgreSQL needs the explicit `::numeric`.
+     */
+    public function jsonExtractNumber(string $jsonColumnSql, string $path): string;
+
+    /**
      * `$valueSql` is a JSON typed SQL expression, `$jsonColumnSql` may be NULL (treated as `{}`).
      */
     public function jsonSet(string $jsonColumnSql, string $path, string $valueSql): string;

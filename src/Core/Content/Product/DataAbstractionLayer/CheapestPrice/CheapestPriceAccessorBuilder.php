@@ -5,6 +5,8 @@ namespace Shopware\Core\Content\Product\DataAbstractionLayer\CheapestPrice;
 use Psr\Log\LoggerInterface;
 use Shopware\Core\Checkout\Cart\Price\Struct\CartPrice;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\SqlDialect;
+use Shopware\Core\Framework\Adapter\Database\Dialect\SqlDialectFactory;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\FieldAccessorBuilder\FieldAccessorBuilderInterface;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\Field;
@@ -18,7 +20,8 @@ class CheapestPriceAccessorBuilder implements FieldAccessorBuilderInterface
      */
     public function __construct(
         private readonly int $maxRulePrices,
-        private readonly LoggerInterface $logger
+        private readonly LoggerInterface $logger,
+        private ?SqlDialect $dialect = null
     ) {
     }
 
@@ -67,7 +70,7 @@ class CheapestPriceAccessorBuilder implements FieldAccessorBuilderInterface
             array_pop($parts);
         }
 
-        $template = '(JSON_UNQUOTE(JSON_EXTRACT(`#root#`.`#field#`, "$.#rule_key#.#currency_key#.#property#")) * #factor#)';
+        $template = '(#extract# * #factor#)';
         $variables = [
             '#template#' => $template,
             '#decimals#' => (string) $context->getRounding()->getDecimals(),
@@ -89,11 +92,7 @@ class CheapestPriceAccessorBuilder implements FieldAccessorBuilderInterface
 
         foreach ($keys as $ruleId) {
             $parameters = [
-                '#root#' => $root,
-                '#field#' => 'cheapest_price_accessor',
-                '#rule_key#' => 'rule' . $ruleId,
-                '#currency_key#' => 'currency' . $context->getCurrencyId(),
-                '#property#' => $jsonAccessor,
+                '#extract#' => $this->extract($root, 'rule' . $ruleId, 'currency' . $context->getCurrencyId(), $jsonAccessor),
                 '#factor#' => '1',
                 '#multiplier#' => (string) $multiplier,
             ];
@@ -109,11 +108,7 @@ class CheapestPriceAccessorBuilder implements FieldAccessorBuilderInterface
             }
 
             $parameters = [
-                '#root#' => $root,
-                '#field#' => 'cheapest_price_accessor',
-                '#rule_key#' => 'rule' . $ruleId,
-                '#currency_key#' => 'currency' . Defaults::CURRENCY,
-                '#property#' => $jsonAccessor,
+                '#extract#' => $this->extract($root, 'rule' . $ruleId, 'currency' . Defaults::CURRENCY, $jsonAccessor),
                 '#factor#' => (string) $context->getCurrencyFactor(),
                 '#multiplier#' => (string) $multiplier,
             ];
@@ -135,6 +130,17 @@ class CheapestPriceAccessorBuilder implements FieldAccessorBuilderInterface
         }
 
         return $result;
+    }
+
+    private function extract(string $root, string $ruleKey, string $currencyKey, string $property): string
+    {
+        $this->dialect ??= SqlDialectFactory::getDefault();
+        $dialect = $this->dialect;
+
+        return $dialect->jsonExtractNumber(
+            $dialect->quoteIdentifier($root) . '.' . $dialect->quoteIdentifier('cheapest_price_accessor'),
+            '$.' . $ruleKey . '.' . $currencyKey . '.' . $property
+        );
     }
 
     private function useCashRounding(Context $context): bool

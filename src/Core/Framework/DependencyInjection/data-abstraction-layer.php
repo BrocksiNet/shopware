@@ -481,6 +481,7 @@ return static function (ContainerConfigurator $containerConfigurator): void {
     $services->set(PriceFieldAccessorBuilder::class)
         ->args([
             service(Connection::class),
+            service(SqlDialect::class),
         ])
         ->tag('shopware.field_accessor_builder', ['priority' => -100]);
 

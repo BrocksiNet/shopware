@@ -145,6 +145,7 @@ use Shopware\Core\Content\Product\Util\VariantCombinationLoader;
 use Shopware\Core\Content\ProductStream\Service\ProductStreamBuilder;
 use Shopware\Core\Content\Shared\MailFlow\DataProvider\ProductProvider;
 use Shopware\Core\Framework\Adapter\Cache\CacheTagCollector;
+use Shopware\Core\Framework\Adapter\Database\Dialect\SqlDialect;
 use Shopware\Core\Framework\Adapter\Storage\AbstractKeyValueStorage;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\Common\IteratorFactory;
 use Shopware\Core\Framework\DataAbstractionLayer\Indexing\ChildCountUpdater;
@@ -867,6 +868,7 @@ return static function (ContainerConfigurator $containerConfigurator): void {
         ->args([
             param('shopware.dal.max_rule_prices'),
             service('logger'),
+            service(SqlDialect::class),
         ])
         ->tag('shopware.field_accessor_builder', ['priority' => -200]);
 

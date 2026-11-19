@@ -128,6 +128,7 @@ class SqlDialectTest extends TestCase
 
         static::assertSame('JSON_EXTRACT(`t`.`c`, \'$.a.b\')', $dialect->jsonExtract('`t`.`c`', '$.a.b'));
         static::assertSame('JSON_UNQUOTE(JSON_EXTRACT(`c`, \'$.a\'))', $dialect->jsonExtractText('`c`', '$.a'));
+        static::assertSame('JSON_UNQUOTE(JSON_EXTRACT(`c`, \'$.a\'))', $dialect->jsonExtractNumber('`c`', '$.a'));
         static::assertSame('JSON_SET(IFNULL(`c`, "{}"), \'$."a"\', ?)', $dialect->jsonSet('`c`', '$."a"', '?'));
         static::assertSame(
             'IF(JSON_TYPE(JSON_EXTRACT(`c`, \'$.a\')) != "NULL", CAST(JSON_UNQUOTE(JSON_EXTRACT(`c`, \'$.a\')) AS DATE), NULL)',
@@ -146,6 +147,7 @@ class SqlDialectTest extends TestCase
 
         static::assertSame('jsonb_path_query_first("t"."c", \'$.a.b\'::jsonpath)', $dialect->jsonExtract('"t"."c"', '$.a.b'));
         static::assertSame('(jsonb_build_array(jsonb_path_query_first(c, \'$.a\'::jsonpath)) ->> 0)', $dialect->jsonExtractText('c', '$.a'));
+        static::assertSame('((jsonb_build_array(jsonb_path_query_first(c, \'$.a\'::jsonpath)) ->> 0)::numeric)', $dialect->jsonExtractNumber('c', '$.a'));
         static::assertSame(
             'jsonb_set(COALESCE(c, \'{}\'::jsonb), \'{"a","b-c"}\'::text[], ?, true)',
             $dialect->jsonSet('c', '$."a"."b-c"', '?')

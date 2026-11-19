@@ -54,6 +54,11 @@ class MySqlDialect implements SqlDialect
         return \sprintf('JSON_UNQUOTE(%s)', $this->jsonExtract($jsonColumnSql, $path));
     }
 
+    public function jsonExtractNumber(string $jsonColumnSql, string $path): string
+    {
+        return $this->jsonExtractText($jsonColumnSql, $path);
+    }
+
     public function jsonSet(string $jsonColumnSql, string $path, string $valueSql): string
     {
         return \sprintf('JSON_SET(IFNULL(%s, "{}"), %s, %s)', $jsonColumnSql, $this->stringLiteral($path), $valueSql);

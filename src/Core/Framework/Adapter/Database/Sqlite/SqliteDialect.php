@@ -73,6 +73,11 @@ class SqliteDialect implements SqlDialect
         return \sprintf('(%s ->> %s)', $jsonColumnSql, $this->stringLiteral($path));
     }
 
+    public function jsonExtractNumber(string $jsonColumnSql, string $path): string
+    {
+        return $this->jsonExtractText($jsonColumnSql, $path);
+    }
+
     public function jsonSet(string $jsonColumnSql, string $path, string $valueSql): string
     {
         return \sprintf('json_set(COALESCE(%s, \'{}\'), %s, %s)', $jsonColumnSql, $this->stringLiteral($path), $valueSql);
