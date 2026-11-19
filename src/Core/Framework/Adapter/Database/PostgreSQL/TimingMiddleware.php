@@ -38,11 +38,10 @@ class TimingMiddleware implements Middleware
 
         if (!self::$registered) {
             self::$registered = true;
-            $start = hrtime(true);
-            register_shutdown_function(static function () use ($file, $start): void {
+            register_shutdown_function(static function () use ($file): void {
                 $line = json_encode([
                     'uri' => $_SERVER['REQUEST_URI'] ?? implode(' ', $_SERVER['argv'] ?? []),
-                    'wall_ns' => hrtime(true) - $start,
+                    'wall_ns' => (int) ((microtime(true) - (float) ($_SERVER['REQUEST_TIME_FLOAT'] ?? microtime(true))) * 1e9),
                     'probes' => self::$totals,
                 ]);
                 file_put_contents($file, $line . "\n", \FILE_APPEND | \LOCK_EX);
