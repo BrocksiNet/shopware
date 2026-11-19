@@ -123,6 +123,13 @@ class DdlRewriter
     {
         $statement = trim(preg_replace('/^(?:\s|--[^\n]*\n|\/\*.*?\*\/)+/s', '', $statement) ?? $statement);
 
+        // `SET foreign_key_checks = 0|1` switches the foreign key triggers of the session, a role without the privilege keeps the checks
+        if (preg_match('/^SET\s+(?:SESSION\s+)?foreign_key_checks\s*=\s*(0|1|ON|OFF|TRUE|FALSE)\s*;?$/i', $statement, $m) === 1) {
+            $role = \in_array(strtolower($m[1]), ['0', 'off', 'false'], true) ? 'replica' : 'origin';
+
+            return ['DO $$ BEGIN PERFORM set_config(\'session_replication_role\', \'' . $role . '\', false); EXCEPTION WHEN insufficient_privilege THEN NULL; END $$'];
+        }
+
         // MySQL session switches without a PostgreSQL counterpart
         if (preg_match('/^SET\s+(?:SESSION\s+|GLOBAL\s+)?(?:default_storage_engine|foreign_key_checks|unique_checks|sql_mode|sql_notes|group_concat_max_len|innodb_\w+)\b/i', $statement) === 1) {
             return ['SELECT 1'];

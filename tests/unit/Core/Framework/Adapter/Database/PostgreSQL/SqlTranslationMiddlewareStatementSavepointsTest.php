@@ -76,9 +76,20 @@ class SqlTranslationMiddlewareStatementSavepointsTest extends TestCase
     public function testSessionSwitchSentThroughQueryBecomesNoop(): void
     {
         $connection = $this->connect();
-        $connection->query('SET FOREIGN_KEY_CHECKS=0;');
+        $connection->query('SET UNIQUE_CHECKS=0;');
 
         static::assertSame(['query SELECT 1'], $this->log);
+    }
+
+    public function testForeignKeyChecksSwitchTogglesTheReplicationRole(): void
+    {
+        $connection = $this->connect();
+        $connection->query('SET FOREIGN_KEY_CHECKS=0;');
+        $connection->query('SET FOREIGN_KEY_CHECKS=1;');
+
+        static::assertCount(2, $this->log);
+        static::assertStringContainsString('\'session_replication_role\', \'replica\'', $this->log[0]);
+        static::assertStringContainsString('\'session_replication_role\', \'origin\'', $this->log[1]);
     }
 
     private function connect(): Connection
