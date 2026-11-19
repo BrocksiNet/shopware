@@ -56,7 +56,7 @@ class CheapestPriceUpdater
         $existingAccessorsByParent = [];
         if ($all !== []) {
             $rows = $this->connection->fetchAllAssociative(
-                'SELECT ' . IdBinding::text('`parent_id`') . ' AS parentId, `id` AS id, `cheapest_price_accessor` AS accessor
+                'SELECT ' . IdBinding::text('`parent_id`') . ' AS parentId, ' . IdBinding::text('`id`') . ' AS id, `cheapest_price_accessor` AS accessor
                  FROM product
                  WHERE `parent_id` IN (:ids) AND `version_id` = :version',
                 ['ids' => IdBinding::values(array_keys($all)), 'version' => $versionId],
@@ -90,7 +90,7 @@ class CheapestPriceUpdater
             foreach ($container->getVariantIds() as $variantId) {
                 $accessor = Json::encode($this->buildAccessor($container, $variantId));
 
-                if (($existingAccessors[IdBinding::value($variantId)] ?? null) === $accessor) {
+                if (($existingAccessors[$variantId] ?? null) === $accessor) {
                     continue;
                 }
 

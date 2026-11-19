@@ -26,10 +26,11 @@ class ThemeRuntimeConfigStorage
 
     public function getByName(string $technicalName): ?ThemeRuntimeConfig
     {
+        $themeIdSelect = IdBinding::text('`theme_id`');
         $record = $this->connection->fetchAssociative(
-            <<<'SQL'
+            <<<SQL
                 SELECT
-                `theme_id`,
+                {$themeIdSelect} AS `theme_id`,
                 `technical_name`,
                 `resolved_config`,
                 `view_inheritance`,

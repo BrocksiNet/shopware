@@ -46,7 +46,7 @@ class UserRepository implements UserRepositoryInterface
         }
 
         $builder = $this->connection->createQueryBuilder();
-        $user = $builder->select('user.id', 'user.password', 'user.active')
+        $user = $builder->select(IdBinding::text('user.id') . ' AS id', 'user.password', 'user.active')
             ->from('user')
             ->where('username = :username')
             ->setParameter('username', $username)
