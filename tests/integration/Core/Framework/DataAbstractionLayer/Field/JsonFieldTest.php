@@ -53,8 +53,8 @@ class JsonFieldTest extends TestCase
         $nullableTable = <<<EOF
 CREATE TABLE `_test_nullable` (
   `id` binary(16) NOT NULL,
-  `data` longtext CHARACTER SET utf8mb4,
-  `root` longtext CHARACTER SET utf8mb4,
+  `data` json,
+  `root` json,
   `created_at` datetime(3) NOT NULL,
   `updated_at` datetime(3) DEFAULT NULL,
   PRIMARY KEY (`id`)
@@ -362,7 +362,7 @@ EOF;
         );
 
         static::assertIsString($stored);
-        static::assertSame(
+        static::assertEquals(
             [
                 'gross' => 15.0,
                 'extended' => [
@@ -433,7 +433,7 @@ EOF;
             $repo->search($this->registerDefinition(JsonDefinition::class), $criteria, $context);
         } catch (\Throwable $e) {
             if ($e instanceof DriverException) {
-                static::assertStringContainsString('Invalid JSON path expression', $e->getMessage());
+                static::assertMatchesRegularExpression('/Invalid JSON path expression|jsonpath/', $e->getMessage());
             }
             if ($e instanceof MissingNamedParameter) {
                 static::assertStringContainsString('Named parameter ', $e->getMessage());
