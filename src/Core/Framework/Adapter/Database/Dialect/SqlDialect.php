@@ -11,7 +11,7 @@ use Shopware\Core\Framework\Log\Package;
  * Every method returns SQL text, the caller binds the values.
  * Extend this interface additively only, other implementations (SQLite) build on it.
  *
- * @experimental stableVersion:v6.8.0 feature:DATABASE_INDEPENDENCE
+ * @internal
  */
 #[Package('framework')]
 interface SqlDialect
