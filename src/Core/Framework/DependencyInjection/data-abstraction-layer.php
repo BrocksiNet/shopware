@@ -6,6 +6,8 @@ use Doctrine\DBAL\Connection;
 use Psr\Clock\ClockInterface;
 use Shopware\Core\Content\Product\SearchKeyword\KeywordLoader;
 use Shopware\Core\Content\Product\SearchKeyword\ProductSearchTermInterpreter;
+use Shopware\Core\Framework\Adapter\Database\Dialect\SqlDialect;
+use Shopware\Core\Framework\Adapter\Database\Dialect\SqlDialectFactory;
 use Shopware\Core\Framework\Api\Acl\AclCriteriaValidator;
 use Shopware\Core\Framework\Api\Acl\AclWriteValidator;
 use Shopware\Core\Framework\Api\Sync\SyncFkResolver;
@@ -222,6 +224,10 @@ return static function (ContainerConfigurator $containerConfigurator): void {
     $services->set(EntityCacheKeyGenerator::class)
         ->public();
 
+    $services->set(SqlDialect::class)
+        ->factory([SqlDialectFactory::class, 'forConnection'])
+        ->args([service(Connection::class)]);
+
     $services->set(EntityDefinitionQueryHelper::class);
 
     $services->set(JoinGroupBuilder::class)
@@ -356,6 +362,7 @@ return static function (ContainerConfigurator $containerConfigurator): void {
             service(CriteriaQueryBuilder::class),
             service('logger'),
             service(CriteriaFieldsResolver::class),
+            service(SqlDialect::class),
         ]);
 
     $services->set(CriteriaFieldsResolver::class);
@@ -428,6 +435,7 @@ return static function (ContainerConfigurator $containerConfigurator): void {
             service(ExceptionHandlerRegistry::class),
             service(DefinitionInstanceRegistry::class),
             service(RowLoader::class),
+            service(SqlDialect::class),
         ]);
 
     $services->set(RowLoader::class)
@@ -478,6 +486,7 @@ return static function (ContainerConfigurator $containerConfigurator): void {
     $services->set(JsonFieldAccessorBuilder::class)
         ->args([
             service(Connection::class),
+            service(SqlDialect::class),
         ])
         ->tag('shopware.field_accessor_builder', ['priority' => -150]);
 

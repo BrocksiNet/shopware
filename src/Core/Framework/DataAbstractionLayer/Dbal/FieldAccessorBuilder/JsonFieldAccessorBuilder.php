@@ -3,6 +3,8 @@
 namespace Shopware\Core\Framework\DataAbstractionLayer\Dbal\FieldAccessorBuilder;
 
 use Doctrine\DBAL\Connection;
+use Shopware\Core\Framework\Adapter\Database\Dialect\SqlDialect;
+use Shopware\Core\Framework\Adapter\Database\Dialect\SqlDialectFactory;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\DataAbstractionLayerException;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\EntityDefinitionQueryHelper;
@@ -21,11 +23,16 @@ use Shopware\Core\Framework\Log\Package;
 #[Package('framework')]
 class JsonFieldAccessorBuilder implements FieldAccessorBuilderInterface
 {
+    private ?SqlDialect $dialect;
+
     /**
      * @internal
      */
-    public function __construct(private readonly Connection $connection)
-    {
+    public function __construct(
+        private readonly Connection $connection,
+        ?SqlDialect $dialect = null
+    ) {
+        $this->dialect = $dialect;
     }
 
     public function buildAccessor(string $root, Field $field, Context $context, string $accessor): ?string
@@ -41,7 +48,7 @@ class JsonFieldAccessorBuilder implements FieldAccessorBuilderInterface
         );
 
         if ($jsonPath === null || $jsonPath === '') {
-            return EntityDefinitionQueryHelper::escape($root) . '.' . EntityDefinitionQueryHelper::escape($field->getStorageName());
+            return $this->quote($root) . '.' . $this->quote($field->getStorageName());
         }
 
         if (!EntityDefinitionQueryHelper::isValidJsonPath($jsonPath)) {
@@ -62,23 +69,13 @@ class JsonFieldAccessorBuilder implements FieldAccessorBuilderInterface
             $jsonPath = implode('.', $jsonPathParts);
         }
 
-        $jsonValueExpr = \sprintf(
-            'JSON_EXTRACT(%s.%s, %s)',
-            EntityDefinitionQueryHelper::escape($root),
-            EntityDefinitionQueryHelper::escape($field->getStorageName()),
-            $this->connection->quote('$' . $jsonPath)
-        );
-
         $embeddedField = $this->getField($jsonPath, $field->getPropertyMapping());
-        $accessor = $this->getFieldAccessor($jsonValueExpr, $embeddedField);
 
-        /*
-         * Values extracted from json have distinct json types, that are different from normal value types.
-         * We need to convert json nulls into sql nulls.
-         *
-         * For example: `JSON_EXTRACT('{"foo":null}', '$.foo') IS NOT NULL`
-         */
-        return \sprintf('IF(JSON_TYPE(%s) != "NULL", %s, NULL)', $jsonValueExpr, $accessor);
+        return $this->dialect()->jsonValue(
+            $this->quote($root) . '.' . $this->quote($field->getStorageName()),
+            '$' . $jsonPath,
+            $this->getJsonType($embeddedField)
+        );
     }
 
     /**
@@ -109,29 +106,31 @@ class JsonFieldAccessorBuilder implements FieldAccessorBuilderInterface
         return null;
     }
 
-    private function getFieldAccessor(string $jsonValueExpr, ?Field $field = null): string
+    private function quote(string $identifier): string
     {
-        if ($field instanceof IntField || $field instanceof FloatField) {
-            return \sprintf('JSON_UNQUOTE(%s) + 0.0', $jsonValueExpr);
+        if (!EntityDefinitionQueryHelper::isValidIdentifier($identifier)) {
+            throw DataAbstractionLayerException::invalidIdentifier($identifier);
         }
 
-        if ($field instanceof BoolField) {
-            return \sprintf(
-                'IF(JSON_UNQUOTE(%s) != "true" AND JSON_UNQUOTE(%s) = 0, 0, 1)',
-                $jsonValueExpr,
-                $jsonValueExpr
-            );
-        }
+        return $this->dialect()->quoteIdentifier($identifier);
+    }
 
-        if ($field instanceof DateTimeField) {
-            return \sprintf('CAST(JSON_UNQUOTE(%s) AS datetime(3))', $jsonValueExpr);
-        }
+    private function getJsonType(?Field $field): string
+    {
+        return match (true) {
+            $field instanceof IntField, $field instanceof FloatField => SqlDialect::JSON_TYPE_FLOAT,
+            $field instanceof BoolField => SqlDialect::JSON_TYPE_BOOL,
+            $field instanceof DateTimeField => SqlDialect::JSON_TYPE_DATETIME,
+            $field instanceof DateField => SqlDialect::JSON_TYPE_DATE,
+            default => SqlDialect::JSON_TYPE_STRING,
+        };
+    }
 
-        if ($field instanceof DateField) {
-            return \sprintf('CAST(JSON_UNQUOTE(%s) AS DATE)', $jsonValueExpr);
-        }
-
-        // The CONVERT is required for mariadb support (mysqls JSON_UNQUOTE returns utf8mb4)
-        return \sprintf('CONVERT(JSON_UNQUOTE(%s) USING "utf8mb4") COLLATE utf8mb4_unicode_ci', $jsonValueExpr);
+    /**
+     * Resolved on first use, the platform detection needs a database connection.
+     */
+    private function dialect(): SqlDialect
+    {
+        return $this->dialect ??= SqlDialectFactory::forConnection($this->connection);
     }
 }

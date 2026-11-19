@@ -22,8 +22,16 @@ class PostgreSqlDialect implements SqlDialect
      */
     private array $primaryKeys = [];
 
-    public function __construct(private readonly ?Connection $connection = null)
-    {
+    /**
+     * @param bool $nativeIdentifiers false: identifiers are quoted with backticks and left to the translator (the default while
+     *                                the translation middleware is active). A double quoted token is a string literal for the
+     *                                translator, and it also shortens identifiers over 63 bytes and keeps the map that restores
+     *                                them in the result, so native quotes only work for statements that bypass it.
+     */
+    public function __construct(
+        private readonly ?Connection $connection = null,
+        private readonly bool $nativeIdentifiers = false
+    ) {
     }
 
     public function getName(): string
@@ -33,6 +41,10 @@ class PostgreSqlDialect implements SqlDialect
 
     public function quoteIdentifier(string $identifier): string
     {
+        if (!$this->nativeIdentifiers) {
+            return '`' . str_replace('`', '``', $identifier) . '`';
+        }
+
         return '"' . str_replace('"', '""', $identifier) . '"';
     }
 

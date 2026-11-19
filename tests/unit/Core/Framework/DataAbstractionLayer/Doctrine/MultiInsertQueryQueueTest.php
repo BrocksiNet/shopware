@@ -7,6 +7,7 @@ use Doctrine\DBAL\ParameterType;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use Shopware\Core\Framework\Adapter\Database\Dialect\PostgreSqlDialect;
 use Shopware\Core\Framework\DataAbstractionLayer\DataAbstractionLayerException;
 use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\MultiInsertQueryQueue;
 use Shopware\Core\Framework\Log\Package;
@@ -253,7 +254,7 @@ class MultiInsertQueryQueueTest extends TestCase
         );
     }
 
-    public function testConflictTargetIsPassedAsCommentForUpserts(): void
+    public function testConflictTargetIsIgnoredByMySql(): void
     {
         $executed = [];
         $queue = new MultiInsertQueryQueue($this->createRecordingConnection($executed));
@@ -266,9 +267,42 @@ class MultiInsertQueryQueueTest extends TestCase
         $queue->execute();
 
         static::assertCount(2, $executed);
-        static::assertSame('/* conflict-target: name, id */ INSERT INTO `table1` (`id`, `name`) VALUES (?,?) ON DUPLICATE KEY UPDATE `name` = VALUES(`name`);', $executed[0]['query']);
-        // no ON DUPLICATE KEY part, no hint
+        static::assertSame('INSERT INTO `table1` (`id`, `name`) VALUES (?,?) ON DUPLICATE KEY UPDATE `name` = VALUES(`name`);', $executed[0]['query']);
         static::assertSame('INSERT INTO `table2` (`id`, `name`) VALUES (?,?);', $executed[1]['query']);
+    }
+
+    public function testConflictTargetIsUsedByThePostgreSqlDialect(): void
+    {
+        $executed = [];
+        $queue = new MultiInsertQueryQueue($this->createRecordingConnection($executed), 250, false, false, new PostgreSqlDialect());
+        $queue->addInsert('table1', ['id' => 1, 'name' => 'test1']);
+        $queue->addInsert('table2', ['id' => 1, 'name' => 'test1']);
+        $queue->setConflictTarget('table1', ['name', 'id']);
+        $queue->setConflictTarget('table2', ['name']);
+        $queue->addUpdateFieldOnDuplicateKey('table1', 'name');
+
+        $queue->execute();
+
+        static::assertCount(2, $executed);
+        static::assertSame('INSERT INTO `table1` (`id`, `name`) VALUES (?,?) ON CONFLICT (`name`, `id`) DO UPDATE SET `name` = EXCLUDED.`name`;', $executed[0]['query']);
+        // nothing to update, no conflict clause
+        static::assertSame('INSERT INTO `table2` (`id`, `name`) VALUES (?,?);', $executed[1]['query']);
+    }
+
+    public function testIgnoreErrorsBecomesInsertIgnoreOrOnConflictDoNothing(): void
+    {
+        $executed = [];
+        $queue = new MultiInsertQueryQueue($this->createRecordingConnection($executed), 250, true);
+        $queue->addInsert('table1', ['id' => 1]);
+        $queue->execute();
+
+        $pgExecuted = [];
+        $pgQueue = new MultiInsertQueryQueue($this->createRecordingConnection($pgExecuted), 250, true, false, new PostgreSqlDialect());
+        $pgQueue->addInsert('table1', ['id' => 1]);
+        $pgQueue->execute();
+
+        static::assertSame('INSERT IGNORE INTO `table1` (`id`) VALUES (?);', $executed[0]['query']);
+        static::assertSame('INSERT INTO `table1` (`id`) VALUES (?) ON CONFLICT DO NOTHING;', $pgExecuted[0]['query']);
     }
 
     public function testExecuteWithoutInsertsDoesNotTouchTheConnection(): void

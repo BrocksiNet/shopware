@@ -5,6 +5,7 @@ namespace Shopware\Core\Framework\DataAbstractionLayer\Dbal;
 use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\SqlDialectFactory;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\DataAbstractionLayerException;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\Exception\UnmappedFieldException;
@@ -40,13 +41,17 @@ class EntityDefinitionQueryHelper
 {
     final public const HAS_TO_MANY_JOIN = 'has_to_many_join';
 
+    /**
+     * Validates the identifier and quotes it with the dialect of the configured database.
+     * Prefer injecting the `SqlDialect` and calling `quoteIdentifier()`, the static call has no service to depend on.
+     */
     public static function escape(string $string): string
     {
         if (!self::isValidIdentifier($string)) {
             throw DataAbstractionLayerException::invalidIdentifier($string);
         }
 
-        return '`' . $string . '`';
+        return SqlDialectFactory::getDefault()->quoteIdentifier($string);
     }
 
     /**

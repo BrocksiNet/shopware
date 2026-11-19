@@ -2,10 +2,11 @@
 
 namespace Shopware\Core\Framework\DataAbstractionLayer\Dbal;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use Psr\Log\LoggerInterface;
+use Shopware\Core\Framework\Adapter\Database\Dialect\SqlDialect;
+use Shopware\Core\Framework\Adapter\Database\Dialect\SqlDialectFactory;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\DataAbstractionLayerException;
 use Shopware\Core\Framework\DataAbstractionLayer\Entity;
@@ -64,6 +65,8 @@ class EntityReader implements EntityReaderInterface
      */
     final public const TO_MANY_ASSOCIATION_LIMIT_QUERY = 'to_many_association_limit_query';
 
+    private ?SqlDialect $dialect;
+
     public function __construct(
         private readonly Connection $connection,
         private readonly EntityHydrator $hydrator,
@@ -71,8 +74,10 @@ class EntityReader implements EntityReaderInterface
         private readonly SqlQueryParser $parser,
         private readonly CriteriaQueryBuilder $criteriaQueryBuilder,
         private readonly LoggerInterface $logger,
-        private readonly CriteriaFieldsResolver $criteriaFieldsResolver
+        private readonly CriteriaFieldsResolver $criteriaFieldsResolver,
+        ?SqlDialect $dialect = null
     ) {
+        $this->dialect = $dialect;
     }
 
     /**
@@ -517,7 +522,7 @@ class EntityReader implements EntityReaderInterface
             str_replace(
                 array_keys($parameters),
                 array_values($parameters),
-                '(SELECT GROUP_CONCAT(HEX(#alias#.#mapping_reference_column#) SEPARATOR \'||\')
+                '(SELECT ' . $this->dialect()->groupConcat($this->dialect()->idToText('#alias#.#mapping_reference_column#'), '||') . '
                   FROM #mapping_table# #alias#
                   WHERE #alias#.#mapping_local_column# = #source#'
                   . $versionCondition
@@ -969,7 +974,7 @@ class EntityReader implements EntityReaderInterface
 
         if (!$association->is(Inherited::class)) {
             $query->andWhere($root . '.' . $localColumn . ' IN (:localIds)');
-            $query->setParameter('localIds', Uuid::fromHexToBytesList($collection->getIds()), ArrayParameterType::BINARY);
+            $query->setParameter('localIds', Uuid::fromHexToBytesList($collection->getIds()), $this->dialect()->idListParameterType());
         } else {
             // When the association is inherited, we need to join the base entity to the local table
             // the "join column" (column name = property name) contains the id of the parent entity if the association is inherited
@@ -990,13 +995,13 @@ class EntityReader implements EntityReaderInterface
             );
 
             $query->andWhere(EntityDefinitionQueryHelper::escape($definition->getEntityName()) . '.id IN (:localIds)');
-            $query->setParameter('localIds', Uuid::fromHexToBytesList($collection->getIds()), ArrayParameterType::BINARY);
+            $query->setParameter('localIds', Uuid::fromHexToBytesList($collection->getIds()), $this->dialect()->idListParameterType());
         }
 
         $orderBy = '';
         $parts = $query->getOrderByParts();
         if ($parts !== []) {
-            $orderBy = ' ORDER BY ' . implode(', ', $parts);
+            $orderBy = implode(', ', $parts);
             $query->resetOrderBy();
         }
         // order by is handled in group_concat
@@ -1004,8 +1009,8 @@ class EntityReader implements EntityReaderInterface
         $fieldCriteria->resetSorting();
 
         $query->select(
-            'LOWER(HEX(' . $root . '.' . $localColumn . ')) as `key`',
-            'GROUP_CONCAT(LOWER(HEX(' . $root . '.' . $referenceColumn . ')) ' . $orderBy . ') as `value`',
+            $this->dialect()->idToText($root . '.' . $localColumn) . ' as ' . $this->dialect()->quoteIdentifier('key'),
+            $this->dialect()->groupConcat($this->dialect()->idToText($root . '.' . $referenceColumn), ',', $orderBy === '' ? null : $orderBy) . ' as ' . $this->dialect()->quoteIdentifier('value'),
         );
 
         $query->addGroupBy($root . '.' . $localColumn);
@@ -1242,7 +1247,7 @@ class EntityReader implements EntityReaderInterface
             }
         }
 
-        $wrapper->setParameter('rootIds', $bytes, ArrayParameterType::BINARY);
+        $wrapper->setParameter('rootIds', $bytes, $this->dialect()->idListParameterType());
 
         $limit = (int) $fieldCriteria->getOffset() + (int) $fieldCriteria->getLimit();
         $offset = (int) $fieldCriteria->getOffset() + 1;
@@ -1535,5 +1540,13 @@ class EntityReader implements EntityReaderInterface
         }
 
         return $collection;
+    }
+
+    /**
+     * Resolved on first use, the platform detection needs a database connection.
+     */
+    private function dialect(): SqlDialect
+    {
+        return $this->dialect ??= SqlDialectFactory::forConnection($this->connection);
     }
 }

@@ -5,8 +5,9 @@ namespace Shopware\Core\Framework\DataAbstractionLayer\Doctrine;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\ParameterType;
 use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
+use Shopware\Core\Framework\Adapter\Database\Dialect\SqlDialect;
+use Shopware\Core\Framework\Adapter\Database\Dialect\SqlDialectFactory;
 use Shopware\Core\Framework\DataAbstractionLayer\DataAbstractionLayerException;
-use Shopware\Core\Framework\DataAbstractionLayer\Dbal\EntityDefinitionQueryHelper;
 use Shopware\Core\Framework\Log\Package;
 
 /**
@@ -40,12 +41,16 @@ class MultiInsertQueryQueue
      */
     private readonly int $chunkSize;
 
+    private ?SqlDialect $dialect;
+
     public function __construct(
         private readonly Connection $connection,
         int $chunkSize = 250,
         private readonly bool $ignoreErrors = false,
-        private readonly bool $useReplace = false
+        private readonly bool $useReplace = false,
+        ?SqlDialect $dialect = null
     ) {
+        $this->dialect = $dialect;
         if ($chunkSize < 1) {
             throw DataAbstractionLayerException::invalidChunkSize($chunkSize);
         }
@@ -118,28 +123,15 @@ class MultiInsertQueryQueue
     private function prepareQueries(): array
     {
         $queries = [];
-        $template = 'INSERT INTO %s (%s) VALUES %s';
-
-        if ($this->ignoreErrors) {
-            $template = 'INSERT IGNORE INTO %s (%s) VALUES %s';
-        }
 
         // PostgreSQL has no REPLACE, the rows that collide with a unique key are deleted before a plain insert
         $deleteBeforeInsert = $this->useReplace && $this->connection->getDatabasePlatform() instanceof PostgreSQLPlatform;
 
-        if ($this->useReplace && !$deleteBeforeInsert) {
-            $template = 'REPLACE INTO %s (%s) VALUES %s';
-        }
-
         foreach ($this->inserts as $table => $rows) {
             $columns = $this->prepareColumns($rows);
-            $escapedColumns = implode(', ', array_map(EntityDefinitionQueryHelper::escape(...), $columns));
-            $escapedTable = EntityDefinitionQueryHelper::escape($table);
 
-            $onDuplicateKey = $this->prepareOnDuplicateKeyUpdatePart(
-                array_intersect($this->updateFieldsOnDuplicateKey[$table] ?? [], $columns) // only fields that are in the columns can be updated
-            );
-            $tableTemplate = \sprintf('%s%s%s;', $this->conflictTargetHint($table), $template, $onDuplicateKey);
+            $updateColumns = array_values(array_intersect($this->updateFieldsOnDuplicateKey[$table] ?? [], $columns)); // only fields that are in the columns can be updated
+            $conflictColumns = $updateColumns !== [] ? ($this->conflictTargets[$table] ?? []) : [];
 
             $rowsChunks = array_chunk($rows, $this->chunkSize);
             foreach ($rowsChunks as $rowsChunk) {
@@ -148,8 +140,21 @@ class MultiInsertQueryQueue
                 }
 
                 $data = $this->prepareValues($columns, $rowsChunk);
+                $valuesSql = implode(', ', $data['placeholders']);
+
+                if ($this->useReplace && !$deleteBeforeInsert) {
+                    $query = \sprintf(
+                        'REPLACE INTO %s (%s) VALUES %s',
+                        $this->dialect()->quoteIdentifier($table),
+                        implode(', ', array_map($this->dialect()->quoteIdentifier(...), $columns)),
+                        $valuesSql
+                    );
+                } else {
+                    $query = $this->dialect()->upsert($table, $columns, $valuesSql, $conflictColumns, $updateColumns, $this->ignoreErrors);
+                }
+
                 $queries[] = [
-                    'query' => \sprintf($tableTemplate, $escapedTable, $escapedColumns, implode(', ', $data['placeholders'])),
+                    'query' => $query . ';',
                     'values' => $data['values'],
                     'types' => $data['types'],
                 ];
@@ -157,15 +162,6 @@ class MultiInsertQueryQueue
         }
 
         return $queries;
-    }
-
-    private function conflictTargetHint(string $table): string
-    {
-        if (!isset($this->conflictTargets[$table]) || !isset($this->updateFieldsOnDuplicateKey[$table])) {
-            return '';
-        }
-
-        return '/* conflict-target: ' . implode(', ', $this->conflictTargets[$table]) . ' */ ';
     }
 
     /**
@@ -208,8 +204,8 @@ class MultiInsertQueryQueue
             $queries[] = [
                 'query' => \sprintf(
                     'DELETE FROM %s WHERE (%s) IN (%s);',
-                    EntityDefinitionQueryHelper::escape($table),
-                    implode(', ', array_map(EntityDefinitionQueryHelper::escape(...), $key)),
+                    $this->dialect()->quoteIdentifier($table),
+                    implode(', ', array_map($this->dialect()->quoteIdentifier(...), $key)),
                     implode(', ', $tuples)
                 ),
                 'values' => $values,
@@ -243,24 +239,6 @@ class MultiInsertQueryQueue
         }
 
         return $this->uniqueKeys[$table] = array_values($keys);
-    }
-
-    /**
-     * @param array<string> $fieldsToUpdate
-     */
-    private function prepareOnDuplicateKeyUpdatePart(array $fieldsToUpdate): string
-    {
-        if ($fieldsToUpdate === []) {
-            return '';
-        }
-
-        $updateParts = [];
-        foreach ($fieldsToUpdate as $field) {
-            // see https://stackoverflow.com/a/2714653/10064036
-            $updateParts[] = \sprintf('%s = VALUES(%s)', EntityDefinitionQueryHelper::escape($field), EntityDefinitionQueryHelper::escape($field));
-        }
-
-        return ' ON DUPLICATE KEY UPDATE ' . implode(', ', $updateParts);
     }
 
     /**
@@ -316,5 +294,13 @@ class MultiInsertQueryQueue
             'values' => $values,
             'types' => $types,
         ];
+    }
+
+    /**
+     * Resolved on first use, the platform detection needs a database connection.
+     */
+    private function dialect(): SqlDialect
+    {
+        return $this->dialect ??= SqlDialectFactory::forConnection($this->connection);
     }
 }

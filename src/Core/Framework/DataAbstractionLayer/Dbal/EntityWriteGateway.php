@@ -5,6 +5,8 @@ namespace Shopware\Core\Framework\DataAbstractionLayer\Dbal;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Exception;
 use Doctrine\DBAL\ParameterType;
+use Shopware\Core\Framework\Adapter\Database\Dialect\SqlDialect;
+use Shopware\Core\Framework\Adapter\Database\Dialect\SqlDialectFactory;
 use Shopware\Core\Framework\DataAbstractionLayer\DataAbstractionLayerException;
 use Shopware\Core\Framework\DataAbstractionLayer\DefinitionInstanceRegistry;
 use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\MultiInsertQueryQueue;
@@ -52,6 +54,8 @@ class EntityWriteGateway implements EntityWriteGatewayInterface
 {
     private ?PrimaryKeyBag $primaryKeyBag = null;
 
+    private ?SqlDialect $dialect;
+
     public function __construct(
         private readonly int $batchSize,
         private readonly Connection $connection,
@@ -59,7 +63,9 @@ class EntityWriteGateway implements EntityWriteGatewayInterface
         private readonly ExceptionHandlerRegistry $exceptionHandlerRegistry,
         private readonly DefinitionInstanceRegistry $definitionInstanceRegistry,
         private readonly RowLoader $rowLoader,
+        ?SqlDialect $dialect = null,
     ) {
+        $this->dialect = $dialect;
     }
 
     #[ParameterNameChange(version: 'v6.8.0', parameterName: 'parameters', newName: 'parameterBag', description: 'Matches the parameter name of the interface.')]
@@ -353,7 +359,7 @@ class EntityWriteGateway implements EntityWriteGatewayInterface
             }
 
             $placeholders = $this->getPlaceholders(\count($pkFields), $tupleCount);
-            $columns = '`' . implode('`,`', array_keys($pkFields)) . '`';
+            $columns = implode(',', array_map($this->dialect()->quoteIdentifier(...), array_keys($pkFields)));
             if (\count($pkFields) > 1) {
                 $columns = '(' . $columns . ')';
             }
@@ -434,53 +440,40 @@ class EntityWriteGateway implements EntityWriteGatewayInterface
          */
 
         $values = [];
-        $sets = [];
         $types = [];
 
         $query = new QueryBuilder($this->connection);
-        $query->update('`' . $command->getEntityName() . '`');
+        $query->update($this->dialect()->quoteIdentifier($command->getEntityName()));
+
+        $storageName = $command->getStorageName();
+        $jsonSql = EntityDefinitionQueryHelper::escape($storageName);
 
         foreach ($command->getPayload() as $attribute => $value) {
-            // add path and value for each attribute value pair
-            $values[] = '$."' . $attribute . '"';
-            $types[] = ParameterType::STRING;
+            // add the value of each attribute value pair, the path is part of the statement
             if (\is_array($value) || \is_object($value)) {
                 $types[] = ParameterType::STRING;
                 $values[] = json_encode($value, \JSON_THROW_ON_ERROR | \JSON_PRESERVE_ZERO_FRACTION | \JSON_UNESCAPED_UNICODE);
-                // does the same thing as CAST(?, json) but works on mariadb
-                $identityValue = \is_object($value) || $this->isAssociative($value) ? '{}' : '[]';
-                $sets[] = '?, JSON_MERGE("' . $identityValue . '", ?)';
+                $valueSql = $this->dialect()->jsonBind('?', \is_object($value) || $this->isAssociative($value) ? SqlDialect::JSON_BIND_OBJECT : SqlDialect::JSON_BIND_ARRAY);
+            } elseif (\is_bool($value)) {
+                $valueSql = $this->dialect()->jsonBind($value ? 'true' : 'false', SqlDialect::JSON_BIND_BOOL);
+            } elseif (\is_float($value)) {
+                $types[] = ParameterType::STRING;
+                $values[] = $value;
+                $valueSql = $this->dialect()->jsonBind('?', SqlDialect::JSON_BIND_FLOAT);
+            } elseif (\is_int($value)) {
+                $types[] = ParameterType::INTEGER;
+                $values[] = $value;
+                $valueSql = $this->dialect()->jsonBind('?', SqlDialect::JSON_BIND_INT);
             } else {
-                if (!\is_bool($value)) {
-                    $values[] = $value;
-                }
-
-                $set = '?, ?';
-
-                if (\is_float($value)) {
-                    $types[] = ParameterType::STRING;
-                    $set = '?, ? + 0.0';
-                } elseif (\is_int($value)) {
-                    $types[] = ParameterType::INTEGER;
-                } elseif (\is_bool($value)) {
-                    $set = '?, ' . ($value ? 'true' : 'false');
-                } else {
-                    $types[] = ParameterType::STRING;
-                }
-
-                $sets[] = $set;
+                $types[] = ParameterType::STRING;
+                $values[] = $value;
+                $valueSql = $this->dialect()->jsonBind('?', SqlDialect::JSON_BIND_STRING);
             }
+
+            $jsonSql = $this->dialect()->jsonSet($jsonSql, '$."' . str_replace(['\\', '"'], ['\\\\', '\\"'], (string) $attribute) . '"', $valueSql);
         }
 
-        $storageName = $command->getStorageName();
-        $query->set(
-            $storageName,
-            \sprintf(
-                'JSON_SET(IFNULL(%s, "{}"), %s)',
-                EntityDefinitionQueryHelper::escape($storageName),
-                implode(', ', $sets)
-            )
-        );
+        $query->set($storageName, $jsonSql);
 
         $identifier = $command->getPrimaryKey();
         foreach ($identifier as $key => $_value) {
@@ -853,5 +846,13 @@ class EntityWriteGateway implements EntityWriteGatewayInterface
         $context->getExceptions()->add(
             new WriteConstraintViolationException($violationList)
         );
+    }
+
+    /**
+     * Resolved on first use, the platform detection needs a database connection.
+     */
+    private function dialect(): SqlDialect
+    {
+        return $this->dialect ??= SqlDialectFactory::forConnection($this->connection);
     }
 }

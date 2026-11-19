@@ -34,7 +34,7 @@ class SqlDialectTest extends TestCase
     {
         yield 'mysql' => [new MySqlDialect(), '`product`'];
         yield 'mariadb' => [new MariaDbDialect(), '`product`'];
-        yield 'postgresql' => [new PostgreSqlDialect(), '"product"'];
+        yield 'postgresql' => [new PostgreSqlDialect(null, true), '"product"'];
     }
 
     #[DataProvider('quoteProvider')]
@@ -46,14 +46,25 @@ class SqlDialectTest extends TestCase
     public function testQuoteIdentifierEscapesTheQuoteCharacter(): void
     {
         static::assertSame('`a``b`', (new MySqlDialect())->quoteIdentifier('a`b'));
-        static::assertSame('"a""b"', (new PostgreSqlDialect())->quoteIdentifier('a"b'));
+        static::assertSame('"a""b"', (new PostgreSqlDialect(null, true))->quoteIdentifier('a"b'));
+    }
+
+    public function testPostgreSqlQuotesWithBackticksForTheTranslatorByDefault(): void
+    {
+        $dialect = new PostgreSqlDialect();
+
+        static::assertSame('`product`', $dialect->quoteIdentifier('product'));
+        static::assertSame(
+            'INSERT INTO `t` (`id`, `a`) VALUES (?, ?) ON CONFLICT (`id`) DO UPDATE SET `a` = EXCLUDED.`a`',
+            $dialect->upsert('t', ['id', 'a'], '(?, ?)', ['id'], ['a'])
+        );
     }
 
     public function testNames(): void
     {
         static::assertSame('mysql', (new MySqlDialect())->getName());
         static::assertSame('mariadb', (new MariaDbDialect())->getName());
-        static::assertSame('postgresql', (new PostgreSqlDialect())->getName());
+        static::assertSame('postgresql', (new PostgreSqlDialect(null, true))->getName());
     }
 
     public function testUpsertMySql(): void
@@ -76,7 +87,7 @@ class SqlDialectTest extends TestCase
 
     public function testUpsertPostgreSql(): void
     {
-        $dialect = new PostgreSqlDialect();
+        $dialect = new PostgreSqlDialect(null, true);
 
         static::assertSame(
             'INSERT INTO "t" ("id", "a") VALUES (?, ?)',
@@ -97,7 +108,7 @@ class SqlDialectTest extends TestCase
         $connection = $this->createMock(Connection::class);
         $connection->expects($this->once())->method('fetchFirstColumn')->willReturn(['id', 'version_id']);
 
-        $dialect = new PostgreSqlDialect($connection);
+        $dialect = new PostgreSqlDialect($connection, true);
         $expected = 'INSERT INTO "t" ("id", "a") VALUES (?, ?) ON CONFLICT ("id", "version_id") DO UPDATE SET "a" = EXCLUDED."a"';
 
         static::assertSame($expected, $dialect->upsert('t', ['id', 'a'], '(?, ?)', [], ['a']));
@@ -108,7 +119,7 @@ class SqlDialectTest extends TestCase
     {
         $this->expectException(AdapterException::class);
 
-        (new PostgreSqlDialect())->upsert('t', ['id', 'a'], '(?, ?)', [], ['a']);
+        (new PostgreSqlDialect(null, true))->upsert('t', ['id', 'a'], '(?, ?)', [], ['a']);
     }
 
     public function testJsonMySql(): void
@@ -131,7 +142,7 @@ class SqlDialectTest extends TestCase
 
     public function testJsonPostgreSql(): void
     {
-        $dialect = new PostgreSqlDialect();
+        $dialect = new PostgreSqlDialect(null, true);
 
         static::assertSame('jsonb_path_query_first("t"."c", \'$.a.b\'::jsonpath)', $dialect->jsonExtract('"t"."c"', '$.a.b'));
         static::assertSame('(jsonb_path_query_first(c, \'$.a\'::jsonpath) #>> \'{}\')', $dialect->jsonExtractText('c', '$.a'));
@@ -160,7 +171,7 @@ class SqlDialectTest extends TestCase
         static::assertSame('JSON_MERGE("{}", ?)', $mysql->jsonBind('?', SqlDialect::JSON_BIND_OBJECT));
         static::assertSame('JSON_MERGE("[]", ?)', $mysql->jsonBind('?', SqlDialect::JSON_BIND_ARRAY));
 
-        $pg = new PostgreSqlDialect();
+        $pg = new PostgreSqlDialect(null, true);
         static::assertSame('to_jsonb(?::text)', $pg->jsonBind('?', SqlDialect::JSON_BIND_STRING));
         static::assertSame('to_jsonb(?::bigint)', $pg->jsonBind('?', SqlDialect::JSON_BIND_INT));
         static::assertSame('to_jsonb(?::numeric)', $pg->jsonBind('?', SqlDialect::JSON_BIND_FLOAT));
@@ -172,9 +183,9 @@ class SqlDialectTest extends TestCase
     public function testIds(): void
     {
         static::assertSame('LOWER(HEX(`p`.`id`))', (new MySqlDialect())->idToText('`p`.`id`'));
-        static::assertSame('REPLACE("p"."id"::text, \'-\', \'\')', (new PostgreSqlDialect())->idToText('"p"."id"'));
+        static::assertSame('REPLACE("p"."id"::text, \'-\', \'\')', (new PostgreSqlDialect(null, true))->idToText('"p"."id"'));
 
-        foreach ([new MySqlDialect(), new MariaDbDialect(), new PostgreSqlDialect()] as $dialect) {
+        foreach ([new MySqlDialect(), new MariaDbDialect(), new PostgreSqlDialect(null, true)] as $dialect) {
             static::assertSame(ParameterType::BINARY, $dialect->idParameterType());
             static::assertSame(ArrayParameterType::BINARY, $dialect->idListParameterType());
         }
@@ -186,7 +197,7 @@ class SqlDialectTest extends TestCase
         static::assertSame('GROUP_CONCAT(x SEPARATOR \',\')', $mysql->groupConcat('x'));
         static::assertSame('GROUP_CONCAT(HEX(x) ORDER BY y DESC SEPARATOR \'||\')', $mysql->groupConcat('HEX(x)', '||', 'y DESC'));
 
-        $pg = new PostgreSqlDialect();
+        $pg = new PostgreSqlDialect(null, true);
         static::assertSame('string_agg((x)::text, \',\')', $pg->groupConcat('x'));
         static::assertSame('string_agg((x)::text, \'||\' ORDER BY y DESC)', $pg->groupConcat('x', '||', 'y DESC'));
     }
