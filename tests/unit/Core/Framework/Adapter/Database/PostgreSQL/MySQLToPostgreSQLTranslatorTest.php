@@ -178,4 +178,73 @@ class MySQLToPostgreSQLTranslatorTest extends TestCase
             'SELECT 1',
         ];
     }
+
+    public function testHashOperatorsAreKeptAndMysqlCommentsStripped(): void
+    {
+        $translator = new MySQLToPostgreSQLTranslator();
+
+        static::assertSame("SELECT a #>> '{}' FROM t", $translator->translate("SELECT a #>> '{}' FROM t")[0]);
+        static::assertSame("SELECT a #> '{x}' FROM t", $translator->translate("SELECT a #> '{x}' FROM t")[0]);
+        static::assertSame("SELECT 1 \nFROM t", $translator->translate("SELECT 1 # comment #> here\nFROM t")[0]);
+        static::assertSame('SELECT 1 ', $translator->translate('SELECT 1 # trailing comment')[0]);
+    }
+
+    #[DataProvider('quotedIdentifierProvider')]
+    public function testDoubleQuotedIdentifiersStayIdentifiers(string $in, string $expected): void
+    {
+        static::assertSame($expected, (new MySQLToPostgreSQLTranslator())->translate($in)[0]);
+    }
+
+    /**
+     * @return iterable<string, array{string, string}>
+     */
+    public static function quotedIdentifierProvider(): iterable
+    {
+        yield 'qualified column' => ['SELECT "product"."id" FROM "product"', 'SELECT "product"."id" FROM "product"'];
+        yield 'where and order' => [
+            'SELECT 1 FROM "t" WHERE "a" = 1 AND "b.c" = 2 ORDER BY "a" DESC',
+            'SELECT 1 FROM "t" WHERE "a" = 1 AND "b.c" = 2 ORDER BY "a" DESC',
+        ];
+        yield 'upsert' => [
+            'INSERT INTO "t" ("id", "a") VALUES (?, ?) ON CONFLICT ("id") DO UPDATE SET "a" = EXCLUDED."a"',
+            'INSERT INTO "t" ("id", "a") VALUES (?, ?) ON CONFLICT ("id") DO UPDATE SET "a" = EXCLUDED."a"',
+        ];
+        yield 'string literal after operator stays a string' => [
+            'SELECT 1 FROM t WHERE a = "x" AND b IN ("y", "z")',
+            "SELECT 1 FROM t WHERE a = 'x' AND b IN ('y', 'z')",
+        ];
+        yield 'select list and tuple comparison' => [
+            'SELECT 1 as "exists", "media_id", "language_id" FROM "media_translation" WHERE ("media_id","language_id") IN ((?,?))',
+            'SELECT 1 as "exists", "media_id", "language_id" FROM "media_translation" WHERE ("media_id","language_id") IN ((?,?))',
+        ];
+        yield 'first function argument with a dotted alias' => [
+            'SELECT COALESCE("a.b.name","a.c.name") as "a.name" FROM t',
+            'SELECT COALESCE("a.b.name","a.c.name") as "a.name" FROM t',
+        ];
+        yield 'first argument of a null handling function' => [
+            'UPDATE "t" SET "c" = JSON_SET(COALESCE("c", \'{}\'), \'$.a\', ?) WHERE "id" = ?',
+            'UPDATE "t" SET "c" = JSON_SET(COALESCE("c", \'{}\'), \'$.a\', ?) WHERE "id" = ?',
+        ];
+        yield 'update set list' => [
+            'UPDATE "tax" SET "tax_rate" = ?, "name" = ?, "updated_at" = ? WHERE id = ?',
+            'UPDATE "tax" SET "tax_rate" = ?, "name" = ?, "updated_at" = ? WHERE id = ?',
+        ];
+        yield 'json path stays a string' => [
+            'SELECT JSON_EXTRACT(a, "$.b") FROM t',
+            'SELECT JSON_EXTRACT(a, \'$.b\') FROM t',
+        ];
+    }
+
+    public function testQuotedIdentifierLongerThan63BytesIsShortenedLikeABacktickOne(): void
+    {
+        $name = str_repeat('a', 70);
+        $translator = new MySQLToPostgreSQLTranslator();
+
+        [$quoted, $quotedMap] = $translator->translate('SELECT "t"."x" AS "' . $name . '" FROM "t"');
+        [$backtick, $backtickMap] = $translator->translate('SELECT `t`.`x` AS `' . $name . '` FROM `t`');
+
+        static::assertSame($backtick, $quoted);
+        static::assertSame($backtickMap, $quotedMap);
+        static::assertSame([$name], array_values($quotedMap));
+    }
 }

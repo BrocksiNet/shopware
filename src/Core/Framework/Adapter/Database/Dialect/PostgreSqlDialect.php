@@ -23,14 +23,13 @@ class PostgreSqlDialect implements SqlDialect
     private array $primaryKeys = [];
 
     /**
-     * @param bool $nativeIdentifiers false: identifiers are quoted with backticks and left to the translator (the default while
-     *                                the translation middleware is active). A double quoted token is a string literal for the
-     *                                translator, and it also shortens identifiers over 63 bytes and keeps the map that restores
-     *                                them in the result, so native quotes only work for statements that bypass it.
+     * @param bool $nativeIdentifiers true (default): identifiers are quoted with PostgreSQL double quotes, the translator
+     *                                recognizes them by their position (see MySQLToPostgreSQLTranslator::isQuotedIdentifier()).
+     *                                false: backticks, left to the translator.
      */
     public function __construct(
         private readonly ?Connection $connection = null,
-        private readonly bool $nativeIdentifiers = false
+        private readonly bool $nativeIdentifiers = true
     ) {
     }
 

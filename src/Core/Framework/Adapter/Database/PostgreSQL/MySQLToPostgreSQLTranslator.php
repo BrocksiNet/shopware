@@ -12,7 +12,8 @@ use Shopware\Core\Framework\Util\Hasher;
  * - `identifier`  => "identifier"
  * - "string"      => 'string'
  * - 'back\\slash' => E'back\\slash'
- * - # comment     => removed
+ * - # comment     => removed (not the operators `#>` and `#>>`)
+ * - "identifier" => kept as identifier when the position only allows one, see isQuotedIdentifier()
  * - a <=> b        => a IS NOT DISTINCT FROM b
  * - AS 'alias'     => AS "alias"
  * - AS mixedCase   => column name restored in the result, see translate()
@@ -188,6 +189,8 @@ class MySQLToPostgreSQLTranslator
         // MySQL returns the column names of information_schema in the spelling of the statement, usually upper case
         $restoreUpper = stripos($sql, 'information_schema') !== false;
         $jsonCall = false;
+        // true inside the column list of INSERT INTO t (...) and ON CONFLICT (...)
+        $columnList = false;
 
         while ($i < $length) {
             $char = $sql[$i];
@@ -196,7 +199,7 @@ class MySQLToPostgreSQLTranslator
                 [$content, $i] = $this->readString($sql, $i, $char);
                 // MySQL accepts a string literal as column alias: SELECT x AS '0'
                 $isAlias = preg_match('/\bAS\s+$/iD', substr($out, -12)) === 1;
-                if ($isAlias) {
+                if ($isAlias || ($char === '"' && $this->isQuotedIdentifier($content, $sql, $i, $out, $columnList))) {
                     $out .= $this->identifier($content, $caseMap);
                 } elseif ($this->followsJsonExtract($out)) {
                     // JSON_EXTRACT(...) = 'text': MySQL compares with the JSON string, PostgreSQL would parse the literal as JSON
@@ -223,6 +226,20 @@ class MySQLToPostgreSQLTranslator
                 }
                 $out .= $this->identifier($name, $caseMap);
                 $i = $end + 1;
+
+                continue;
+            }
+
+            if ($char === '(') {
+                $columnList = preg_match('/(\bINTO\s+(?:"(?:[^"]|"")+"|`[^`]+`|[\w.]+)|\bCONFLICT)\s*$/iD', substr($out, -200)) === 1;
+            } elseif ($char === ')') {
+                $columnList = false;
+            }
+
+            // `#>` and `#>>` are PostgreSQL JSON operators, every other `#` starts a MySQL comment
+            if ($char === '#' && ($sql[$i + 1] ?? '') === '>') {
+                $out .= $char;
+                ++$i;
 
                 continue;
             }
@@ -388,6 +405,85 @@ class MySQLToPostgreSQLTranslator
      *
      * @return array{string, int}
      */
+    /**
+     * A double quoted token is a string literal in MySQL and an identifier in PostgreSQL.
+     * It is read as identifier when it looks like one and the position only allows an identifier:
+     * next to a dot, after an identifier or `)` (alias without AS), after FROM / JOIN / INTO / UPDATE / TABLE / SET / BY / DISTINCT / WHERE / AND / OR / ON / HAVING / SELECT, in a column list, or before AS / FROM / ASC / DESC, in select, ORDER BY and GROUP BY lists.
+     * Quotes written by `PostgreSqlDialect::quoteIdentifier()` always end up in such a position.
+     */
+    private function isQuotedIdentifier(string $content, string $sql, int $end, string $out, bool $columnList): bool
+    {
+        if (preg_match('/^[A-Za-z_][A-Za-z0-9_$.~-]*$/D', $content) !== 1) {
+            return false;
+        }
+
+        $trimmed = rtrim($out);
+        // an alias without AS follows an identifier or a subquery: FROM "t" "alias", JOIN (SELECT ...) "alias"
+        if (str_ends_with($trimmed, '.') || ($sql[$end] ?? '') === '.' || str_ends_with($trimmed, '"') || str_ends_with($trimmed, ')')) {
+            return true;
+        }
+
+        if ($columnList && ($trimmed === '' || \in_array(substr($trimmed, -1), ['(', ','], true))) {
+            return true;
+        }
+
+        if (preg_match('/\b(?:FROM|JOIN|INTO|UPDATE|TABLE|SET|BY|DISTINCT|ONLY|EXISTS|WHERE|AND|OR|ON|HAVING|SELECT)$/iD', $trimmed) === 1) {
+            return true;
+        }
+
+        $next = substr($sql, $end, 12);
+        if (preg_match('/^\s*(?:ASC|DESC|AS|FROM)\b/i', $next) === 1) {
+            return true;
+        }
+
+        // an item of a select list like `"a.b", "a.b" AS "c"` and of ORDER BY / GROUP BY lists
+        if (str_ends_with($trimmed, ',') && (str_contains($content, '.') || preg_match('/\b(?:ORDER|GROUP)\s+BY\s+[^()]*$/iD', substr($trimmed, -300)) === 1)) {
+            return true;
+        }
+
+        // the first argument of an aggregate or null handling function is a column: COALESCE("a", '{}'), MAX("a"), JSON_SET("a", ...)
+        if (preg_match('/\b(?:COALESCE|IFNULL|NULLIF|LOWER|UPPER|LENGTH|MAX|MIN|SUM|AVG|COUNT|JSON_\w+|CAST)\($/iD', $trimmed) === 1) {
+            return true;
+        }
+
+        // a column of an UPDATE ... SET list: SET "a" = ?, "b" = ?
+        if (str_ends_with($trimmed, ',') && preg_match('/^\s*=(?!=)/', substr($sql, $end, 6)) === 1) {
+            $setPos = strripos($trimmed, ' SET ');
+            if ($setPos !== false && preg_match('/\b(?:WHERE|SELECT|FROM)\b/i', substr($trimmed, $setPos)) !== 1) {
+                return true;
+            }
+        }
+
+        // the first argument of a function that is a dotted DAL alias: COALESCE("a.b.name", "a.c.name")
+        if (str_ends_with($trimmed, '(') && str_contains($content, '.') && preg_match('/\b(?:IN|VALUES|LIKE)\s*\($/iD', $trimmed) !== 1 && preg_match('/\w\($/D', $trimmed) === 1) {
+            return true;
+        }
+
+        // an item of a select list that has no FROM yet: SELECT 1, "a", "b" FROM
+        if (\in_array(substr($trimmed, -1), [','], true) && preg_match('/^\s*(?:,|FROM\b)/i', substr($sql, $end, 12)) === 1) {
+            $selectPos = strripos($trimmed, 'SELECT');
+            if ($selectPos !== false && preg_match('/\bFROM\b/i', substr($trimmed, $selectPos)) !== 1) {
+                return true;
+            }
+        }
+
+        // a tuple comparison: WHERE ("a", "b") IN (...)
+        if (\in_array(substr($trimmed, -1), ['(', ','], true) && preg_match('/^[^()]*\)\s*(?:=|IN\b|NOT\s+IN\b)/i', substr($sql, $end, 200)) === 1) {
+            $open = strrpos($trimmed, '(');
+            if ($open !== false && preg_match('/(?:\b(?:WHERE|AND|OR|ON|HAVING)|[(,])\s*$/i', substr($trimmed, 0, $open)) === 1 && !str_contains(substr($trimmed, $open), ')')) {
+                return true;
+            }
+        }
+
+        // a single column compared in parentheses: WHERE ("a" IN (?)) AND ("b" = ?)
+        if (str_ends_with($trimmed, '(') && preg_match('/(?:\b(?:WHERE|AND|OR|ON|HAVING|NOT)|[(,])\s*$/i', substr($trimmed, 0, -1)) === 1
+            && preg_match('/^\s*(?:IN\b|NOT\s+IN\b|IS\b|=(?!=)|<>|!=|<=?|>=?|LIKE\b|BETWEEN\b)/i', substr($sql, $end, 12)) === 1) {
+            return true;
+        }
+
+        return false;
+    }
+
     private function readString(string $sql, int $start, string $quote): array
     {
         $length = \strlen($sql);
