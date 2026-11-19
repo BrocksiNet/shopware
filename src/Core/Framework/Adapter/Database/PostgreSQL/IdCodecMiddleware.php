@@ -56,11 +56,22 @@ class IdCodecMiddleware implements Middleware
             return $value;
         }
 
+        if (!$boundAsBinary && self::isStrict()) {
+            return $value;
+        }
         if (!$boundAsBinary && !str_contains($value, "\0") && mb_check_encoding($value, 'UTF-8')) {
             return $value;
         }
 
         return bin2hex($value);
+    }
+
+    /**
+     * `SHOPWARE_PG_ID_CODEC=strict` converts only values bound as BINARY or LARGE_OBJECT, `guess` (default) also converts untyped 16 byte strings that are not valid UTF-8 or contain a NUL byte.
+     */
+    public static function isStrict(): bool
+    {
+        return ($_SERVER['SHOPWARE_PG_ID_CODEC'] ?? $_ENV['SHOPWARE_PG_ID_CODEC'] ?? getenv('SHOPWARE_PG_ID_CODEC')) === 'strict';
     }
 
     public static function decode(mixed $value): mixed
