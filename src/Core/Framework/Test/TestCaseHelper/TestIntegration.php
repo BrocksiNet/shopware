@@ -4,6 +4,7 @@ namespace Shopware\Core\Framework\Test\TestCaseHelper;
 
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Api\Util\AccessKeyHelper;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Uuid\Uuid;
@@ -35,15 +36,15 @@ class TestIntegration
         $roleId = Uuid::randomHex();
 
         $connection->insert('acl_role', [
-            'id' => Uuid::fromHexToBytes($roleId),
+            'id' => IdBinding::value($roleId),
             'name' => $roleId,
             'privileges' => json_encode($permissions, \JSON_THROW_ON_ERROR),
             'created_at' => (new \DateTime())->format(Defaults::STORAGE_DATE_TIME_FORMAT),
         ]);
 
         $connection->insert('integration_role', [
-            'integration_id' => Uuid::fromHexToBytes($id),
-            'acl_role_id' => Uuid::fromHexToBytes($roleId),
+            'integration_id' => IdBinding::value($id),
+            'acl_role_id' => IdBinding::value($roleId),
         ]);
 
         return new TestIntegration($id, $roleId);
@@ -69,7 +70,7 @@ class TestIntegration
         $id = Uuid::randomHex();
 
         $connection->insert('integration', [
-            'id' => Uuid::fromHexToBytes($id),
+            'id' => IdBinding::value($id),
             'access_key' => AccessKeyHelper::generateAccessKey('integration'),
             'secret_access_key' => TestDefaults::HASHED_PASSWORD,
             'label' => 'test integration',

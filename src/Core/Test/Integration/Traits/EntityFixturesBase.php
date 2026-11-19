@@ -4,6 +4,7 @@ namespace Shopware\Core\Test\Integration\Traits;
 
 use Doctrine\DBAL\Connection;
 use PHPUnit\Framework\Attributes\Before;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\DefinitionInstanceRegistry;
 use Shopware\Core\Framework\DataAbstractionLayer\Entity;
@@ -11,7 +12,6 @@ use Shopware\Core\Framework\DataAbstractionLayer\EntityCollection;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\Test\TestCaseBase\KernelLifecycleManager;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
@@ -66,7 +66,7 @@ trait EntityFixturesBase
                 [
                     'media_type' => serialize($fixtureData[$fixtureName]['mediaType']),
                 ],
-                ['id' => Uuid::fromHexToBytes($fixtureData[$fixtureName]['id'])]
+                ['id' => IdBinding::value($fixtureData[$fixtureName]['id'])]
             );
         }
 

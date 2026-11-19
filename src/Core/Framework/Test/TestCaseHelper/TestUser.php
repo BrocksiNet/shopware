@@ -4,6 +4,7 @@ namespace Shopware\Core\Framework\Test\TestCaseHelper;
 
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\Test\TestDefaults;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
@@ -71,7 +72,7 @@ class TestUser
             );
         }
 
-        return new TestUser('shopware', $username, Uuid::fromBytesToHex($userId), $roleId === null ? null : Uuid::fromBytesToHex($roleId));
+        return new TestUser('shopware', $username, IdBinding::toHex($userId), $roleId === null ? null : IdBinding::toHex($roleId));
     }
 
     public static function createNewAdminTestUser(Connection $connection): TestUser
@@ -80,7 +81,7 @@ class TestUser
 
         $connection->executeStatement(
             'UPDATE `user` SET admin = 1 WHERE id = :id',
-            ['id' => Uuid::fromHexToBytes($user->getUserId())]
+            ['id' => IdBinding::value($user->getUserId())]
         );
 
         return $user;
@@ -144,7 +145,7 @@ class TestUser
             ->from('language', 'language')
             ->innerJoin('language', 'locale', 'locale', 'language.locale_id = locale.id')
             ->where('language.id = :id')
-            ->setParameter('id', Uuid::fromHexToBytes(Defaults::LANGUAGE_SYSTEM))
+            ->setParameter('id', IdBinding::value(Defaults::LANGUAGE_SYSTEM))
             ->executeQuery()
             ->fetchOne();
     }

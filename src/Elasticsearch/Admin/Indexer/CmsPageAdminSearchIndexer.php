@@ -2,11 +2,11 @@
 
 namespace Shopware\Elasticsearch\Admin\Indexer;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Content\Cms\Aggregate\CmsPageTranslation\CmsPageTranslationDefinition;
 use Shopware\Core\Content\Cms\CmsPageCollection;
 use Shopware\Core\Content\Cms\CmsPageDefinition;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\Common\IterableQuery;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\Common\IteratorFactory;
@@ -16,7 +16,6 @@ use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\Feature;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Plugin\Exception\DecorationPatternException;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Elasticsearch\Framework\AbstractElasticsearchDefinition;
 use Shopware\Elasticsearch\Framework\ElasticsearchFieldBuilder;
 
@@ -124,12 +123,11 @@ final class CmsPageAdminSearchIndexer extends AbstractAdminIndexer
     public function fetch(array $ids): array
     {
         $data = $this->connection->fetchAllAssociative(
-            <<<'SQL'
-            SELECT LOWER(HEX(cms_page.id)) as id,
+            '            SELECT ' . IdBinding::text('cms_page.id') . ' as id,
                    GROUP_CONCAT(DISTINCT cms_page_translation.name SEPARATOR " ") as name,
                    JSON_ARRAYAGG(JSON_OBJECT(
-                       'languageId', LOWER(HEX(cms_page_translation.language_id)),
-                       'name', cms_page_translation.name
+                       \'languageId\', ' . IdBinding::text('cms_page_translation.language_id') . ',
+                       \'name\', cms_page_translation.name
                    )) as translatedNames,
                    cms_page.type AS type,
                    cms_page.created_at as createdAt
@@ -137,13 +135,12 @@ final class CmsPageAdminSearchIndexer extends AbstractAdminIndexer
                 INNER JOIN cms_page_translation
                     ON cms_page_translation.cms_page_id = cms_page.id
             WHERE cms_page.id IN (:ids)
-            GROUP BY cms_page.id
-SQL,
+            GROUP BY cms_page.id',
             [
-                'ids' => Uuid::fromHexToBytesList($ids),
+                'ids' => IdBinding::values($ids),
             ],
             [
-                'ids' => ArrayParameterType::BINARY,
+                'ids' => IdBinding::listType(),
             ]
         );
 

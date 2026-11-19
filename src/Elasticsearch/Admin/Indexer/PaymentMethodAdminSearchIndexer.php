@@ -2,11 +2,11 @@
 
 namespace Shopware\Elasticsearch\Admin\Indexer;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Checkout\Payment\Aggregate\PaymentMethodTranslation\PaymentMethodTranslationDefinition;
 use Shopware\Core\Checkout\Payment\PaymentMethodCollection;
 use Shopware\Core\Checkout\Payment\PaymentMethodDefinition;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\Common\IterableQuery;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\Common\IteratorFactory;
@@ -15,7 +15,6 @@ use Shopware\Core\Framework\DataAbstractionLayer\Event\EntityWrittenContainerEve
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Plugin\Exception\DecorationPatternException;
-use Shopware\Core\Framework\Uuid\Uuid;
 
 #[Package('inventory')]
 final class PaymentMethodAdminSearchIndexer extends AbstractAdminIndexer
@@ -84,7 +83,7 @@ final class PaymentMethodAdminSearchIndexer extends AbstractAdminIndexer
     {
         $data = $this->connection->fetchAllAssociative(
             '
-            SELECT LOWER(HEX(payment_method.id)) as id,
+            SELECT ' . IdBinding::text('payment_method.id') . ' as id,
                    GROUP_CONCAT(DISTINCT payment_method_translation.name SEPARATOR " ") as name
             FROM payment_method
                 INNER JOIN payment_method_translation
@@ -93,10 +92,10 @@ final class PaymentMethodAdminSearchIndexer extends AbstractAdminIndexer
             GROUP BY payment_method.id
         ',
             [
-                'ids' => Uuid::fromHexToBytesList($ids),
+                'ids' => IdBinding::values($ids),
             ],
             [
-                'ids' => ArrayParameterType::BINARY,
+                'ids' => IdBinding::listType(),
             ]
         );
 

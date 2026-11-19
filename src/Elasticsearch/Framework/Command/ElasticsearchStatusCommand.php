@@ -5,9 +5,9 @@ namespace Shopware\Elasticsearch\Framework\Command;
 use Doctrine\DBAL\Connection;
 use OpenSearch\Client;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\Command\ConsoleProgressTrait;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Elasticsearch\ElasticsearchException;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -57,7 +57,7 @@ class ElasticsearchStatusCommand extends Command
         $table->addRow(['Available Nodes', $health['number_of_nodes']]);
 
         $indexTask = $this->connection->fetchAssociative('SELECT * FROM elasticsearch_index_task WHERE entity = "product" LIMIT 1');
-        $totalProducts = (int) $this->connection->fetchOne('SELECT COUNT(*) FROM product WHERE version_id = :liveVersionId AND child_count = 0 OR parent_id IS NOT NULL', ['liveVersionId' => Uuid::fromHexToBytes(Defaults::LIVE_VERSION)]);
+        $totalProducts = (int) $this->connection->fetchOne('SELECT COUNT(*) FROM product WHERE version_id = :liveVersionId AND child_count = 0 OR parent_id IS NOT NULL', ['liveVersionId' => IdBinding::value(Defaults::LIVE_VERSION)]);
 
         // No entry in key
         if ($indexTask === false) {

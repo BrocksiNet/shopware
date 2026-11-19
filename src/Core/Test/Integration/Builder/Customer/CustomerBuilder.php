@@ -3,9 +3,9 @@
 namespace Shopware\Core\Test\Integration\Builder\Customer;
 
 use Doctrine\DBAL\Connection;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Test\TestCaseBase\KernelTestBehaviour;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\Test\Stub\Framework\IdsCollection;
 use Shopware\Core\Test\TestBuilderTrait;
 use Shopware\Core\Test\TestDefaults;
@@ -176,8 +176,8 @@ class CustomerBuilder
     private function getCountry(): string
     {
         return self::connection()->fetchOne(
-            'SELECT LOWER(HEX(country_id)) FROM sales_channel_country WHERE sales_channel_id = :id LIMIT 1',
-            ['id' => Uuid::fromHexToBytes($this->salesChannelId)]
+            'SELECT ' . IdBinding::text('country_id') . ' FROM sales_channel_country WHERE sales_channel_id = :id LIMIT 1',
+            ['id' => IdBinding::value($this->salesChannelId)]
         );
     }
 }

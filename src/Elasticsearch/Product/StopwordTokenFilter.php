@@ -3,11 +3,11 @@
 namespace Shopware\Elasticsearch\Product;
 
 use Doctrine\DBAL\Connection;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Term\Filter\AbstractTokenFilter;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Plugin\Exception\DecorationPatternException;
-use Shopware\Core\Framework\Uuid\Uuid;
 
 #[Package('framework')]
 class StopwordTokenFilter extends AbstractTokenFilter
@@ -85,7 +85,7 @@ class StopwordTokenFilter extends AbstractTokenFilter
             FROM product_search_config
             WHERE language_id = :languageId
             LIMIT 1
-        ', ['languageId' => Uuid::fromHexToBytes($languageId)]);
+        ', ['languageId' => IdBinding::value($languageId)]);
 
         if ($config === false) {
             return null;

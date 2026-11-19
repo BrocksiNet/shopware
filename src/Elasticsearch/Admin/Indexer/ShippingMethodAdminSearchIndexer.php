@@ -2,11 +2,11 @@
 
 namespace Shopware\Elasticsearch\Admin\Indexer;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Checkout\Shipping\Aggregate\ShippingMethodTranslation\ShippingMethodTranslationDefinition;
 use Shopware\Core\Checkout\Shipping\ShippingMethodCollection;
 use Shopware\Core\Checkout\Shipping\ShippingMethodDefinition;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\Common\IterableQuery;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\Common\IteratorFactory;
@@ -15,7 +15,6 @@ use Shopware\Core\Framework\DataAbstractionLayer\Event\EntityWrittenContainerEve
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Plugin\Exception\DecorationPatternException;
-use Shopware\Core\Framework\Uuid\Uuid;
 
 #[Package('inventory')]
 final class ShippingMethodAdminSearchIndexer extends AbstractAdminIndexer
@@ -84,7 +83,7 @@ final class ShippingMethodAdminSearchIndexer extends AbstractAdminIndexer
     {
         $data = $this->connection->fetchAllAssociative(
             '
-            SELECT LOWER(HEX(shipping_method.id)) as id,
+            SELECT ' . IdBinding::text('shipping_method.id') . ' as id,
                    GROUP_CONCAT(DISTINCT shipping_method_translation.name SEPARATOR " ") as name
             FROM shipping_method
                 INNER JOIN shipping_method_translation
@@ -93,10 +92,10 @@ final class ShippingMethodAdminSearchIndexer extends AbstractAdminIndexer
             GROUP BY shipping_method.id
         ',
             [
-                'ids' => Uuid::fromHexToBytesList($ids),
+                'ids' => IdBinding::values($ids),
             ],
             [
-                'ids' => ArrayParameterType::BINARY,
+                'ids' => IdBinding::listType(),
             ]
         );
 

@@ -7,6 +7,7 @@ use Doctrine\DBAL\Connection;
 use PHPUnit\Framework\Attributes\After;
 use PHPUnit\Framework\Attributes\Before;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Plugin\PluginEntity;
 use Shopware\Core\Framework\Test\TestCaseBase\KernelLifecycleManager;
 use Shopware\Core\Framework\Test\TestCaseBase\KernelTestBehaviour;
@@ -52,7 +53,7 @@ trait PluginIntegrationTestBehaviour
         static::assertNotNull($createdAt);
 
         $data = [
-            'id' => Uuid::fromHexToBytes($plugin->getId()),
+            'id' => IdBinding::value($plugin->getId()),
             'name' => $plugin->getName(),
             'version' => $plugin->getVersion(),
             'active' => $plugin->getActive() ? '1' : '0',

@@ -2,7 +2,6 @@
 
 namespace Shopware\Elasticsearch\Admin\Indexer;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Checkout\DocumentV2\DocumentDefinition;
 use Shopware\Core\Checkout\Order\Aggregate\OrderAddress\OrderAddressDefinition;
@@ -12,6 +11,7 @@ use Shopware\Core\Checkout\Order\Aggregate\OrderTransaction\OrderTransactionDefi
 use Shopware\Core\Checkout\Order\OrderCollection;
 use Shopware\Core\Checkout\Order\OrderDefinition;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\Common\IterableQuery;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\Common\IteratorFactory;
@@ -21,7 +21,6 @@ use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\Feature;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Plugin\Exception\DecorationPatternException;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Elasticsearch\Framework\AbstractElasticsearchDefinition;
 use Shopware\Elasticsearch\Framework\ElasticsearchFieldBuilder;
 use Shopware\Elasticsearch\Framework\ElasticsearchIndexingUtils;
@@ -235,8 +234,7 @@ final class OrderAdminSearchIndexer extends AbstractAdminIndexer
      */
     public function fetch(array $ids): array
     {
-        $baseSql = <<<'SQL'
-            SELECT LOWER(HEX(`order`.id)) as id,
+        $baseSql = '            SELECT ' . IdBinding::text('`order`.id') . ' as id,
                    tag_agg.tags as tags,
                    tag_agg.tagIds as tagIds,
                    address_agg.country as country,
@@ -255,35 +253,35 @@ final class OrderAdminSearchIndexer extends AbstractAdminIndexer
                    `order`.order_number,
                    `order`.amount_total,
                    `order`.order_date_time,
-                   LOWER(HEX(`order`.state_id)) AS stateId,
-                   LOWER(HEX(`order`.sales_channel_id)) AS salesChannelId,
+                   ' . IdBinding::text('`order`.state_id') . ' AS stateId,
+                   ' . IdBinding::text('`order`.sales_channel_id') . ' AS salesChannelId,
                    `order`.affiliate_code AS affiliateCode,
                    `order`.campaign_code AS campaignCode,
                    `order`.created_at as createdAt,
                    primary_delivery.tracking_codes,
                    document_agg.documentIds as documentIds,
-                   LOWER(HEX(billing_address.id)) as billingAddressId,
-                   LOWER(HEX(billing_address.country_id)) as billingAddressCountryId,
-                   LOWER(HEX(order_customer.id)) as orderCustomerId,
-                   LOWER(HEX(order_customer.customer_id)) as customerId,
-                   LOWER(HEX(customer.customer_group_id)) as customerGroupId,
+                   ' . IdBinding::text('billing_address.id') . ' as billingAddressId,
+                   ' . IdBinding::text('billing_address.country_id') . ' as billingAddressCountryId,
+                   ' . IdBinding::text('order_customer.id') . ' as orderCustomerId,
+                   ' . IdBinding::text('order_customer.customer_id') . ' as customerId,
+                   ' . IdBinding::text('customer.customer_group_id') . ' as customerGroupId,
                    customer.customer_number as liveCustomerNumber,
                    line_item_agg.lineItems as lineItems,
-                   LOWER(HEX(primary_transaction.id)) as primaryTransactionId,
-                   LOWER(HEX(primary_transaction.state_id)) as primaryTransactionStateId,
-                   LOWER(HEX(primary_transaction.payment_method_id)) as primaryTransactionPaymentMethodId,
-                   LOWER(HEX(primary_delivery.id)) as primaryDeliveryId,
-                   LOWER(HEX(primary_delivery.state_id)) as primaryDeliveryStateId,
-                   LOWER(HEX(primary_delivery.shipping_method_id)) as primaryDeliveryShippingMethodId,
-                   LOWER(HEX(primary_delivery_address.country_id)) as primaryDeliveryCountryId
+                   ' . IdBinding::text('primary_transaction.id') . ' as primaryTransactionId,
+                   ' . IdBinding::text('primary_transaction.state_id') . ' as primaryTransactionStateId,
+                   ' . IdBinding::text('primary_transaction.payment_method_id') . ' as primaryTransactionPaymentMethodId,
+                   ' . IdBinding::text('primary_delivery.id') . ' as primaryDeliveryId,
+                   ' . IdBinding::text('primary_delivery.state_id') . ' as primaryDeliveryStateId,
+                   ' . IdBinding::text('primary_delivery.shipping_method_id') . ' as primaryDeliveryShippingMethodId,
+                   ' . IdBinding::text('primary_delivery_address.country_id') . ' as primaryDeliveryCountryId
             FROM `order`
                 LEFT JOIN order_customer
                     ON `order`.id = order_customer.order_id AND `order`.version_id = order_customer.order_version_id
                 LEFT JOIN (
                     SELECT order_tag.order_id,
                            order_tag.order_version_id,
-                           GROUP_CONCAT(DISTINCT tag.name SEPARATOR ' ') as tags,
-                           GROUP_CONCAT(LOWER(HEX(tag.id)) SEPARATOR ' ') as tagIds
+                           GROUP_CONCAT(DISTINCT tag.name SEPARATOR \' \') as tags,
+                           GROUP_CONCAT(' . IdBinding::text('tag.id') . ' SEPARATOR \' \') as tagIds
                     FROM order_tag
                     LEFT JOIN tag
                         ON order_tag.tag_id = tag.id
@@ -295,13 +293,13 @@ final class OrderAdminSearchIndexer extends AbstractAdminIndexer
                 LEFT JOIN (
                     SELECT order_address.order_id,
                            order_address.order_version_id,
-                           GROUP_CONCAT(DISTINCT country_translation.name SEPARATOR ' ') as country,
-                           GROUP_CONCAT(DISTINCT order_address.city SEPARATOR ' ') as city,
-                           GROUP_CONCAT(DISTINCT order_address.street SEPARATOR ' ') as street,
-                           GROUP_CONCAT(DISTINCT order_address.zipcode SEPARATOR ' ') as zipcode,
-                           GROUP_CONCAT(DISTINCT order_address.phone_number SEPARATOR ' ') as phone_number,
-                           GROUP_CONCAT(DISTINCT order_address.additional_address_line1 SEPARATOR ' ') as additional_address_line1,
-                           GROUP_CONCAT(DISTINCT order_address.additional_address_line2 SEPARATOR ' ') as additional_address_line2
+                           GROUP_CONCAT(DISTINCT country_translation.name SEPARATOR \' \') as country,
+                           GROUP_CONCAT(DISTINCT order_address.city SEPARATOR \' \') as city,
+                           GROUP_CONCAT(DISTINCT order_address.street SEPARATOR \' \') as street,
+                           GROUP_CONCAT(DISTINCT order_address.zipcode SEPARATOR \' \') as zipcode,
+                           GROUP_CONCAT(DISTINCT order_address.phone_number SEPARATOR \' \') as phone_number,
+                           GROUP_CONCAT(DISTINCT order_address.additional_address_line1 SEPARATOR \' \') as additional_address_line1,
+                           GROUP_CONCAT(DISTINCT order_address.additional_address_line2 SEPARATOR \' \') as additional_address_line2
                     FROM order_address
                     LEFT JOIN country
                         ON order_address.country_id = country.id
@@ -314,8 +312,8 @@ final class OrderAdminSearchIndexer extends AbstractAdminIndexer
                     ON `order`.id = address_agg.order_id AND `order`.version_id = address_agg.order_version_id
                 LEFT JOIN (
                     SELECT document.order_id,
-                           GROUP_CONCAT(DISTINCT document.document_number SEPARATOR ' ') as documentNumber,
-                           GROUP_CONCAT(DISTINCT LOWER(HEX(document.id)) SEPARATOR ' ') as documentIds
+                           GROUP_CONCAT(DISTINCT document.document_number SEPARATOR \' \') as documentNumber,
+                           GROUP_CONCAT(DISTINCT ' . IdBinding::text('document.id') . ' SEPARATOR \' \') as documentIds
                     FROM document
                     WHERE document.order_id IN (:ids)
                     GROUP BY document.order_id
@@ -329,15 +327,15 @@ final class OrderAdminSearchIndexer extends AbstractAdminIndexer
                     SELECT order_line_item.order_id,
                            order_line_item.order_version_id,
                            CONCAT(
-                               '[',
+                               \'[\',
                                GROUP_CONCAT(
                                    DISTINCT JSON_OBJECT(
-                                       'id', LOWER(HEX(order_line_item.id)),
-                                       'productId', LOWER(HEX(order_line_item.product_id)),
-                                       'code', CASE WHEN order_line_item.promotion_id IS NOT NULL THEN JSON_UNQUOTE(JSON_EXTRACT(order_line_item.payload, '$.code')) END
+                                       \'id\', ' . IdBinding::text('order_line_item.id') . ',
+                                       \'productId\', ' . IdBinding::text('order_line_item.product_id') . ',
+                                       \'code\', CASE WHEN order_line_item.promotion_id IS NOT NULL THEN JSON_UNQUOTE(JSON_EXTRACT(order_line_item.payload, \'$.code\')) END
                                    ) ORDER BY NULL
                                ),
-                               ']'
+                               \']\'
                            ) as lineItems
                     FROM order_line_item
                     WHERE order_line_item.order_id IN (:ids)
@@ -352,17 +350,16 @@ final class OrderAdminSearchIndexer extends AbstractAdminIndexer
                 LEFT JOIN order_address AS primary_delivery_address
                     ON primary_delivery.shipping_order_address_id = primary_delivery_address.id AND primary_delivery.shipping_order_address_version_id = primary_delivery_address.version_id
             WHERE `order`.id IN (:ids)
-            AND `order`.version_id = :versionId
-SQL;
+            AND `order`.version_id = :versionId';
 
         $data = $this->connection->fetchAllAssociative(
             $baseSql,
             [
-                'ids' => Uuid::fromHexToBytesList($ids),
-                'versionId' => Uuid::fromHexToBytes(Defaults::LIVE_VERSION),
+                'ids' => IdBinding::values($ids),
+                'versionId' => IdBinding::value(Defaults::LIVE_VERSION),
             ],
             [
-                'ids' => ArrayParameterType::BINARY,
+                'ids' => IdBinding::listType(),
             ]
         );
 

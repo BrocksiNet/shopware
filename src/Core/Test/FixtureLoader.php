@@ -4,6 +4,7 @@ namespace Shopware\Core\Test;
 
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Api\Sync\SyncOperation;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\Indexing\EntityIndexerRegistry;
@@ -78,8 +79,9 @@ class FixtureLoader
     {
         return $this->connection
             ->fetchOne(
-                'SELECT LOWER(HEX(locale_id)) FROM language WHERE id = UNHEX(:systemLanguageId)',
-                ['systemLanguageId' => Defaults::LANGUAGE_SYSTEM]
+                'SELECT ' . IdBinding::text('locale_id') . ' FROM language WHERE id = :systemLanguageId',
+                ['systemLanguageId' => IdBinding::value(Defaults::LANGUAGE_SYSTEM)],
+                ['systemLanguageId' => IdBinding::type()]
             );
     }
 
@@ -87,7 +89,7 @@ class FixtureLoader
     {
         return $this->connection
             ->fetchOne(
-                'SELECT LOWER(HEX(id)) from locale WHERE code = :code',
+                'SELECT ' . IdBinding::text('id') . ' from locale WHERE code = :code',
                 ['code' => $code]
             );
     }

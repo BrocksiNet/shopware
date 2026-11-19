@@ -2,11 +2,11 @@
 
 namespace Shopware\Elasticsearch\Admin\Indexer;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Checkout\Customer\Aggregate\CustomerGroup\CustomerGroupCollection;
 use Shopware\Core\Checkout\Customer\Aggregate\CustomerGroup\CustomerGroupDefinition;
 use Shopware\Core\Checkout\Customer\Aggregate\CustomerGroupTranslation\CustomerGroupTranslationDefinition;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\Common\IterableQuery;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\Common\IteratorFactory;
@@ -15,7 +15,6 @@ use Shopware\Core\Framework\DataAbstractionLayer\Event\EntityWrittenContainerEve
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Plugin\Exception\DecorationPatternException;
-use Shopware\Core\Framework\Uuid\Uuid;
 
 #[Package('inventory')]
 final class CustomerGroupAdminSearchIndexer extends AbstractAdminIndexer
@@ -84,7 +83,7 @@ final class CustomerGroupAdminSearchIndexer extends AbstractAdminIndexer
     {
         $data = $this->connection->fetchAllAssociative(
             '
-            SELECT LOWER(HEX(customer_group.id)) as id,
+            SELECT ' . IdBinding::text('customer_group.id') . ' as id,
                    GROUP_CONCAT(DISTINCT customer_group_translation.name SEPARATOR " ") as name
             FROM customer_group
                 INNER JOIN customer_group_translation
@@ -93,10 +92,10 @@ final class CustomerGroupAdminSearchIndexer extends AbstractAdminIndexer
             GROUP BY customer_group.id
         ',
             [
-                'ids' => Uuid::fromHexToBytesList($ids),
+                'ids' => IdBinding::values($ids),
             ],
             [
-                'ids' => ArrayParameterType::BINARY,
+                'ids' => IdBinding::listType(),
             ]
         );
 

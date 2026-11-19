@@ -2,11 +2,11 @@
 
 namespace Shopware\Elasticsearch\Admin\Indexer;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Content\Property\Aggregate\PropertyGroupTranslation\PropertyGroupTranslationDefinition;
 use Shopware\Core\Content\Property\PropertyGroupCollection;
 use Shopware\Core\Content\Property\PropertyGroupDefinition;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\Common\IterableQuery;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\Common\IteratorFactory;
@@ -16,7 +16,6 @@ use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\Feature;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Plugin\Exception\DecorationPatternException;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Elasticsearch\Framework\AbstractElasticsearchDefinition;
 use Shopware\Elasticsearch\Framework\ElasticsearchFieldBuilder;
 
@@ -123,12 +122,11 @@ final class PropertyGroupAdminSearchIndexer extends AbstractAdminIndexer
     public function fetch(array $ids): array
     {
         $data = $this->connection->fetchAllAssociative(
-            <<<'SQL'
-            SELECT LOWER(HEX(property_group.id)) as id,
+            '            SELECT ' . IdBinding::text('property_group.id') . ' as id,
                    GROUP_CONCAT(DISTINCT property_group_translation.name SEPARATOR " ") as name,
                    JSON_ARRAYAGG(JSON_OBJECT(
-                       'languageId', LOWER(HEX(property_group_translation.language_id)),
-                       'name', property_group_translation.name
+                       \'languageId\', ' . IdBinding::text('property_group_translation.language_id') . ',
+                       \'name\', property_group_translation.name
                    )) as translatedNames,
                    property_group.filterable AS filterable,
                    property_group.created_at as createdAt
@@ -136,13 +134,12 @@ final class PropertyGroupAdminSearchIndexer extends AbstractAdminIndexer
                 INNER JOIN property_group_translation
                     ON property_group.id = property_group_translation.property_group_id
             WHERE property_group.id IN (:ids)
-            GROUP BY property_group.id
-SQL,
+            GROUP BY property_group.id',
             [
-                'ids' => Uuid::fromHexToBytesList($ids),
+                'ids' => IdBinding::values($ids),
             ],
             [
-                'ids' => ArrayParameterType::BINARY,
+                'ids' => IdBinding::listType(),
             ]
         );
 

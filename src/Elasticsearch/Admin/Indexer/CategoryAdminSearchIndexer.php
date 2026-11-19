@@ -2,12 +2,12 @@
 
 namespace Shopware\Elasticsearch\Admin\Indexer;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Content\Category\Aggregate\CategoryTag\CategoryTagDefinition;
 use Shopware\Core\Content\Category\Aggregate\CategoryTranslation\CategoryTranslationDefinition;
 use Shopware\Core\Content\Category\CategoryCollection;
 use Shopware\Core\Content\Category\CategoryDefinition;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\Common\IterableQuery;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\Common\IteratorFactory;
@@ -17,7 +17,6 @@ use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\Feature;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Plugin\Exception\DecorationPatternException;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Elasticsearch\Framework\AbstractElasticsearchDefinition;
 use Shopware\Elasticsearch\Framework\ElasticsearchFieldBuilder;
 
@@ -141,16 +140,15 @@ final class CategoryAdminSearchIndexer extends AbstractAdminIndexer
     public function fetch(array $ids): array
     {
         $data = $this->connection->fetchAllAssociative(
-            <<<'SQL'
-            SELECT LOWER(HEX(category.id)) as id,
-                   LOWER(HEX(category.parent_id)) as parentId,
+            '            SELECT ' . IdBinding::text('category.id') . ' as id,
+                   ' . IdBinding::text('category.parent_id') . ' as parentId,
                    GROUP_CONCAT(DISTINCT category_translation.name SEPARATOR " ") as name,
                    JSON_ARRAYAGG(JSON_OBJECT(
-                       'languageId', LOWER(HEX(category_translation.language_id)),
-                       'name', category_translation.name
+                       \'languageId\', ' . IdBinding::text('category_translation.language_id') . ',
+                       \'name\', category_translation.name
                    )) as translatedNames,
                    GROUP_CONCAT(DISTINCT tag.name SEPARATOR " ") as tags,
-                   GROUP_CONCAT(LOWER(HEX(tag.id)) SEPARATOR " ") as tagIds,
+                   GROUP_CONCAT(' . IdBinding::text('tag.id') . ' SEPARATOR " ") as tagIds,
                    category.active AS active,
                    category.visible AS visible,
                    category.type AS type,
@@ -163,13 +161,12 @@ final class CategoryAdminSearchIndexer extends AbstractAdminIndexer
                 LEFT JOIN tag
                     ON category_tag.tag_id = tag.id
             WHERE category.id IN (:ids)
-            GROUP BY category.id
-SQL,
+            GROUP BY category.id',
             [
-                'ids' => Uuid::fromHexToBytesList($ids),
+                'ids' => IdBinding::values($ids),
             ],
             [
-                'ids' => ArrayParameterType::BINARY,
+                'ids' => IdBinding::listType(),
             ]
         );
 

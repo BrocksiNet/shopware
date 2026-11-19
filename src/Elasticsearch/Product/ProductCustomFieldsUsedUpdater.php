@@ -6,10 +6,10 @@ use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Content\Product\SalesChannel\Sorting\ProductSortingDefinition;
 use Shopware\Core\Content\ProductStream\Aggregate\ProductStreamFilter\ProductStreamFilterDefinition;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityWriteResult;
 use Shopware\Core\Framework\DataAbstractionLayer\Event\EntityWrittenEvent;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Elasticsearch\Framework\ElasticsearchHelper;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
@@ -98,7 +98,7 @@ class ProductCustomFieldsUsedUpdater implements EventSubscriberInterface
     {
         $rows = $this->connection->fetchFirstColumn(
             'SELECT fields FROM product_sorting WHERE id IN (:ids) AND fields LIKE :pattern',
-            ['ids' => Uuid::fromHexToBytesList($productSortingIds), 'pattern' => '%customFields.%'],
+            ['ids' => IdBinding::values($productSortingIds), 'pattern' => '%customFields.%'],
             ['ids' => ArrayParameterType::STRING]
         );
 
@@ -137,7 +137,7 @@ class ProductCustomFieldsUsedUpdater implements EventSubscriberInterface
     {
         return $this->connection->fetchFirstColumn(
             'SELECT DISTINCT REPLACE(field, \'customFields.\', \'\') FROM product_stream_filter WHERE id IN (:ids) AND field LIKE :field',
-            ['ids' => Uuid::fromHexToBytesList($productStreamFilterIds), 'field' => 'customFields.%'],
+            ['ids' => IdBinding::values($productStreamFilterIds), 'field' => 'customFields.%'],
             ['ids' => ArrayParameterType::STRING]
         );
     }

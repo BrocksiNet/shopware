@@ -2,11 +2,11 @@
 
 namespace Shopware\Elasticsearch\Admin\Indexer;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Content\Product\Aggregate\ProductManufacturer\ProductManufacturerCollection;
 use Shopware\Core\Content\Product\Aggregate\ProductManufacturer\ProductManufacturerDefinition;
 use Shopware\Core\Content\Product\Aggregate\ProductManufacturerTranslation\ProductManufacturerTranslationDefinition;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\Common\IterableQuery;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\Common\IteratorFactory;
@@ -16,7 +16,6 @@ use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\Feature;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Plugin\Exception\DecorationPatternException;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Elasticsearch\Framework\AbstractElasticsearchDefinition;
 use Shopware\Elasticsearch\Framework\ElasticsearchFieldBuilder;
 
@@ -115,25 +114,23 @@ final class ManufacturerAdminSearchIndexer extends AbstractAdminIndexer
     public function fetch(array $ids): array
     {
         $data = $this->connection->fetchAllAssociative(
-            <<<'SQL'
-            SELECT LOWER(HEX(product_manufacturer.id)) as id,
+            '            SELECT ' . IdBinding::text('product_manufacturer.id') . ' as id,
                    GROUP_CONCAT(DISTINCT product_manufacturer_translation.name SEPARATOR " ") as name,
                    JSON_ARRAYAGG(JSON_OBJECT(
-                       'languageId', LOWER(HEX(product_manufacturer_translation.language_id)),
-                       'name', product_manufacturer_translation.name
+                       \'languageId\', ' . IdBinding::text('product_manufacturer_translation.language_id') . ',
+                       \'name\', product_manufacturer_translation.name
                    )) as translatedNames,
                    product_manufacturer.created_at as createdAt
             FROM product_manufacturer
                 INNER JOIN product_manufacturer_translation
                     ON product_manufacturer.id = product_manufacturer_translation.product_manufacturer_id
             WHERE product_manufacturer.id IN (:ids)
-            GROUP BY product_manufacturer.id
-SQL,
+            GROUP BY product_manufacturer.id',
             [
-                'ids' => Uuid::fromHexToBytesList($ids),
+                'ids' => IdBinding::values($ids),
             ],
             [
-                'ids' => ArrayParameterType::BINARY,
+                'ids' => IdBinding::listType(),
             ]
         );
 

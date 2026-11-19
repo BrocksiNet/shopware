@@ -2,18 +2,17 @@
 
 namespace Shopware\Elasticsearch\Product;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use OpenSearchDSL\BuilderInterface;
 use Shopware\Core\Content\Product\ProductDefinition;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\SqlHelper;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityDefinition;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\Feature;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\System\Language\LanguageLoaderInterface;
 use Shopware\Core\System\Language\SalesChannelLanguageLoader;
 use Shopware\Elasticsearch\Framework\AbstractElasticsearchDefinition;
@@ -372,9 +371,8 @@ class ElasticsearchProductDefinition extends AbstractElasticsearchDefinition
             $languages[] = Defaults::LANGUAGE_SYSTEM;
         }
 
-        $baseSql = <<<'SQL'
-SELECT
-    LOWER(HEX(p.id)) AS id,
+        $baseSql = 'SELECT
+    ' . IdBinding::text('p.id') . ' AS id,
     IFNULL(p.active, pp.active) AS active,
     p.available AS available,
     #tags#,
@@ -385,11 +383,11 @@ SELECT
     p.product_number as productNumber,
     pp.product_number as parentProductNumber,
     p.sales,
-    LOWER(HEX(p.manufacturer)) AS productManufacturerId,
-    LOWER(HEX(p.delivery_time_id)) as deliveryTimeId,
+    ' . IdBinding::text('p.manufacturer') . ' AS productManufacturerId,
+    ' . IdBinding::text('p.delivery_time_id') . ' as deliveryTimeId,
     IFNULL(p.shipping_free, pp.shipping_free) AS shippingFree,
     IFNULL(p.is_closeout, pp.is_closeout) AS isCloseout,
-    LOWER(HEX(IFNULL(p.product_media_id, pp.product_media_id))) AS coverId,
+    ' . IdBinding::text('IFNULL(p.product_media_id, pp.product_media_id)') . ' AS coverId,
     IFNULL(p.weight, pp.weight) AS weight,
     IFNULL(p.length, pp.length) AS length,
     IFNULL(p.height, pp.height) AS height,
@@ -402,7 +400,7 @@ SELECT
     IFNULL(p.property_ids, pp.property_ids) AS propertyIds,
     IFNULL(p.tag_ids, pp.tag_ids) AS tagIds,
     IFNULL(p.stream_ids, pp.stream_ids) AS streamIds,
-    LOWER(HEX(IFNULL(p.tax_id, pp.tax_id))) AS taxId,
+    ' . IdBinding::text('IFNULL(p.tax_id, pp.tax_id)') . ' AS taxId,
     IFNULL(p.stock, pp.stock) AS stock,
     IFNULL(p.ean, pp.ean) AS ean,
     IFNULL(p.mark_as_topseller, pp.mark_as_topseller) AS markAsTopseller,
@@ -410,7 +408,7 @@ SELECT
     p.display_group as displayGroup,
     IFNULL(p.cheapest_price_accessor, pp.cheapest_price_accessor) as cheapest_price_accessor,
     IFNULL(p.price, pp.price) as price,
-    LOWER(HEX(p.parent_id)) as parentId,
+    ' . IdBinding::text('p.parent_id') . ' as parentId,
     p.child_count as childCount,
     p.type#states#
 
@@ -422,8 +420,7 @@ FROM product p
 
 WHERE p.id IN (:ids) AND p.version_id = :liveVersionId AND (p.child_count = 0 OR p.parent_id IS NOT NULL OR JSON_EXTRACT(`p`.`variant_listing_config`, "$.displayParent") = 1)
 
-GROUP BY p.id
-SQL;
+GROUP BY p.id';
 
         $baseMapping = [
             // @deprecated tag:v6.8.0 - the `product.states` column is removed in v6.8 (see Migration1763125892),
@@ -431,11 +428,11 @@ SQL;
             '#states#' => Feature::isActive('v6.8.0.0') ? '' : ",\n    p.states",
             '#tags#' => SqlHelper::objectArray([
                 'name' => 'tag.name',
-                'id' => 'LOWER(HEX(tag.id))',
+                'id' => IdBinding::text('tag.id'),
             ], 'tags'),
             '#visibilities#' => SqlHelper::objectArray([
                 'visibility' => 'product_visibility.visibility',
-                'salesChannelId' => 'LOWER(HEX(product_visibility.sales_channel_id))',
+                'salesChannelId' => IdBinding::text('product_visibility.sales_channel_id'),
             ], 'visibilities'),
         ];
 
@@ -444,18 +441,17 @@ SQL;
             str_replace(array_keys($baseMapping), array_values($baseMapping), $baseSql),
             [
                 'ids' => $ids,
-                'liveVersionId' => Uuid::fromHexToBytes($context->getVersionId()),
+                'liveVersionId' => IdBinding::value($context->getVersionId()),
             ],
             [
-                'ids' => ArrayParameterType::BINARY,
+                'ids' => IdBinding::listType(),
             ]
         );
 
         $validProductIds = array_keys($base);
 
-        $translationSql = <<<'SQL'
-SELECT
-    LOWER(HEX(p.id)) AS id,
+        $translationSql = 'SELECT
+    ' . IdBinding::text('p.id') . ' AS id,
     IFNULL(product_main.name, product_parent.name) AS name,
     product_parent.name AS parentName,
     IFNULL(product_main.description, product_parent.description) AS description,
@@ -477,13 +473,12 @@ FROM product p
 
 WHERE p.id IN (:ids) AND p.version_id = :liveVersionId
 
-GROUP BY p.id
-SQL;
+GROUP BY p.id';
 
         $translationMapping = [
             '#categories#' => SqlHelper::objectArray([
-                'languageId' => 'LOWER(HEX(category.language_id))',
-                'id' => 'LOWER(HEX(category.category_id))',
+                'languageId' => IdBinding::text('category.language_id'),
+                'id' => IdBinding::text('category.category_id'),
                 'name' => 'category.name',
             ], 'categories'),
         ];
@@ -495,12 +490,12 @@ SQL;
             $translations = $this->connection->fetchAllAssociativeIndexed(
                 $translationSql,
                 [
-                    'ids' => Uuid::fromHexToBytesList($validProductIds),
-                    'languageId' => Uuid::fromHexToBytes($languageId),
-                    'liveVersionId' => Uuid::fromHexToBytes($context->getVersionId()),
+                    'ids' => IdBinding::values($validProductIds),
+                    'languageId' => IdBinding::value($languageId),
+                    'liveVersionId' => IdBinding::value($context->getVersionId()),
                 ],
                 [
-                    'ids' => ArrayParameterType::BINARY,
+                    'ids' => IdBinding::listType(),
                 ]
             );
 
@@ -536,34 +531,32 @@ SQL;
             return [];
         }
 
-        $sql = <<<'SQL'
-SELECT
-       LOWER(HEX(id)) as id,
-       LOWER(HEX(property_group_id)) as groupId,
+        $sql = 'SELECT
+       ' . IdBinding::text('id') . ' as id,
+       ' . IdBinding::text('property_group_id') . ' as groupId,
        #translations#
 FROM property_group_option
          LEFT JOIN property_group_option_translation
             ON property_group_option_translation.property_group_option_id = property_group_option.id
 
 WHERE property_group_option.id in (:ids)
-GROUP BY property_group_option.id
-SQL;
+GROUP BY property_group_option.id';
 
         /** @var array<string, array{id: string, groupId: string, translations: string}> $options */
         $options = $this->connection->fetchAllAssociativeIndexed(
             str_replace(
                 '#translations#',
                 SqlHelper::objectArray([
-                    'languageId' => 'LOWER(HEX(property_group_option_translation.language_id))',
+                    'languageId' => IdBinding::text('property_group_option_translation.language_id'),
                     'name' => 'property_group_option_translation.name',
                 ], 'translations'),
                 $sql
             ),
             [
-                'ids' => Uuid::fromHexToBytesList($propertyIds),
+                'ids' => IdBinding::values($propertyIds),
             ],
             [
-                'ids' => ArrayParameterType::BINARY,
+                'ids' => IdBinding::listType(),
             ]
         );
 

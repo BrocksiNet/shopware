@@ -10,6 +10,7 @@ use Shopware\Core\Checkout\Cart\Price\Struct\CalculatedPrice;
 use Shopware\Core\Checkout\Cart\SalesChannel\CartService;
 use Shopware\Core\Checkout\Order\Aggregate\OrderLineItem\OrderLineItemEntity;
 use Shopware\Core\Content\Flow\Events\FlowSendMailActionEvent;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\AndFilter;
@@ -146,7 +147,7 @@ trait TestShortHands
     protected function mailListener(\Closure $closure): mixed
     {
         $mapping = static::getContainer()->get(Connection::class)
-            ->fetchAllKeyValue('SELECT LOWER(HEX(id)), technical_name FROM mail_template_type');
+            ->fetchAllKeyValue('SELECT ' . IdBinding::text('id') . ', technical_name FROM mail_template_type');
 
         $listener = new MailEventListener($mapping);
 
@@ -164,7 +165,7 @@ trait TestShortHands
         /** @var array{stock: string, available_stock: string}|false $stocks */
         $stocks = static::getContainer()->get(Connection::class)->fetchAssociative(
             'SELECT stock, available_stock FROM product WHERE id = :id',
-            ['id' => Uuid::fromHexToBytes($productId)]
+            ['id' => IdBinding::value($productId)]
         );
 
         static::assertNotFalse($stocks, \sprintf('Product with id %s not found', $productId));

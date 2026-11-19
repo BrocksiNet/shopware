@@ -2,12 +2,12 @@
 
 namespace Shopware\Elasticsearch\Admin\Indexer;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Checkout\Customer\Aggregate\CustomerAddress\CustomerAddressDefinition;
 use Shopware\Core\Checkout\Customer\Aggregate\CustomerTag\CustomerTagDefinition;
 use Shopware\Core\Checkout\Customer\CustomerCollection;
 use Shopware\Core\Checkout\Customer\CustomerDefinition;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\Common\IterableQuery;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\Common\IteratorFactory;
@@ -17,7 +17,6 @@ use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\Feature;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Plugin\Exception\DecorationPatternException;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Elasticsearch\Framework\AbstractElasticsearchDefinition;
 use Shopware\Elasticsearch\Framework\ElasticsearchFieldBuilder;
 
@@ -183,8 +182,7 @@ final class CustomerAdminSearchIndexer extends AbstractAdminIndexer
     public function fetch(array $ids): array
     {
         $data = $this->connection->fetchAllAssociative(
-            <<<'SQL'
-            SELECT LOWER(HEX(customer.id)) as id,
+            '            SELECT ' . IdBinding::text('customer.id') . ' as id,
                    tag_agg.tags as tags,
                    tag_agg.tagIds as tagIds,
                    address_agg.country as country,
@@ -205,28 +203,28 @@ final class CustomerAdminSearchIndexer extends AbstractAdminIndexer
                    customer.active AS active,
                    customer.affiliate_code AS affiliateCode,
                    customer.campaign_code AS campaignCode,
-                   LOWER(HEX(customer.customer_group_id)) AS groupId,
-                   LOWER(HEX(customer.salutation_id)) AS salutationId,
-                   LOWER(HEX(customer.bound_sales_channel_id)) AS boundSalesChannelId,
-                   LOWER(HEX(customer.requested_customer_group_id)) AS requestedGroupId,
-                   LOWER(HEX(customer.default_billing_address_id)) AS defaultBillingAddressId,
-                   LOWER(HEX(default_billing_address.country_id)) AS defaultBillingAddressCountryId,
-                   LOWER(HEX(customer.default_shipping_address_id)) AS defaultShippingAddressId,
-                   LOWER(HEX(default_shipping_address.country_id)) AS defaultShippingAddressCountryId,
+                   ' . IdBinding::text('customer.customer_group_id') . ' AS groupId,
+                   ' . IdBinding::text('customer.salutation_id') . ' AS salutationId,
+                   ' . IdBinding::text('customer.bound_sales_channel_id') . ' AS boundSalesChannelId,
+                   ' . IdBinding::text('customer.requested_customer_group_id') . ' AS requestedGroupId,
+                   ' . IdBinding::text('customer.default_billing_address_id') . ' AS defaultBillingAddressId,
+                   ' . IdBinding::text('default_billing_address.country_id') . ' AS defaultBillingAddressCountryId,
+                   ' . IdBinding::text('customer.default_shipping_address_id') . ' AS defaultShippingAddressId,
+                   ' . IdBinding::text('default_shipping_address.country_id') . ' AS defaultShippingAddressCountryId,
                    customer.created_at as createdAt
             FROM customer
                 LEFT JOIN (
                     SELECT customer_address.customer_id,
-                           GROUP_CONCAT(DISTINCT country_translation.name ORDER BY NULL SEPARATOR ' ') as country,
-                           GROUP_CONCAT(DISTINCT customer_address.first_name ORDER BY NULL SEPARATOR ' ') as address_first_name,
-                           GROUP_CONCAT(DISTINCT customer_address.last_name ORDER BY NULL SEPARATOR ' ') as address_last_name,
-                           GROUP_CONCAT(DISTINCT customer_address.company ORDER BY NULL SEPARATOR ' ') as address_company,
-                           GROUP_CONCAT(DISTINCT customer_address.city ORDER BY NULL SEPARATOR ' ') as city,
-                           GROUP_CONCAT(DISTINCT customer_address.street ORDER BY NULL SEPARATOR ' ') as street,
-                           GROUP_CONCAT(DISTINCT customer_address.zipcode ORDER BY NULL SEPARATOR ' ') as zipcode,
-                           GROUP_CONCAT(DISTINCT customer_address.phone_number ORDER BY NULL SEPARATOR ' ') as phone_number,
-                           GROUP_CONCAT(DISTINCT customer_address.additional_address_line1 ORDER BY NULL SEPARATOR ' ') as additional_address_line1,
-                           GROUP_CONCAT(DISTINCT customer_address.additional_address_line2 ORDER BY NULL SEPARATOR ' ') as additional_address_line2
+                           GROUP_CONCAT(DISTINCT country_translation.name ORDER BY NULL SEPARATOR \' \') as country,
+                           GROUP_CONCAT(DISTINCT customer_address.first_name ORDER BY NULL SEPARATOR \' \') as address_first_name,
+                           GROUP_CONCAT(DISTINCT customer_address.last_name ORDER BY NULL SEPARATOR \' \') as address_last_name,
+                           GROUP_CONCAT(DISTINCT customer_address.company ORDER BY NULL SEPARATOR \' \') as address_company,
+                           GROUP_CONCAT(DISTINCT customer_address.city ORDER BY NULL SEPARATOR \' \') as city,
+                           GROUP_CONCAT(DISTINCT customer_address.street ORDER BY NULL SEPARATOR \' \') as street,
+                           GROUP_CONCAT(DISTINCT customer_address.zipcode ORDER BY NULL SEPARATOR \' \') as zipcode,
+                           GROUP_CONCAT(DISTINCT customer_address.phone_number ORDER BY NULL SEPARATOR \' \') as phone_number,
+                           GROUP_CONCAT(DISTINCT customer_address.additional_address_line1 ORDER BY NULL SEPARATOR \' \') as additional_address_line1,
+                           GROUP_CONCAT(DISTINCT customer_address.additional_address_line2 ORDER BY NULL SEPARATOR \' \') as additional_address_line2
                     FROM customer_address
                     LEFT JOIN country
                         ON customer_address.country_id = country.id
@@ -242,8 +240,8 @@ final class CustomerAdminSearchIndexer extends AbstractAdminIndexer
                     ON customer.default_shipping_address_id = default_shipping_address.id
                 LEFT JOIN (
                     SELECT customer_tag.customer_id,
-                           GROUP_CONCAT(DISTINCT tag.name ORDER BY NULL SEPARATOR ' ') as tags,
-                           GROUP_CONCAT(LOWER(HEX(tag.id)) ORDER BY NULL SEPARATOR ' ') as tagIds
+                           GROUP_CONCAT(DISTINCT tag.name ORDER BY NULL SEPARATOR \' \') as tags,
+                           GROUP_CONCAT(' . IdBinding::text('tag.id') . ' ORDER BY NULL SEPARATOR \' \') as tagIds
                     FROM customer_tag
                     LEFT JOIN tag
                         ON customer_tag.tag_id = tag.id
@@ -251,13 +249,12 @@ final class CustomerAdminSearchIndexer extends AbstractAdminIndexer
                     GROUP BY customer_tag.customer_id
                 ) as tag_agg
                     ON tag_agg.customer_id = customer.id
-            WHERE customer.id IN (:ids)
-SQL,
+            WHERE customer.id IN (:ids)',
             [
-                'ids' => Uuid::fromHexToBytesList($ids),
+                'ids' => IdBinding::values($ids),
             ],
             [
-                'ids' => ArrayParameterType::BINARY,
+                'ids' => IdBinding::listType(),
             ]
         );
 

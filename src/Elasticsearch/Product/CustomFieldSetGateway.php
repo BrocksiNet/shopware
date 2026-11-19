@@ -4,9 +4,9 @@ namespace Shopware\Elasticsearch\Product;
 
 use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\FetchModeHelper;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 
 /**
  * @internal
@@ -36,13 +36,11 @@ class CustomFieldSetGateway
 
         /** @var list<array{id: string, name: string, type: string}> $result */
         $result = $this->connection->fetchAllAssociative(
-            <<<'SQL'
-                SELECT LOWER(HEX(set_id)) as set_id, LOWER(HEX(id)) AS id, name, type
-                FROM custom_field
-                WHERE set_id IN (:setIds)
-                    AND include_in_search = 1
-            SQL,
-            ['setIds' => Uuid::fromHexToBytesList($setIds)],
+            '    SELECT ' . IdBinding::text('set_id') . ' as set_id, ' . IdBinding::text('id') . ' AS id, name, type
+    FROM custom_field
+    WHERE set_id IN (:setIds)
+        AND include_in_search = 1',
+            ['setIds' => IdBinding::values($setIds)],
             ['setIds' => ArrayParameterType::STRING]
         );
 
@@ -64,8 +62,8 @@ class CustomFieldSetGateway
         }
 
         return $this->connection->fetchFirstColumn(
-            'SELECT LOWER(HEX(id)) FROM custom_field_set WHERE id IN (:ids) AND app_id IS NOT NULL',
-            ['ids' => Uuid::fromHexToBytesList($setIds)],
+            'SELECT ' . IdBinding::text('id') . ' FROM custom_field_set WHERE id IN (:ids) AND app_id IS NOT NULL',
+            ['ids' => IdBinding::values($setIds)],
             ['ids' => ArrayParameterType::STRING]
         );
     }
@@ -83,8 +81,8 @@ class CustomFieldSetGateway
 
         /** @var array<string, string> $result */
         $result = $this->connection->fetchAllKeyValue(
-            'SELECT LOWER(HEX(id)), LOWER(HEX(set_id)) FROM custom_field WHERE id IN (:ids) AND set_id IS NOT NULL',
-            ['ids' => Uuid::fromHexToBytesList($customFieldIds)],
+            'SELECT ' . IdBinding::text('id') . ', ' . IdBinding::text('set_id') . ' FROM custom_field WHERE id IN (:ids) AND set_id IS NOT NULL',
+            ['ids' => IdBinding::values($customFieldIds)],
             ['ids' => ArrayParameterType::STRING]
         );
 
@@ -104,13 +102,11 @@ class CustomFieldSetGateway
 
         /** @var list<array{set_id: string, entity_name: string}> $fieldSets */
         $fieldSets = $this->connection->fetchAllAssociative(
-            <<<'SQL'
-                SELECT LOWER(HEX(custom_field_set.id)) AS set_id, entity_name
-                FROM custom_field_set
-                LEFT JOIN custom_field_set_relation ON custom_field_set.id = custom_field_set_relation.set_id
-                WHERE custom_field_set.id IN (:ids)
-            SQL,
-            ['ids' => Uuid::fromHexToBytesList($fieldSetIds)],
+            '    SELECT ' . IdBinding::text('custom_field_set.id') . ' AS set_id, entity_name
+    FROM custom_field_set
+    LEFT JOIN custom_field_set_relation ON custom_field_set.id = custom_field_set_relation.set_id
+    WHERE custom_field_set.id IN (:ids)',
+            ['ids' => IdBinding::values($fieldSetIds)],
             ['ids' => ArrayParameterType::STRING]
         );
 
@@ -123,7 +119,7 @@ class CustomFieldSetGateway
     public function fetchLanguageIds(): array
     {
         /** @var list<string> $languageIds */
-        $languageIds = $this->connection->fetchFirstColumn('SELECT LOWER(HEX(`id`)) FROM language');
+        $languageIds = $this->connection->fetchFirstColumn('SELECT ' . IdBinding::text('`id`') . ' FROM language');
 
         return $languageIds;
     }

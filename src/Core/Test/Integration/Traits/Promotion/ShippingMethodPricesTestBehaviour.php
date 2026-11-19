@@ -2,10 +2,10 @@
 
 namespace Shopware\Core\Test\Integration\Traits\Promotion;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Exception;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Log\Package;
 
 /**
@@ -28,7 +28,7 @@ trait ShippingMethodPricesTestBehaviour
     public function setNewShippingPrices(Connection $conn, float $price): void
     {
         $rows = $conn->fetchAllAssociative(
-            'SELECT id, currency_price FROM shipping_method_price'
+            'SELECT ' . IdBinding::text('id') . ' AS id, currency_price FROM shipping_method_price'
         );
 
         foreach ($rows as $row) {
@@ -49,8 +49,8 @@ trait ShippingMethodPricesTestBehaviour
 
         $conn->executeStatement(
             'UPDATE shipping_method_price SET currency_price=:currencyPrice WHERE id in(:ids)',
-            ['currencyPrice' => $priceStruct, 'ids' => array_keys($this->oldValues)],
-            ['ids' => ArrayParameterType::BINARY]
+            ['currencyPrice' => $priceStruct, 'ids' => IdBinding::values(array_map('strval', array_keys($this->oldValues)))],
+            ['ids' => IdBinding::listType()]
         );
     }
 
@@ -64,7 +64,8 @@ trait ShippingMethodPricesTestBehaviour
         foreach ($this->oldValues as $k => $v) {
             $conn->executeStatement(
                 'UPDATE shipping_method_price SET currency_price=:currencyPrice WHERE id=:id',
-                ['currencyPrice' => $v, 'id' => $k]
+                ['currencyPrice' => $v, 'id' => IdBinding::value((string) $k)],
+                ['id' => IdBinding::type()]
             );
         }
     }

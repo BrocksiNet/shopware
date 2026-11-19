@@ -2,7 +2,6 @@
 
 namespace Shopware\Elasticsearch\Admin\Indexer;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use OpenSearchDSL\Query\Compound\BoolQuery;
 use OpenSearchDSL\Query\FullText\SimpleQueryStringQuery;
@@ -16,6 +15,7 @@ use Shopware\Core\Content\Product\Aggregate\ProductVisibility\ProductVisibilityD
 use Shopware\Core\Content\Product\ProductCollection;
 use Shopware\Core\Content\Product\ProductDefinition;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\Common\IterableQuery;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\Common\IteratorFactory;
@@ -211,11 +211,12 @@ final class ProductAdminSearchIndexer extends AbstractAdminIndexer
         }
 
         $data = $this->connection->fetchAllAssociative(
-            "
-            SELECT LOWER(HEX(product.id)) as id,
-                   GROUP_CONCAT(DISTINCT translation.name ORDER BY NULL SEPARATOR '\n') as name,
-                   CONCAT('[', GROUP_CONCAT(translation.custom_search_keywords), ']') as custom_search_keywords,
-                   GROUP_CONCAT(DISTINCT tag.name SEPARATOR ' ') as tags,
+            '
+            SELECT ' . IdBinding::text('product.id') . ' as id,
+                   GROUP_CONCAT(DISTINCT translation.name ORDER BY NULL SEPARATOR \'
+\') as name,
+                   CONCAT(\'[\', GROUP_CONCAT(translation.custom_search_keywords), \']\') as custom_search_keywords,
+                   GROUP_CONCAT(DISTINCT tag.name SEPARATOR \' \') as tags,
                    product.product_number,
                    product.ean,
                    product.manufacturer_number
@@ -229,13 +230,13 @@ final class ProductAdminSearchIndexer extends AbstractAdminIndexer
             WHERE product.id IN (:ids)
             AND product.version_id = :versionId
             GROUP BY product.id
-        ",
+        ',
             [
-                'ids' => Uuid::fromHexToBytesList($ids),
-                'versionId' => Uuid::fromHexToBytes(Defaults::LIVE_VERSION),
+                'ids' => IdBinding::values($ids),
+                'versionId' => IdBinding::value(Defaults::LIVE_VERSION),
             ],
             [
-                'ids' => ArrayParameterType::BINARY,
+                'ids' => IdBinding::listType(),
             ]
         );
 
@@ -291,8 +292,8 @@ final class ProductAdminSearchIndexer extends AbstractAdminIndexer
             return [];
         }
 
-        $versionId = Uuid::fromHexToBytes(Defaults::LIVE_VERSION);
-        $binaryIds = array_values(Uuid::fromHexToBytesList($ids));
+        $versionId = IdBinding::value(Defaults::LIVE_VERSION);
+        $binaryIds = array_values(IdBinding::values($ids));
 
         $baseRows = $this->fetchProductBaseRows($binaryIds, $versionId);
 
@@ -330,24 +331,23 @@ final class ProductAdminSearchIndexer extends AbstractAdminIndexer
     private function fetchProductBaseRows(array $binaryIds, string $versionId): array
     {
         return $this->connection->fetchAllAssociative(
-            <<<'SQL'
-            SELECT LOWER(HEX(product.id)) as id,
+            '            SELECT ' . IdBinding::text('product.id') . ' as id,
                    IFNULL(product.active, parent.active) AS active,
                    product.available AS available,
-                   LOWER(HEX(product.parent_id)) as parentId,
+                   ' . IdBinding::text('product.parent_id') . ' as parentId,
                    product.product_number as productNumber,
                    product.ean as ean,
                    product.manufacturer_number as manufacturerNumber,
                    product.sales as sales,
                    product.type as type,
                    product.states as states,
-                   LOWER(HEX(product.manufacturer)) AS manufacturerId,
-                   LOWER(HEX(product.visibilities)) AS visibilitiesId,
+                   ' . IdBinding::text('product.manufacturer') . ' AS manufacturerId,
+                   ' . IdBinding::text('product.visibilities') . ' AS visibilitiesId,
                    IFNULL(product.category_ids, parent.category_ids) AS categoryIds,
                    product.stock as stock,
                    IFNULL(product.price, parent.price) AS priceRaw,
                    IFNULL(product.release_date, parent.release_date) AS releaseDate,
-                   LOWER(HEX(product.cover)) AS mediaId,
+                   ' . IdBinding::text('product.cover') . ' AS mediaId,
                    product.created_at as createdAt,
                    product.updated_at as updatedAt
             FROM product
@@ -355,10 +355,9 @@ final class ProductAdminSearchIndexer extends AbstractAdminIndexer
                     ON product.parent_id = parent.id
                     AND parent.version_id = :versionId
             WHERE product.id IN (:ids)
-            AND product.version_id = :versionId
-SQL,
+            AND product.version_id = :versionId',
             ['ids' => $binaryIds, 'versionId' => $versionId],
-            ['ids' => ArrayParameterType::BINARY]
+            ['ids' => IdBinding::listType()]
         );
     }
 
@@ -374,26 +373,25 @@ SQL,
         }
 
         $rows = $this->connection->fetchAllAssociative(
-            <<<'SQL'
-            SELECT LOWER(HEX(product_translation.product_id)) as id,
-                   GROUP_CONCAT(DISTINCT product_translation.name ORDER BY NULL SEPARATOR ' ') as name,
+            '            SELECT ' . IdBinding::text('product_translation.product_id') . ' as id,
+                   GROUP_CONCAT(DISTINCT product_translation.name ORDER BY NULL SEPARATOR \' \') as name,
                    CONCAT(
-                       '[',
+                       \'[\',
                        IFNULL(
                            GROUP_CONCAT(
                                CASE
                                    WHEN product_translation.name IS NOT NULL THEN JSON_OBJECT(
-                                       'languageId', LOWER(HEX(product_translation.language_id)),
-                                       'name', product_translation.name
+                                       \'languageId\', ' . IdBinding::text('product_translation.language_id') . ',
+                                       \'name\', product_translation.name
                                    )
                                END
                                ORDER BY NULL
                            ),
-                           ''
+                           \'\'
                        ),
-                       ']'
+                       \']\'
                    ) as translatedNames,
-                   CONCAT('[', IFNULL(GROUP_CONCAT(product_translation.custom_search_keywords ORDER BY NULL), ''), ']') as customSearchKeywords
+                   CONCAT(\'[\', IFNULL(GROUP_CONCAT(product_translation.custom_search_keywords ORDER BY NULL), \'\'), \']\') as customSearchKeywords
             FROM product_translation
             WHERE product_translation.product_id IN (:ids)
             AND product_translation.product_version_id = :versionId
@@ -401,10 +399,9 @@ SQL,
                 product_translation.name IS NOT NULL
                 OR product_translation.custom_search_keywords IS NOT NULL
             )
-            GROUP BY product_translation.product_id, product_translation.product_version_id
-SQL,
-            ['ids' => Uuid::fromHexToBytesList($translationIds), 'versionId' => $versionId],
-            ['ids' => ArrayParameterType::BINARY]
+            GROUP BY product_translation.product_id, product_translation.product_version_id',
+            ['ids' => IdBinding::values($translationIds), 'versionId' => $versionId],
+            ['ids' => IdBinding::listType()]
         );
 
         return $this->indexRowsById($rows);
@@ -422,19 +419,17 @@ SQL,
         }
 
         $rows = $this->connection->fetchAllAssociative(
-            <<<'SQL'
-            SELECT LOWER(HEX(product_manufacturer_translation.product_manufacturer_id)) as id,
+            '            SELECT ' . IdBinding::text('product_manufacturer_translation.product_manufacturer_id') . ' as id,
                    JSON_ARRAYAGG(JSON_OBJECT(
-                       'languageId', LOWER(HEX(product_manufacturer_translation.language_id)),
-                       'name', product_manufacturer_translation.name
+                       \'languageId\', ' . IdBinding::text('product_manufacturer_translation.language_id') . ',
+                       \'name\', product_manufacturer_translation.name
                    )) as translatedManufacturerNames
             FROM product_manufacturer_translation
             WHERE product_manufacturer_translation.product_manufacturer_id IN (:ids)
             AND product_manufacturer_translation.product_manufacturer_version_id = :versionId
-            GROUP BY product_manufacturer_translation.product_manufacturer_id, product_manufacturer_translation.product_manufacturer_version_id
-SQL,
-            ['ids' => Uuid::fromHexToBytesList($manufacturerIds), 'versionId' => $versionId],
-            ['ids' => ArrayParameterType::BINARY]
+            GROUP BY product_manufacturer_translation.product_manufacturer_id, product_manufacturer_translation.product_manufacturer_version_id',
+            ['ids' => IdBinding::values($manufacturerIds), 'versionId' => $versionId],
+            ['ids' => IdBinding::listType()]
         );
 
         return $this->indexRowsById($rows);
@@ -448,19 +443,17 @@ SQL,
     private function fetchTagsByProductIds(array $binaryIds, string $versionId): array
     {
         $rows = $this->connection->fetchAllAssociative(
-            <<<'SQL'
-            SELECT LOWER(HEX(product_tag.product_id)) as id,
-                   GROUP_CONCAT(DISTINCT tag.name ORDER BY NULL SEPARATOR ' ') as tags,
-                   GROUP_CONCAT(LOWER(HEX(tag.id)) ORDER BY NULL SEPARATOR ' ') as tagIds
+            '            SELECT ' . IdBinding::text('product_tag.product_id') . ' as id,
+                   GROUP_CONCAT(DISTINCT tag.name ORDER BY NULL SEPARATOR \' \') as tags,
+                   GROUP_CONCAT(' . IdBinding::text('tag.id') . ' ORDER BY NULL SEPARATOR \' \') as tagIds
             FROM product_tag
                 LEFT JOIN tag
                     ON product_tag.tag_id = tag.id
             WHERE product_tag.product_id IN (:ids)
             AND product_tag.product_version_id = :versionId
-            GROUP BY product_tag.product_id, product_tag.product_version_id
-SQL,
+            GROUP BY product_tag.product_id, product_tag.product_version_id',
             ['ids' => $binaryIds, 'versionId' => $versionId],
-            ['ids' => ArrayParameterType::BINARY]
+            ['ids' => IdBinding::listType()]
         );
 
         return $this->indexRowsById($rows);
@@ -478,24 +471,22 @@ SQL,
         }
 
         $rows = $this->connection->fetchAllAssociative(
-            <<<'SQL'
-            SELECT LOWER(HEX(product_visibility.product_id)) as id,
+            '            SELECT ' . IdBinding::text('product_visibility.product_id') . ' as id,
                    CONCAT(
-                       '[',
+                       \'[\',
                        GROUP_CONCAT(
                            DISTINCT JSON_OBJECT(
-                               'salesChannelId', LOWER(HEX(product_visibility.sales_channel_id))
+                               \'salesChannelId\', ' . IdBinding::text('product_visibility.sales_channel_id') . '
                            ) ORDER BY NULL
                        ),
-                       ']'
+                       \']\'
                    ) as visibilities
             FROM product_visibility
             WHERE product_visibility.product_id IN (:ids)
             AND product_visibility.product_version_id = :versionId
-            GROUP BY product_visibility.product_id, product_visibility.product_version_id
-SQL,
-            ['ids' => Uuid::fromHexToBytesList($visibilityIds), 'versionId' => $versionId],
-            ['ids' => ArrayParameterType::BINARY]
+            GROUP BY product_visibility.product_id, product_visibility.product_version_id',
+            ['ids' => IdBinding::values($visibilityIds), 'versionId' => $versionId],
+            ['ids' => IdBinding::listType()]
         );
 
         return $this->indexRowsById($rows);

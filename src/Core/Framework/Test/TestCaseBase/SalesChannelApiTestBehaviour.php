@@ -2,11 +2,11 @@
 
 namespace Shopware\Core\Framework\Test\TestCaseBase;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use PHPUnit\Framework\Attributes\After;
 use Shopware\Core\Checkout\Cart\CartRuleLoader;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Api\Util\AccessKeyHelper;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
@@ -49,8 +49,8 @@ trait SalesChannelApiTestBehaviour
         try {
             $connection->executeStatement(
                 'DELETE FROM sales_channel WHERE id IN (:salesChannelIds)',
-                ['salesChannelIds' => $this->salesChannelIds],
-                ['salesChannelIds' => ArrayParameterType::BINARY]
+                ['salesChannelIds' => IdBinding::values($this->salesChannelIds)],
+                ['salesChannelIds' => IdBinding::listType()]
             );
         } catch (\Exception $ex) {
             // nth
@@ -337,6 +337,6 @@ trait SalesChannelApiTestBehaviour
     private function getRandomId(string $table): string
     {
         return (string) static::getContainer()->get(Connection::class)
-            ->fetchOne('SELECT LOWER(HEX(id)) FROM ' . $table);
+            ->fetchOne('SELECT ' . IdBinding::text('id') . ' FROM ' . $table);
     }
 }

@@ -4,6 +4,7 @@ namespace Shopware\Core\Test\Integration\Builder\Webhook;
 
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Uuid\Uuid;
 
@@ -117,13 +118,13 @@ class WebhookBuilder
     public function insert(Connection $connection): string
     {
         $connection->insert('webhook', [
-            'id' => Uuid::fromHexToBytes($this->id),
+            'id' => IdBinding::value($this->id),
             'name' => $this->name ?? 'webhook-' . $this->id,
             'event_name' => $this->eventName,
             'url' => $this->url,
-            'app_id' => $this->appId !== null ? Uuid::fromHexToBytes($this->appId) : null,
-            'owner_user_id' => $this->ownerUserId !== null ? Uuid::fromHexToBytes($this->ownerUserId) : null,
-            'owner_integration_id' => $this->ownerIntegrationId !== null ? Uuid::fromHexToBytes($this->ownerIntegrationId) : null,
+            'app_id' => $this->appId !== null ? IdBinding::value($this->appId) : null,
+            'owner_user_id' => $this->ownerUserId !== null ? IdBinding::value($this->ownerUserId) : null,
+            'owner_integration_id' => $this->ownerIntegrationId !== null ? IdBinding::value($this->ownerIntegrationId) : null,
             'active' => (int) $this->active,
             'error_count' => $this->errorCount,
             'acl_role_ids' => $this->aclRoleIds !== null ? json_encode($this->aclRoleIds, \JSON_THROW_ON_ERROR) : null,

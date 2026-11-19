@@ -8,6 +8,7 @@ use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use PHPUnit\Framework\Attributes\After;
 use PHPUnit\Framework\TestCase;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Api\Context\AdminApiSource;
 use Shopware\Core\Framework\Api\Util\AccessKeyHelper;
 use Shopware\Core\Framework\Context;
@@ -56,7 +57,7 @@ trait AdminApiTestBehaviour
             $connection->executeStatement(
                 'DELETE FROM integration WHERE id IN (:ids)',
                 ['ids' => $this->apiIntegrations],
-                ['ids' => ArrayParameterType::BINARY]
+                ['ids' => IdBinding::listType()]
             );
         } catch (\Exception) {
             // nth
@@ -239,9 +240,9 @@ trait AdminApiTestBehaviour
         $accessKey = AccessKeyHelper::generateAccessKey('integration');
 
         if (!$id) {
-            $id = Uuid::randomBytes();
+            $id = IdBinding::value(Uuid::randomHex());
         } else {
-            $id = Uuid::fromHexToBytes($id);
+            $id = IdBinding::value($id);
         }
 
         $connection = $browser->getContainer()->get(Connection::class);
@@ -342,7 +343,7 @@ trait AdminApiTestBehaviour
             ->from('language', 'language')
             ->innerJoin('language', 'locale', 'locale', 'language.locale_id = locale.id')
             ->where('language.id = :id')
-            ->setParameter('id', Uuid::fromHexToBytes(Defaults::LANGUAGE_SYSTEM))
+            ->setParameter('id', IdBinding::value(Defaults::LANGUAGE_SYSTEM))
             ->executeQuery()
             ->fetchOne();
     }

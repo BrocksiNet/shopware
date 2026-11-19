@@ -4,6 +4,7 @@ namespace Shopware\Storefront\Test\Controller;
 
 use Doctrine\DBAL\Connection;
 use Shopware\Core\DevOps\Environment\EnvironmentHelper;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Test\TestCaseBase\KernelLifecycleManager;
 use Shopware\Core\Framework\Test\TestCaseHelper\TestBrowser;
 use Symfony\Component\DependencyInjection\ContainerInterface;
@@ -51,7 +52,7 @@ trait StorefrontControllerTestBehaviour
         return (string) static::getContainer()
             ->get(Connection::class)
             ->fetchOne(
-                'SELECT LOWER(HEX(sales_channel_id)) FROM sales_channel_domain WHERE url = :url',
+                'SELECT ' . IdBinding::text('sales_channel_id') . ' FROM sales_channel_domain WHERE url = :url',
                 ['url' => EnvironmentHelper::getVariable('APP_URL')]
             );
     }

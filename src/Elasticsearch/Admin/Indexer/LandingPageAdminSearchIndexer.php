@@ -2,12 +2,12 @@
 
 namespace Shopware\Elasticsearch\Admin\Indexer;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Content\LandingPage\Aggregate\LandingPageTag\LandingPageTagDefinition;
 use Shopware\Core\Content\LandingPage\Aggregate\LandingPageTranslation\LandingPageTranslationDefinition;
 use Shopware\Core\Content\LandingPage\LandingPageCollection;
 use Shopware\Core\Content\LandingPage\LandingPageDefinition;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\Common\IterableQuery;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\Common\IteratorFactory;
@@ -17,7 +17,6 @@ use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\Feature;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Plugin\Exception\DecorationPatternException;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Elasticsearch\Framework\AbstractElasticsearchDefinition;
 use Shopware\Elasticsearch\Framework\ElasticsearchFieldBuilder;
 
@@ -125,15 +124,14 @@ final class LandingPageAdminSearchIndexer extends AbstractAdminIndexer
     public function fetch(array $ids): array
     {
         $data = $this->connection->fetchAllAssociative(
-            <<<'SQL'
-            SELECT LOWER(HEX(landing_page.id)) as id,
+            '            SELECT ' . IdBinding::text('landing_page.id') . ' as id,
                    GROUP_CONCAT(DISTINCT landing_page_translation.name SEPARATOR " ") as name,
                    JSON_ARRAYAGG(JSON_OBJECT(
-                       'languageId', LOWER(HEX(landing_page_translation.language_id)),
-                       'name', landing_page_translation.name
+                       \'languageId\', ' . IdBinding::text('landing_page_translation.language_id') . ',
+                       \'name\', landing_page_translation.name
                    )) as translatedNames,
                    GROUP_CONCAT(DISTINCT tag.name SEPARATOR " ") as tags,
-                   GROUP_CONCAT(LOWER(HEX(tag.id)) SEPARATOR " ") as tagIds,
+                   GROUP_CONCAT(' . IdBinding::text('tag.id') . ' SEPARATOR " ") as tagIds,
                    landing_page.active AS active,
                    landing_page.created_at as createdAt
             FROM landing_page
@@ -144,13 +142,12 @@ final class LandingPageAdminSearchIndexer extends AbstractAdminIndexer
                 LEFT JOIN tag
                     ON landing_page_tag.tag_id = tag.id
             WHERE landing_page.id IN (:ids)
-            GROUP BY landing_page.id
-SQL,
+            GROUP BY landing_page.id',
             [
-                'ids' => Uuid::fromHexToBytesList($ids),
+                'ids' => IdBinding::values($ids),
             ],
             [
-                'ids' => ArrayParameterType::BINARY,
+                'ids' => IdBinding::listType(),
             ]
         );
 

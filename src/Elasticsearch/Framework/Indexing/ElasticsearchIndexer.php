@@ -7,6 +7,7 @@ use Doctrine\DBAL\Connection;
 use OpenSearch\Client;
 use Psr\Clock\ClockInterface;
 use Psr\Log\LoggerInterface;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\Common\IteratorFactory;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityDefinition;
@@ -286,7 +287,7 @@ class ElasticsearchIndexer
             throw ElasticsearchException::definitionNotFound($entity);
         }
 
-        $data = $definition->fetch(Uuid::fromHexToBytesList($ids), $context);
+        $data = $definition->fetch(IdBinding::values($ids), $context);
 
         $toRemove = array_filter($ids, static fn (string $id) => !isset($data[$id]));
 
