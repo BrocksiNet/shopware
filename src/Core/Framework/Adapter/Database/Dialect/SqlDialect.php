@@ -140,4 +140,11 @@ interface SqlDialect
      * MySQL, MariaDB and SQLite merge the derived table, the result is an empty string and callers keep the plain query.
      */
     public function subqueryFence(): string;
+
+    /**
+     * A window function expression that numbers the rows of each partition starting at 1, in the order of the surrounding ORDER BY.
+     * PostgreSQL and SQLite: `ROW_NUMBER() OVER (PARTITION BY ...)`.
+     * MySQL and MariaDB: null, callers keep the session variable counter (`@n`, `@c`) they have always used there.
+     */
+    public function rowNumberPerPartition(string $partitionSql): ?string;
 }

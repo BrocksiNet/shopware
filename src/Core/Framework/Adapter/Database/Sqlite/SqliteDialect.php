@@ -136,6 +136,11 @@ class SqliteDialect implements SqlDialect
         return \sprintf('lower(%s)', $columnSql);
     }
 
+    public function rowNumberPerPartition(string $partitionSql): ?string
+    {
+        return \sprintf('ROW_NUMBER() OVER (PARTITION BY %s ORDER BY %s)', $partitionSql, $partitionSql);
+    }
+
     public function subqueryFence(): string
     {
         return '';

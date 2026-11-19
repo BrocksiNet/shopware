@@ -1054,7 +1054,9 @@ class EntityReader implements EntityReaderInterface
             );
             $query->setParameter('limit', $fieldCriteria->getLimit());
 
-            $this->connection->executeStatement('SET @n = 0, @c = null');
+            if ($this->dialect()->rowNumberPerPartition('x') === null) {
+                $this->connection->executeStatement('SET @n = 0, @c = null');
+            }
         }
 
         $mapping = $query->executeQuery()->fetchAllKeyValue();
@@ -1309,13 +1311,16 @@ class EntityReader implements EntityReaderInterface
             '#source_column#' => $sourceColumn,
         ];
 
+        $rowNumber = $this->dialect()->rowNumberPerPartition($table . '.' . $sourceColumn);
+        $counter = $rowNumber ?? str_replace(
+            array_keys($params),
+            array_values($params),
+            '@n:=IF(@c=#table#.#source_column#, @n+1, IF(@c:=#table#.#source_column#,1,1))'
+        );
+
         $query = new QueryBuilder($this->connection);
         $query->select(
-            str_replace(
-                array_keys($params),
-                array_values($params),
-                '@n:=IF(@c=#table#.#source_column#, @n+1, IF(@c:=#table#.#source_column#,1,1)) as id_count'
-            ),
+            $counter . ' as id_count',
             $table . '.' . $referenceColumn,
             $table . '.' . $sourceColumn,
         );

@@ -113,6 +113,11 @@ class MySqlDialect implements SqlDialect
         return $columnSql;
     }
 
+    public function rowNumberPerPartition(string $partitionSql): ?string
+    {
+        return null;
+    }
+
     public function subqueryFence(): string
     {
         return '';
