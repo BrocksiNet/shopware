@@ -5,6 +5,7 @@ namespace Shopware\Core\Maintenance\System\Service;
 use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
+use Doctrine\DBAL\Platforms\SQLitePlatform;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Kernel;
 use Shopware\Core\Maintenance\MaintenanceException;
@@ -21,6 +22,18 @@ class SetupDatabaseAdapter
 {
     public function dropDatabase(Connection $connection, string $database): void
     {
+        if ($this->isSqlite($connection)) {
+            // the database is the file the connection points to. The file is emptied and not deleted: another connection of this
+            // process (the kernel) may have it open already and would keep writing to the unlinked file.
+            $connection->executeStatement('PRAGMA foreign_keys = OFF');
+            foreach ($connection->fetchAllAssociative("SELECT type, name FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' AND type IN ('view', 'trigger', 'table') ORDER BY CASE type WHEN 'view' THEN 0 WHEN 'trigger' THEN 1 ELSE 2 END") as $object) {
+                $connection->executeStatement(\sprintf('DROP %s IF EXISTS `%s`', strtoupper((string) $object['type']), str_replace('`', '``', (string) $object['name'])));
+            }
+            $connection->executeStatement('PRAGMA foreign_keys = ON');
+
+            return;
+        }
+
         if ($this->isPostgreSQL($connection)) {
             $this->executeNative($connection, 'DROP DATABASE IF EXISTS ' . $this->quotePostgreSQL($database) . ' WITH (FORCE)');
 
@@ -32,6 +45,15 @@ class SetupDatabaseAdapter
 
     public function createDatabase(Connection $connection, string $database): void
     {
+        if ($this->isSqlite($connection)) {
+            $directory = \dirname($database);
+            if ($database !== ':memory:' && !is_dir($directory)) {
+                mkdir($directory, 0o775, true);
+            }
+
+            return;
+        }
+
         if ($this->isPostgreSQL($connection)) {
             $exists = $connection->fetchOne('SELECT 1 FROM pg_database WHERE datname = ?', [$database]);
             if ($exists === false) {
@@ -59,7 +81,7 @@ class SetupDatabaseAdapter
 
     public function hasShopwareTables(Connection $connection, ?string $database = null): bool
     {
-        if ($database && !$this->isPostgreSQL($connection)) {
+        if ($database && !$this->isPostgreSQL($connection) && !$this->isSqlite($connection)) {
             $connection->executeStatement('USE `' . $database . '`');
         }
 
@@ -70,7 +92,7 @@ class SetupDatabaseAdapter
 
     public function getTableCount(Connection $connection, string $database): int
     {
-        if (!$this->isPostgreSQL($connection)) {
+        if (!$this->isPostgreSQL($connection) && !$this->isSqlite($connection)) {
             $connection->executeStatement('USE `' . $database . '`');
         }
 
@@ -104,6 +126,11 @@ class SetupDatabaseAdapter
     public function isPostgreSQL(Connection $connection): bool
     {
         return $connection->getDatabasePlatform() instanceof PostgreSQLPlatform;
+    }
+
+    public function isSqlite(Connection $connection): bool
+    {
+        return $connection->getDatabasePlatform() instanceof SQLitePlatform;
     }
 
     /**
@@ -141,6 +168,10 @@ class SetupDatabaseAdapter
     {
         if ($this->isPostgreSQL($connection)) {
             return array_map(strval(...), $connection->fetchFirstColumn('SELECT tablename FROM pg_tables WHERE schemaname = current_schema()'));
+        }
+
+        if ($this->isSqlite($connection)) {
+            return array_map(strval(...), $connection->fetchFirstColumn("SELECT name FROM sqlite_master WHERE type = 'table'"));
         }
 
         return array_map(strval(...), $connection->fetchFirstColumn('SHOW TABLES'));

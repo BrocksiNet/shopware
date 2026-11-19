@@ -75,7 +75,7 @@ class UserProvisioner
             ->where('username = :username')
             ->setParameter('username', $username)
             ->executeQuery()
-            ->rowCount() > 0;
+            ->fetchOne() !== false;
     }
 
     private function getLocaleOfSystemLanguage(): string

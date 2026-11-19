@@ -149,6 +149,10 @@ class SqlTranslationMiddleware implements Middleware
                         if (stripos($sql, 'information_schema.') !== false) {
                             $sql = (string) preg_replace(['/\binformation_schema\.columns\b/i', '/\binformation_schema\.tables\b/i'], ['sw_is_columns', 'sw_is_tables'], $sql);
                         }
+                        if (stripos($sql, 'pragma_table_info(') !== false) {
+                            // the schema manager lists columns with pragma_table_info, which hides generated columns, table_xinfo shows them
+                            $sql = (string) preg_replace('/\bpragma_table_info\(/i', 'pragma_table_xinfo(', $sql);
+                        }
                         if (str_contains($sql, '#')) {
                             // MySQL `# comment` lines, SQLite only knows `--` and block comments
                             $sql = (string) preg_replace_callback('/(\'(?:[^\'\\\\]|\\\\.|\'\')*\'|`[^`]*`|"[^"]*")|#[^\n]*/s', static fn (array $m): string => ($m[1] ?? '') !== '' ? $m[1] : '', $sql);
@@ -174,6 +178,14 @@ class SqlTranslationMiddleware implements Middleware
                                 $expr = preg_replace('/^\s*DISTINCT\s+/i', '', $mm[1]);
 
                                 return 'group_concat(' . $expr . ', ' . $mm[2] . ')';
+                            }, $sql);
+                        }
+                        if (stripos($sql, 'JSON_TYPE') !== false) {
+                            // JSON_EXTRACT returns the SQL value in SQLite, JSON in MySQL: JSON_TYPE(JSON_EXTRACT(a, p)) is json_type(a, p) with MySQL names
+                            $sql = (string) preg_replace_callback('/\bJSON_TYPE\s*\(\s*JSON_EXTRACT\s*\(([^()\']*(?:\'[^\']*\'[^()\']*)*)\)\s*\)/i', static function (array $m): string {
+                                $t = 'json_type(' . $m[1] . ')';
+
+                                return '(CASE ' . $t . " WHEN 'text' THEN 'STRING' WHEN 'true' THEN 'BOOLEAN' WHEN 'false' THEN 'BOOLEAN' WHEN 'real' THEN 'DOUBLE' ELSE UPPER(" . $t . ') END)';
                             }, $sql);
                         }
                         if (stripos($sql, 'COALESCE') !== false) {
@@ -219,6 +231,8 @@ class SqlTranslationMiddleware implements Middleware
                             $sql = $this->stripSetQualifier($sql);
                             $sql = $this->updateLimit($sql);
                             $sql = (string) preg_replace('/\bctid\b/', 'rowid', UpdateRewriter::rewrite($sql));
+                            // SQLite wants AS for the alias of the target table: `UPDATE t AS a SET ... FROM ...`
+                            $sql = (string) preg_replace('/^(\s*UPDATE\s+"?\w+"?)\s+(?!AS\b|SET\b)("?\w+"?)\s+SET\s/i', '$1 AS $2 SET ', $sql);
                             if ($ignore) {
                                 $sql = (string) preg_replace('/^(\s*UPDATE)\s+/i', '$1 OR IGNORE ', $sql);
                             }

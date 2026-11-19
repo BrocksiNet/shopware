@@ -281,6 +281,21 @@ class DatabaseConnectionInformationTest extends TestCase
 
     public static function validEnvProvider(): \Generator
     {
+        yield 'sqlite file' => [
+            ['DATABASE_URL' => 'sqlite:////var/data/shopware.db'],
+            (new DatabaseConnectionInformation())->assign(['scheme' => 'sqlite', 'databaseName' => '/var/data/shopware.db']),
+        ];
+
+        yield 'sqlite relative file' => [
+            ['DATABASE_URL' => 'sqlite:///var/shopware.db'],
+            (new DatabaseConnectionInformation())->assign(['scheme' => 'sqlite', 'databaseName' => 'var/shopware.db']),
+        ];
+
+        yield 'sqlite memory' => [
+            ['DATABASE_URL' => 'sqlite:///:memory:'],
+            (new DatabaseConnectionInformation())->assign(['scheme' => 'sqlite', 'databaseName' => ':memory:']),
+        ];
+
         yield 'only database' => [
             [
                 'DATABASE_URL' => 'mysql://root:root@localhost:3306/shopware',
@@ -361,6 +376,17 @@ class DatabaseConnectionInformationTest extends TestCase
                 'databaseName' => 'shopware',
             ]),
         ];
+    }
+
+    public function testSqliteParametersAndDsn(): void
+    {
+        $info = (new DatabaseConnectionInformation())->assign(['scheme' => 'sqlite', 'databaseName' => '/var/data/shopware.db']);
+
+        static::assertTrue($info->isSqlite());
+        static::assertFalse($info->isPostgreSQL());
+        static::assertSame(['driver' => 'pdo_sqlite', 'driverOptions' => [\PDO::ATTR_STRINGIFY_FETCHES => true], 'path' => '/var/data/shopware.db'], $info->toDBALParameters());
+        static::assertSame('sqlite:////var/data/shopware.db', $info->asDsn());
+        $info->validate();
     }
 
     /**

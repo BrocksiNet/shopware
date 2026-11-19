@@ -8,6 +8,7 @@ use Doctrine\DBAL\DriverManager;
 use Shopware\Core\Framework\Adapter\Database\PostgreSQL\IdCodecMiddleware;
 use Shopware\Core\Framework\Adapter\Database\PostgreSQL\SessionMiddleware;
 use Shopware\Core\Framework\Adapter\Database\PostgreSQL\SqlTranslationMiddleware;
+use Shopware\Core\Framework\Adapter\Database\SqliteFactory;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Maintenance\MaintenanceException;
 use Shopware\Core\Maintenance\System\Struct\DatabaseConnectionInformation;
@@ -34,6 +35,11 @@ class DatabaseConnectionFactory
                 $connectionInformation->toDBALParameters($withoutDatabase),
                 (new Configuration())->setMiddlewares([new SessionMiddleware(), new SqlTranslationMiddleware(), new IdCodecMiddleware()])
             );
+        }
+
+        if ($connectionInformation->isSqlite()) {
+            // the runtime factory reads DATABASE_URL, which is the source of the connection information
+            return SqliteFactory::create();
         }
 
         $connection = DriverManager::getConnection($connectionInformation->toDBALParameters($withoutDatabase), new Configuration());

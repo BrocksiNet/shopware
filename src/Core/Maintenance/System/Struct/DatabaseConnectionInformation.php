@@ -2,6 +2,7 @@
 
 namespace Shopware\Core\Maintenance\System\Struct;
 
+use Doctrine\DBAL\Tools\DsnParser;
 use Pdo\Mysql;
 use Shopware\Core\DevOps\Environment\EnvironmentHelper;
 use Shopware\Core\Framework\Log\Package;
@@ -60,6 +61,10 @@ class DatabaseConnectionInformation extends Struct
             throw MaintenanceException::environmentVariableNotDefined('DATABASE_URL');
         }
 
+        if (strtolower((string) strstr($dsn, ':', true)) === 'sqlite') {
+            return self::fromSqliteDsn($dsn);
+        }
+
         $params = parse_url($dsn);
         if ($params === false) {
             throw MaintenanceException::environmentVariableNotValid('DATABASE_URL', $dsn, 'Not a valid DSN');
@@ -94,12 +99,34 @@ class DatabaseConnectionInformation extends Struct
     }
 
     /**
+     * `sqlite:///relative/or/absolute/file.db`, parsed by Doctrine like the runtime connection does.
+     * The file path is kept in `databaseName`.
+     */
+    private static function fromSqliteDsn(string $dsn): self
+    {
+        $parameters = (new DsnParser(['sqlite' => 'pdo_sqlite']))->parse($dsn);
+        $path = (string) ($parameters['path'] ?? '');
+        if ($path === '' && !($parameters['memory'] ?? false)) {
+            throw MaintenanceException::environmentVariableNotValid('DATABASE_URL', $dsn, 'Not a valid DSN, expected sqlite:///path/to/file.db');
+        }
+
+        return (new self())->assign([
+            'scheme' => 'sqlite',
+            'databaseName' => ($parameters['memory'] ?? false) ? ':memory:' : $path,
+        ]);
+    }
+
+    /**
      * @return array{host: string, port: int, charset: string, driver: 'pdo_mysql', dbname?: string, user?: string, password?: string, driverOptions: array<int, string|bool>}
      */
     public function toDBALParameters(bool $withoutDatabaseName = false): array
     {
         if ($this->isPostgreSQL()) {
             return $this->toPostgreSQLParameters($withoutDatabaseName);
+        }
+
+        if ($this->isSqlite()) {
+            return $this->toSqliteParameters();
         }
 
         $parameters = [
@@ -149,8 +176,17 @@ class DatabaseConnectionInformation extends Struct
         return $this->scheme === 'pgsql';
     }
 
+    public function isSqlite(): bool
+    {
+        return $this->scheme === 'sqlite';
+    }
+
     public function asDsn(bool $withoutDatabaseName = false): string
     {
+        if ($this->isSqlite()) {
+            return $this->databaseName === ':memory:' ? 'sqlite:///:memory:' : 'sqlite:///' . $this->databaseName;
+        }
+
         $dsn = \sprintf(
             '%s://%s%s:%d',
             $this->scheme,
@@ -223,6 +259,14 @@ class DatabaseConnectionInformation extends Struct
 
     public function validate(): void
     {
+        if ($this->isSqlite()) {
+            if ($this->databaseName === '') {
+                throw MaintenanceException::dbConnectionParameterMissing('databaseName');
+            }
+
+            return;
+        }
+
         if ($this->hostname === '') {
             throw MaintenanceException::dbConnectionParameterMissing('hostname');
         }
@@ -234,6 +278,21 @@ class DatabaseConnectionInformation extends Struct
         if ($this->username === null || $this->username === '') {
             throw MaintenanceException::dbConnectionParameterMissing('username');
         }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function toSqliteParameters(): array
+    {
+        $parameters = ['driver' => 'pdo_sqlite', 'driverOptions' => [\PDO::ATTR_STRINGIFY_FETCHES => true]];
+        if ($this->databaseName === ':memory:') {
+            $parameters['memory'] = true;
+        } else {
+            $parameters['path'] = $this->databaseName;
+        }
+
+        return $parameters;
     }
 
     /**

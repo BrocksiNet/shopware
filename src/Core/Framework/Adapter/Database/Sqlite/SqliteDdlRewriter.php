@@ -173,7 +173,19 @@ class SqliteDdlRewriter
             } elseif (preg_match('/^DROP\s+(?:COLUMN\s+)?(`?\w+`?)$/i', $action, $m) && !preg_match('/^DROP\s+(?:FOREIGN|PRIMARY|CONSTRAINT)/i', $action)) {
                 // SQLite refuses to drop a column a CHECK constraint mentions
                 $column = trim($m[1], '`');
-                $patch = $this->patchTable($table, static fn (array $lines): array => array_values(array_filter($lines, static fn (string $l): bool => !preg_match('/^CONSTRAINT\s+`[^`]+`\s+CHECK\b.*`' . preg_quote($column, '/') . '`/is', $l))));
+                $patch = $this->patchTable($table, static function (array $lines) use ($column): array {
+                    $lines = array_values(array_filter($lines, static fn (string $l): bool => !preg_match('/^CONSTRAINT\s+`[^`]+`\s+CHECK\b.*`' . preg_quote($column, '/') . '`/is', $l)));
+
+                    // MySQL removes the column from a composite unique key and keeps the key, SQLite would refuse the drop
+                    return array_values(array_filter(array_map(static function (string $l) use ($column): ?string {
+                        if (!preg_match('/^(CONSTRAINT\s+`[^`]+`\s+)?UNIQUE\s*(?:KEY\s+)?\((.*)\)$/is', $l, $u) || !preg_match('/`' . preg_quote($column, '/') . '`/', $u[2])) {
+                            return $l;
+                        }
+                        $columns = array_values(array_filter(array_map('trim', explode(',', $u[2])), static fn (string $c): bool => trim($c, '`') !== $column));
+
+                        return $columns === [] ? null : $u[1] . 'UNIQUE (' . implode(', ', $columns) . ')';
+                    }, $lines), static fn (?string $l): bool => $l !== null));
+                });
                 if ($patch !== null) {
                     $out[] = $patch;
                 }

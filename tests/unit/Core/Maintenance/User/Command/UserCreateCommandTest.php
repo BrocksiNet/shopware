@@ -4,6 +4,7 @@ namespace Shopware\Tests\Unit\Core\Maintenance\User\Command;
 
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Query\QueryBuilder;
+use Doctrine\DBAL\Result;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Shopware\Core\Framework\Log\Package;
@@ -60,6 +61,9 @@ class UserCreateCommandTest extends TestCase
         $builder->method('where')->willReturnSelf();
         $builder->method('innerJoin')->willReturnSelf();
         $builder->method('setParameter')->willReturnSelf();
+        $result = static::createStub(Result::class);
+        $result->method('fetchOne')->willReturn(false);
+        $builder->method('executeQuery')->willReturn($result);
         $connection->method('createQueryBuilder')->willReturn($builder);
 
         $connection->method('fetchOne')->willReturn('{"_value": 8}');
