@@ -167,9 +167,9 @@ class EntityForeignKeyResolverTest extends TestCase
         // The meta field aliases must be backtick-escaped. An unescaped leading-underscore alias
         // (e.g. `as _fileName`) is parsed by MariaDB as a charset introducer and fails with
         // "ERROR 1064 ... near '_fileName'" (regression from #17329).
-        static::assertStringContainsString('as `_id`', $queries);
-        static::assertStringContainsString('as `_fileName`', $queries);
-        static::assertStringContainsString('as `_fileExtension`', $queries);
+        static::assertMatchesRegularExpression('/as [`"]_id[`"]/', $queries);
+        static::assertMatchesRegularExpression('/as [`"]_fileName[`"]/', $queries);
+        static::assertMatchesRegularExpression('/as [`"]_fileExtension[`"]/', $queries);
         static::assertStringNotContainsString('as _fileName', $queries);
         static::assertStringNotContainsString('as _fileExtension', $queries);
     }

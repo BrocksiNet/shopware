@@ -12,6 +12,7 @@ use Shopware\Core\Content\Product\Aggregate\ProductManufacturer\ProductManufactu
 use Shopware\Core\Content\Product\Aggregate\ProductManufacturerTranslation\ProductManufacturerTranslationDefinition;
 use Shopware\Core\Content\Product\Aggregate\ProductTranslation\ProductTranslationDefinition;
 use Shopware\Core\Content\Product\ProductDefinition;
+use Shopware\Core\Framework\Adapter\Database\Dialect\SqlDialectFactory;
 use Shopware\Core\Framework\Api\Context\AdminApiSource;
 use Shopware\Core\Framework\Api\Context\SalesChannelApiSource;
 use Shopware\Core\Framework\Context;
@@ -166,7 +167,7 @@ class EntityDefinitionQueryHelperTest extends TestCase
 
     public function testEscapeQuotesAValidIdentifier(): void
     {
-        static::assertSame('`product`', EntityDefinitionQueryHelper::escape('product'));
+        static::assertSame(SqlDialectFactory::getDefault()->quoteIdentifier('product'), EntityDefinitionQueryHelper::escape('product'));
     }
 
     /**
@@ -216,7 +217,7 @@ class EntityDefinitionQueryHelperTest extends TestCase
     #[DataProvider('provideAllowedIdentifiers')]
     public function testEscapeAcceptsValidIdentifiers(string $identifier): void
     {
-        static::assertSame('`' . $identifier . '`', EntityDefinitionQueryHelper::escape($identifier));
+        static::assertSame(SqlDialectFactory::getDefault()->quoteIdentifier($identifier), EntityDefinitionQueryHelper::escape($identifier));
     }
 
     /**

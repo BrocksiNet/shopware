@@ -168,7 +168,7 @@ class IterateEntitiesQueryBuilderTest extends TestCase
         );
         static::assertSame(12, $queryBuilder->getMaxResults());
         static::assertStringContainsString(
-            '(`entity_name` = :entityName) AND (`deleted_at` <= :currentRunDate)',
+            '(' . EntityDefinitionQueryHelper::escape('entity_name') . ' = :entityName) AND (' . EntityDefinitionQueryHelper::escape('deleted_at') . ' <= :currentRunDate)',
             $queryBuilder->getSQL(),
         );
         static::assertSame(IterableTestEntityDefinition::ENTITY_NAME, $queryBuilder->getParameter('entityName'));

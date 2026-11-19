@@ -284,9 +284,9 @@ class MultiInsertQueryQueueTest extends TestCase
         $queue->execute();
 
         static::assertCount(2, $executed);
-        static::assertSame('INSERT INTO `table1` (`id`, `name`) VALUES (?,?) ON CONFLICT (`name`, `id`) DO UPDATE SET `name` = EXCLUDED.`name`;', $executed[0]['query']);
+        static::assertSame('INSERT INTO "table1" ("id", "name") VALUES (?,?) ON CONFLICT ("name", "id") DO UPDATE SET "name" = EXCLUDED."name";', $executed[0]['query']);
         // nothing to update, no conflict clause
-        static::assertSame('INSERT INTO `table2` (`id`, `name`) VALUES (?,?);', $executed[1]['query']);
+        static::assertSame('INSERT INTO "table2" ("id", "name") VALUES (?,?);', $executed[1]['query']);
     }
 
     public function testIgnoreErrorsBecomesInsertIgnoreOrOnConflictDoNothing(): void
@@ -302,7 +302,7 @@ class MultiInsertQueryQueueTest extends TestCase
         $pgQueue->execute();
 
         static::assertSame('INSERT IGNORE INTO `table1` (`id`) VALUES (?);', $executed[0]['query']);
-        static::assertSame('INSERT INTO `table1` (`id`) VALUES (?) ON CONFLICT DO NOTHING;', $pgExecuted[0]['query']);
+        static::assertSame('INSERT INTO "table1" ("id") VALUES (?) ON CONFLICT DO NOTHING;', $pgExecuted[0]['query']);
     }
 
     public function testExecuteWithoutInsertsDoesNotTouchTheConnection(): void
