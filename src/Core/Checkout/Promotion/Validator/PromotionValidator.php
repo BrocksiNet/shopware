@@ -2,13 +2,13 @@
 
 namespace Shopware\Core\Checkout\Promotion\Validator;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Exception;
 use Shopware\Core\Checkout\Promotion\Aggregate\PromotionDiscount\PromotionDiscountDefinition;
 use Shopware\Core\Checkout\Promotion\Aggregate\PromotionDiscount\PromotionDiscountEntity;
 use Shopware\Core\Checkout\Promotion\PromotionDefinition;
 use Shopware\Core\Checkout\Promotion\PromotionException;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\InsertCommand;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\UpdateCommand;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\WriteCommand;
@@ -163,8 +163,8 @@ class PromotionValidator implements EventSubscriberInterface
         if ($promotionIds !== []) {
             $promotionQuery = $this->connection->executeQuery(
                 'SELECT * FROM `promotion` WHERE `id` IN (:ids)',
-                ['ids' => $promotionIds],
-                ['ids' => ArrayParameterType::BINARY]
+                ['ids' => IdBinding::values(IdBinding::toHexList($promotionIds))],
+                ['ids' => IdBinding::listType()]
             );
 
             $this->databasePromotions = $promotionQuery->fetchAllAssociative();
@@ -174,8 +174,8 @@ class PromotionValidator implements EventSubscriberInterface
         if ($discountIds !== []) {
             $discountQuery = $this->connection->executeQuery(
                 'SELECT * FROM `promotion_discount` WHERE `id` IN (:ids)',
-                ['ids' => $discountIds],
-                ['ids' => ArrayParameterType::BINARY]
+                ['ids' => IdBinding::values(IdBinding::toHexList($discountIds))],
+                ['ids' => IdBinding::listType()]
             );
 
             $this->databaseDiscounts = $discountQuery->fetchAllAssociative();
