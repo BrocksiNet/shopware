@@ -57,6 +57,8 @@ class SqlTranslationMiddleware implements Middleware
                     public function query(string $sql): Result
                     {
                         [$translated, $caseMap] = $this->translator->translate($sql);
+                        // session switches such as `SET FOREIGN_KEY_CHECKS=0` are also sent through executeQuery(), the rewriter turns them into `SELECT 1`
+                        $translated = DdlRewriter::isDdl($translated) ? $this->rewriteStatement($translated) : $translated;
                         $result = parent::query(ShowRewriter::matches($translated) ? ShowRewriter::rewrite($translated) : (InformationSchemaRewriter::matches($translated) ? InformationSchemaRewriter::rewrite($translated) : $translated));
 
                         return $caseMap === [] ? $result : new ColumnCaseResult($result, $caseMap);

@@ -84,9 +84,9 @@ class SalesChannelContextRestorer
     {
         $customer = $this->connection->createQueryBuilder()
             ->select(
-                'LOWER(HEX(language_id))',
-                'LOWER(HEX(customer_group_id))',
-                'LOWER(HEX(sales_channel_id))',
+                'LOWER(HEX(language_id)) AS language_id',
+                'LOWER(HEX(customer_group_id)) AS customer_group_id',
+                'LOWER(HEX(sales_channel_id)) AS sales_channel_id',
             )
             ->from('customer')
             ->where('id = :id')
