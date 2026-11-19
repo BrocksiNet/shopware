@@ -12,6 +12,7 @@ use Shopware\Core\Framework\Adapter\Database\PostgreSQL\ExceptionConverterMiddle
 use Shopware\Core\Framework\Adapter\Database\PostgreSQL\IdCodecMiddleware;
 use Shopware\Core\Framework\Adapter\Database\PostgreSQL\SessionMiddleware;
 use Shopware\Core\Framework\Adapter\Database\PostgreSQL\SqlTranslationMiddleware;
+use Shopware\Core\Framework\Adapter\Database\PostgreSQL\TimingMiddleware;
 use Shopware\Core\Framework\Log\Package;
 
 /**
@@ -30,8 +31,12 @@ class PostgreSQLFactory
      */
     public static function create(array $middlewares = []): Connection
     {
+        // Benchmark probes (docs/13-benchmark.md): SHOPWARE_PG_TIMING=<file> adds timers between the layers, off by default
+        $timing = (string) EnvironmentHelper::getVariable('SHOPWARE_PG_TIMING', getenv('SHOPWARE_PG_TIMING'));
+        $probe = static fn (string $label): array => $timing === '' ? [] : [new TimingMiddleware($label, $timing)];
+
         $config = (new Configuration())
-            ->setMiddlewares([new SessionMiddleware(), new SqlTranslationMiddleware(), new IdCodecMiddleware(), new ExceptionConverterMiddleware(), ...$middlewares]);
+            ->setMiddlewares([new SessionMiddleware(), ...$probe('driver'), new SqlTranslationMiddleware(), ...$probe('translated'), new IdCodecMiddleware(), ...$probe('codec'), new ExceptionConverterMiddleware(), ...$middlewares]);
 
         return DriverManager::getConnection(self::getConnectionParameters(), $config);
     }
