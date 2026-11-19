@@ -2,10 +2,10 @@
 
 namespace Shopware\Core\Checkout\Promotion\DataAbstractionLayer;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Checkout\Promotion\PromotionDefinition;
 use Shopware\Core\Checkout\Promotion\PromotionException;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Validation\PreWriteValidationEvent;
 use Shopware\Core\Framework\Log\Package;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
@@ -46,7 +46,7 @@ class PromotionValidator implements EventSubscriberInterface
         $promotionIds = $this->connection->fetchOne(
             'SELECT id FROM promotion WHERE id IN (:ids) AND order_count > 0',
             ['ids' => $ids],
-            ['ids' => ArrayParameterType::BINARY]
+            ['ids' => IdBinding::listType()]
         );
 
         if ($promotionIds !== false) {

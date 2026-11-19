@@ -2,10 +2,10 @@
 
 namespace Shopware\Core\Checkout\Payment\DataAbstractionLayer;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Checkout\Payment\PaymentException;
 use Shopware\Core\Checkout\Payment\PaymentMethodDefinition;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Validation\PreWriteValidationEvent;
 use Shopware\Core\Framework\Log\Package;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
@@ -46,7 +46,7 @@ final readonly class PaymentMethodValidator implements EventSubscriberInterface
         $pluginId = $this->connection->fetchOne(
             'SELECT id FROM payment_method WHERE id IN (:ids) AND plugin_id IS NOT NULL',
             ['ids' => $ids],
-            ['ids' => ArrayParameterType::BINARY]
+            ['ids' => IdBinding::listType()]
         );
 
         if ($pluginId !== false) {
