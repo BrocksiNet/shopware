@@ -136,6 +136,11 @@ class SqliteDialect implements SqlDialect
         return \sprintf('lower(%s)', $columnSql);
     }
 
+    public function subqueryFence(): string
+    {
+        return '';
+    }
+
     private function stringLiteral(string $value): string
     {
         return '\'' . str_replace('\'', '\'\'', $value) . '\'';

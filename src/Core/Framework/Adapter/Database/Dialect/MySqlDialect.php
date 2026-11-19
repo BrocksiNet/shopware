@@ -113,6 +113,11 @@ class MySqlDialect implements SqlDialect
         return $columnSql;
     }
 
+    public function subqueryFence(): string
+    {
+        return '';
+    }
+
     protected function convertJsonValue(string $extractSql, string $type): string
     {
         $unquoted = \sprintf('JSON_UNQUOTE(%s)', $extractSql);

@@ -30,7 +30,21 @@ class KeywordLoader
     {
         $query = new QueryBuilder($this->connection);
         $query->select('keyword');
-        $query->from('product_keyword_dictionary');
+
+        // with a fence the dictionary rows are lowered once in a derived table, otherwise the expression is evaluated for every pattern of every row
+        $fenced = $this->dialect->subqueryFence() !== '';
+        $keywordSql = $fenced ? 'd.k' : $this->dialect->caseInsensitive('keyword');
+        $reversedSql = $fenced ? 'd.r' : $this->dialect->caseInsensitive('reversed');
+
+        if ($fenced) {
+            $query->from(
+                '(SELECT keyword, ' . $this->dialect->caseInsensitive('keyword') . ' AS k, ' . $this->dialect->caseInsensitive('reversed') . ' AS r'
+                . ' FROM product_keyword_dictionary WHERE language_id = :language' . $this->dialect->subqueryFence() . ')',
+                'd'
+            );
+        } else {
+            $query->from('product_keyword_dictionary');
+        }
 
         $query->setTitle('search::detect-keywords');
 
@@ -42,19 +56,21 @@ class KeywordLoader
             $slopsWheres = [];
             foreach ($slops['normal'] as $slop) {
                 ++$counter;
-                $slopsWheres[] = $this->dialect->caseInsensitive('keyword') . ' LIKE :reg' . $counter;
+                $slopsWheres[] = $keywordSql . ' LIKE :reg' . $counter;
                 $query->setParameter('reg' . $counter, mb_strtolower($slop));
             }
             foreach ($slops['reversed'] as $slop) {
                 ++$counter;
-                $slopsWheres[] = $this->dialect->caseInsensitive('reversed') . ' LIKE :reg' . $counter;
+                $slopsWheres[] = $reversedSql . ' LIKE :reg' . $counter;
                 $query->setParameter('reg' . $counter, mb_strtolower($slop));
             }
             $query->addSelect('IF (' . implode(' OR ', $slopsWheres) . ', 1, 0) as \'' . $index++ . '\'');
             $wheres = array_merge($wheres, $slopsWheres);
         }
 
-        $query->andWhere('language_id = :language');
+        if (!$fenced) {
+            $query->andWhere('language_id = :language');
+        }
         $query->andWhere('(' . implode(' OR ', $wheres) . ')');
         $query->addOrderBy('keyword', 'ASC');
 

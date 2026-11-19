@@ -158,6 +158,11 @@ class PostgreSqlDialect implements SqlDialect
         return \sprintf('lower(%s) COLLATE ucs_basic', $columnSql);
     }
 
+    public function subqueryFence(): string
+    {
+        return ' OFFSET 0';
+    }
+
     /**
      * `$.a."b-c"` => `{a,"b-c"}`
      */

@@ -132,4 +132,12 @@ interface SqlDialect
      * so the expression is `lower(column) COLLATE ucs_basic`, (`ucs_basic` is written without quotes because the translator reads a double quoted token as a string literal), which can use the expression indexes of the PostgreSQL migration.
      */
     public function caseInsensitive(string $columnSql): string;
+
+    /**
+     * Appended to a derived table that computes an expensive expression (for example `lower(column)`), so that the expression is evaluated once per row
+     * and not inlined into every reference of the outer query.
+     * PostgreSQL: ` OFFSET 0`, an optimization fence for the planner that keeps it from pulling the subquery up.
+     * MySQL, MariaDB and SQLite merge the derived table, the result is an empty string and callers keep the plain query.
+     */
+    public function subqueryFence(): string;
 }
