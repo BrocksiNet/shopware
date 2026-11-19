@@ -8,6 +8,7 @@ use Doctrine\DBAL\Driver\Exception as DriverException;
 use Doctrine\DBAL\Driver\Middleware;
 use Doctrine\DBAL\Driver\Middleware\AbstractDriverMiddleware;
 use Doctrine\DBAL\Exception\DriverException as ConvertedDriverException;
+use Doctrine\DBAL\Exception\ForeignKeyConstraintViolationException;
 use Doctrine\DBAL\Exception\LockWaitTimeoutException;
 use Doctrine\DBAL\Query;
 use Shopware\Core\Framework\Log\Package;
@@ -22,6 +23,11 @@ use Shopware\Core\Framework\Log\Package;
 class ExceptionConverterMiddleware implements Middleware
 {
     public const LOCK_NOT_AVAILABLE = '55P03';
+
+    /**
+     * PostgreSQL reports a violated `ON DELETE RESTRICT` foreign key with its own SQLSTATE, MySQL reports it as a foreign key violation (1451).
+     */
+    public const RESTRICT_VIOLATION = '23001';
 
     public function wrap(Driver $driver): Driver
     {
@@ -39,6 +45,10 @@ class ExceptionConverterMiddleware implements Middleware
                     {
                         if ($exception->getSQLState() === ExceptionConverterMiddleware::LOCK_NOT_AVAILABLE) {
                             return new LockWaitTimeoutException($exception, $query);
+                        }
+
+                        if ($exception->getSQLState() === ExceptionConverterMiddleware::RESTRICT_VIOLATION) {
+                            return new ForeignKeyConstraintViolationException($exception, $query);
                         }
 
                         return $this->converter->convert($exception, $query);

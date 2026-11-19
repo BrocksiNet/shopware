@@ -6,6 +6,7 @@ use Doctrine\DBAL\Driver;
 use Doctrine\DBAL\Driver\API\PostgreSQL\ExceptionConverter as PostgreSQLExceptionConverter;
 use Doctrine\DBAL\Driver\Exception as DriverException;
 use Doctrine\DBAL\Exception\DeadlockException;
+use Doctrine\DBAL\Exception\ForeignKeyConstraintViolationException;
 use Doctrine\DBAL\Exception\LockWaitTimeoutException;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -27,6 +28,13 @@ class ExceptionConverterMiddlewareTest extends TestCase
         static::assertInstanceOf(LockWaitTimeoutException::class, $converted);
         static::assertSame($original, $converted->getPrevious());
         static::assertSame('55P03', $converted->getSQLState());
+    }
+
+    public function testRestrictViolationIsConvertedToForeignKeyViolation(): void
+    {
+        $converted = $this->converter()->convert(self::driverException('23001'), null);
+
+        static::assertInstanceOf(ForeignKeyConstraintViolationException::class, $converted);
     }
 
     public function testStockConverterWithoutTheMiddlewareDoesNotMapLockNotAvailable(): void
