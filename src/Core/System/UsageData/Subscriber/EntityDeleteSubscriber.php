@@ -4,9 +4,9 @@ namespace Shopware\Core\System\UsageData\Subscriber;
 
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Exception as DbalException;
-use Doctrine\DBAL\ParameterType;
 use Doctrine\DBAL\Query\QueryBuilder;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\RetryableTransaction;
 use Shopware\Core\Framework\DataAbstractionLayer\Event\EntityDeleteEvent;
@@ -86,7 +86,7 @@ class EntityDeleteSubscriber implements EventSubscriberInterface
                 $formattedNow = $now->format(Defaults::STORAGE_DATE_TIME_FORMAT);
 
                 foreach ($primaryKeys as $primaryKey) {
-                    $statement->bindValue(':id', Uuid::randomBytes(), ParameterType::BINARY);
+                    $statement->bindValue(':id', IdBinding::value(Uuid::randomHex()), IdBinding::type());
                     $statement->bindValue(':entity_name', $entityName);
                     $statement->bindValue(':entity_ids', \json_encode($primaryKey, \JSON_THROW_ON_ERROR));
                     $statement->bindValue(':deleted_at', $formattedNow);

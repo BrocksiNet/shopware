@@ -4,6 +4,7 @@ namespace Shopware\Core\Framework\Log;
 
 use Doctrine\DBAL\Connection;
 use Psr\Log\LoggerInterface;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Api\Context\AdminApiSource;
 use Shopware\Core\Framework\Api\Context\SystemSource;
 use Shopware\Core\Framework\App\Event\AppActivatedEvent;
@@ -21,7 +22,6 @@ use Shopware\Core\Framework\Plugin\Event\PluginPostInstallEvent;
 use Shopware\Core\Framework\Plugin\Event\PluginPostUninstallEvent;
 use Shopware\Core\Framework\Plugin\Event\PluginPostUpdateEvent;
 use Shopware\Core\Framework\Plugin\Event\PluginUploadedEvent;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
 /**
@@ -114,7 +114,7 @@ final class SystemActivitySubscriber implements EventSubscriberInterface
         // This event is dispatched before the app is removed from the database.
         $app = $this->connection->fetchAssociative(
             'SELECT name, version FROM app WHERE id = :id',
-            ['id' => Uuid::fromHexToBytes($event->getAppId())]
+            ['id' => IdBinding::value($event->getAppId())]
         );
         $this->logger->info('app:uninstall', array_filter([
             'appId' => $event->getAppId(),
@@ -168,14 +168,14 @@ final class SystemActivitySubscriber implements EventSubscriberInterface
         if ($source->getUserId() !== null) {
             $username = $this->connection->fetchOne(
                 'SELECT username FROM `user` WHERE id = :id',
-                ['id' => Uuid::fromHexToBytes($source->getUserId())]
+                ['id' => IdBinding::value($source->getUserId())]
             );
             $actor['username'] = \is_string($username) ? $username : null;
         }
         if ($source->getIntegrationId() !== null) {
             $accessKey = $this->connection->fetchOne(
                 'SELECT access_key FROM integration WHERE id = :id',
-                ['id' => Uuid::fromHexToBytes($source->getIntegrationId())]
+                ['id' => IdBinding::value($source->getIntegrationId())]
             );
             $actor['integrationAccessKey'] = \is_string($accessKey) ? $accessKey : null;
         }

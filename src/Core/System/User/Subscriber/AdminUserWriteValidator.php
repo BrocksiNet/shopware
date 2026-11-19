@@ -8,7 +8,6 @@ use Shopware\Core\Framework\Api\Context\AdminApiSource;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\InsertCommand;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Validation\PreWriteValidationEvent;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\System\User\Aggregate\UserAccessKey\UserAccessKeyDefinition;
 use Shopware\Core\System\User\UserDefinition;
 use Shopware\Core\System\User\UserException;
@@ -45,7 +44,7 @@ class AdminUserWriteValidator implements EventSubscriberInterface
         }
 
         // integrations have no user, so a non-admin integration may not change any user or access key
-        $callerId = $source->getUserId() !== null ? Uuid::fromHexToBytes($source->getUserId()) : null;
+        $callerId = $source->getUserId() !== null ? IdBinding::value($source->getUserId()) : null;
 
         $this->validateUsers($event, $callerId);
         $this->validateAccessKeys($event, $callerId);

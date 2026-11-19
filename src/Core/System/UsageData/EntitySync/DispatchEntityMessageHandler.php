@@ -4,6 +4,7 @@ namespace Shopware\Core\System\UsageData\EntitySync;
 
 use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\EntityDefinitionQueryHelper;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\QueryBuilder;
@@ -13,7 +14,6 @@ use Shopware\Core\Framework\DataAbstractionLayer\Field\ManyToManyIdField;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\StorageAware;
 use Shopware\Core\Framework\DataAbstractionLayer\FieldCollection;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\System\Consent\Definition\BackendData;
 use Shopware\Core\System\Consent\Service\ConsentService;
 use Shopware\Core\System\UsageData\Services\EntityDefinitionService;
@@ -116,7 +116,7 @@ final readonly class DispatchEntityMessageHandler
     {
         $rowIds = [];
         foreach ($message->primaryKeys as $pks) {
-            $rowIds[] = Uuid::fromHexToBytes($pks['id']);
+            $rowIds[] = IdBinding::value($pks['id']);
         }
 
         $entityName = $definition->getEntityName();

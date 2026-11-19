@@ -3,10 +3,10 @@
 namespace Shopware\Core\System\SystemConfig\Facade;
 
 use Doctrine\DBAL\Connection;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Api\Exception\MissingPrivilegeException;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Script\Execution\ScriptAppInformation;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\System\SystemConfig\SystemConfigService;
 
 /**
@@ -103,7 +103,7 @@ class SystemConfigFacade
             FROM `acl_role`
             INNER JOIN `app` ON `app`.`acl_role_id` = `acl_role`.`id`
             WHERE `app`.`id` = :appId
-        ', ['appId' => Uuid::fromHexToBytes($appId)]);
+        ', ['appId' => IdBinding::value($appId)]);
 
         if (!\is_string($privileges)) {
             throw new \RuntimeException(\sprintf('Privileges for app with id "%s" not found.', $appId));

@@ -7,6 +7,7 @@ use Doctrine\DBAL\Connection;
 use Psr\Clock\ClockInterface;
 use Shopware\Core\Defaults;
 use Shopware\Core\Framework\Adapter\Cache\CacheTagCollector;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Bundle;
 use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\MultiInsertQueryQueue;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\ConfigJsonField;
@@ -160,7 +161,7 @@ class SystemConfigService implements ResetInterface
         $domain = rtrim($domain, '.') . '.';
         $escapedDomain = str_replace('%', '\\%', $domain);
 
-        $salesChannelId = $salesChannelId ? Uuid::fromHexToBytes($salesChannelId) : null;
+        $salesChannelId = $salesChannelId ? IdBinding::value($salesChannelId) : null;
 
         $queryBuilder->andWhere('configuration_key LIKE :prefix')
             ->addOrderBy('sales_channel_id', 'ASC')
@@ -251,7 +252,7 @@ class SystemConfigService implements ResetInterface
             ->fetchAllKeyValue(
                 'SELECT configuration_key, id FROM system_config WHERE ' . $where . ' and configuration_key IN (:configurationKeys)',
                 [
-                    'salesChannelId' => $salesChannelId ? Uuid::fromHexToBytes($salesChannelId) : null,
+                    'salesChannelId' => $salesChannelId ? IdBinding::value($salesChannelId) : null,
                     'configurationKeys' => array_map('trim', array_keys($values)),
                 ],
                 [
@@ -307,7 +308,7 @@ class SystemConfigService implements ResetInterface
                     'id' => Uuid::randomBytes(),
                     'configuration_key' => $key,
                     'configuration_value' => Json::encode(['_value' => $value]),
-                    'sales_channel_id' => $salesChannelId ? Uuid::fromHexToBytes($salesChannelId) : null,
+                    'sales_channel_id' => $salesChannelId ? IdBinding::value($salesChannelId) : null,
                     'created_at' => $this->clock->now()->format(Defaults::STORAGE_DATE_TIME_FORMAT),
                 ],
             );
@@ -320,7 +321,7 @@ class SystemConfigService implements ResetInterface
             $this->connection->executeStatement(
                 'DELETE FROM system_config WHERE id IN (:ids)',
                 ['ids' => $toBeDeleted],
-                ['ids' => ArrayParameterType::BINARY]
+                ['ids' => IdBinding::listType()]
             );
         }
 
@@ -432,14 +433,14 @@ class SystemConfigService implements ResetInterface
 
         // Delete overridden config keys for each sales channel
         foreach ($salesChannelIds as $salesChannelId) {
-            $this->setMultiple($keysForDelete, Uuid::fromBytesToHex($salesChannelId), false);
+            $this->setMultiple($keysForDelete, IdBinding::toHex($salesChannelId), false);
         }
     }
 
     /**
      * @template TReturn of mixed
      *
-     * @param \Closure(): TReturn $param
+     * @param \Closure():TReturn $param
      *
      * @return TReturn All kind of data could be cached
      *
@@ -490,7 +491,7 @@ class SystemConfigService implements ResetInterface
 
         if ($salesChannelId) {
             // will throw if ID is invalid UUID
-            Uuid::fromHexToBytes($salesChannelId);
+            IdBinding::value($salesChannelId);
         }
     }
 
@@ -504,7 +505,7 @@ class SystemConfigService implements ResetInterface
         }
 
         /** @var array<string, string> $allKeyValue */
-        $allKeyValue = $this->connection->fetchAllKeyValue('SELECT LOWER(HEX(id)), name FROM app');
+        $allKeyValue = $this->connection->fetchAllKeyValue('SELECT ' . IdBinding::text('id') . ', name FROM app');
 
         return $this->appMapping = $allKeyValue;
     }

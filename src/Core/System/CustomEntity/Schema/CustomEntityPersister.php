@@ -6,6 +6,7 @@ use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Psr\Clock\ClockInterface;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Api\ApiDefinition\Generator\CachedEntitySchemaGenerator;
 use Shopware\Core\Framework\App\AppEntity;
 use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\MultiInsertQueryQueue;
@@ -38,7 +39,7 @@ class CustomEntityPersister
         $names = array_column($customEntities, 'name');
 
         $existings = $this->connection->fetchAllAssociativeIndexed(
-            'SELECT `name`, LOWER(HEX(id)) as id, created_at FROM custom_entity WHERE `name` IN (:names)',
+            'SELECT `name`, ' . IdBinding::text('id') . ' as id, created_at FROM custom_entity WHERE `name` IN (:names)',
             ['names' => $names],
             ['names' => ArrayParameterType::STRING]
         );
@@ -46,12 +47,12 @@ class CustomEntityPersister
         if ($extensionEntityType === PluginEntity::class && $extensionId) {
             $this->connection->executeStatement(
                 'DELETE FROM custom_entity WHERE plugin_id = :id',
-                ['id' => Uuid::fromHexToBytes($extensionId)]
+                ['id' => IdBinding::value($extensionId)]
             );
         } elseif ($extensionEntityType === AppEntity::class && $extensionId) {
             $this->connection->executeStatement(
                 'DELETE FROM custom_entity WHERE app_id = :id',
-                ['id' => Uuid::fromHexToBytes($extensionId)]
+                ['id' => IdBinding::value($extensionId)]
             );
         } else {
             // custom entity without any app or plugin id --> created by the user and not by any extension
@@ -62,8 +63,8 @@ class CustomEntityPersister
         foreach ($customEntities as $customEntity) {
             unset($customEntity['cmsAware']);
 
-            $customEntity['plugin_id'] = $extensionEntityType === PluginEntity::class && $extensionId ? Uuid::fromHexToBytes($extensionId) : null;
-            $customEntity['app_id'] = $extensionEntityType === AppEntity::class && $extensionId ? Uuid::fromHexToBytes($extensionId) : null;
+            $customEntity['plugin_id'] = $extensionEntityType === PluginEntity::class && $extensionId ? IdBinding::value($extensionId) : null;
+            $customEntity['app_id'] = $extensionEntityType === AppEntity::class && $extensionId ? IdBinding::value($extensionId) : null;
 
             $customEntity['flags'] = json_encode($customEntity['flags'], \JSON_THROW_ON_ERROR | \JSON_PRESERVE_ZERO_FRACTION);
             $customEntity['fields'] = json_encode($customEntity['fields'], \JSON_THROW_ON_ERROR | \JSON_PRESERVE_ZERO_FRACTION);
@@ -75,7 +76,7 @@ class CustomEntityPersister
 
             $name = $customEntity['name'];
             $id = isset($existings[$name]) ? $existings[$name]['id'] : Uuid::randomHex();
-            $customEntity['id'] = Uuid::fromHexToBytes($id);
+            $customEntity['id'] = IdBinding::value($id);
 
             $customEntity['created_at'] = isset($existings[$name]) ? $existings[$name]['created_at'] : $this->clock->now()->format(Defaults::STORAGE_DATE_TIME_FORMAT);
             $customEntity['updated_at'] = isset($existings[$name]) ? $this->clock->now()->format(Defaults::STORAGE_DATE_TIME_FORMAT) : null;

@@ -3,6 +3,7 @@
 namespace Shopware\Core\System\Language;
 
 use Doctrine\DBAL\Connection;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\FetchModeHelper;
 use Shopware\Core\Framework\Log\Package;
 
@@ -25,7 +26,7 @@ class LanguageLoader implements LanguageLoaderInterface
     public function loadLanguages(): array
     {
         $data = $this->connection->createQueryBuilder()
-            ->select('LOWER(HEX(language.id)) AS array_key, LOWER(HEX(language.id)) AS id, locale.code, parentLocale.code AS parentCode, LOWER(HEX(language.parent_id)) parentId')
+            ->select(IdBinding::text('language.id') . ' AS array_key, ' . IdBinding::text('language.id') . ' AS id, locale.code, parentLocale.code AS parentCode, ' . IdBinding::text('language.parent_id') . ' parentId')
             ->from('language')
             ->leftJoin('language', 'locale', 'locale', 'language.translation_code_id = locale.id')
             ->leftJoin('language', 'language', 'parentLanguage', 'language.parent_id = parentLanguage.id')

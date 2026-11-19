@@ -6,6 +6,7 @@ use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use League\Flysystem\FilesystemOperator;
 use Psr\EventDispatcher\EventDispatcherInterface;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Aggregation\Bucket\TermsAggregation;
@@ -14,7 +15,6 @@ use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\Extensions\ExtensionDispatcher;
 use Shopware\Core\Framework\Feature;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\System\Snippet\Aggregate\SnippetSet\SnippetSetCollection;
 use Shopware\Core\System\Snippet\Event\SnippetsThemeResolveEvent;
 use Shopware\Core\System\Snippet\Extension\StorefrontSnippetsExtension;
@@ -229,14 +229,14 @@ class SnippetService
     public function findSnippetSetId(string $salesChannelId, string $languageId, string $locale): string
     {
         $snippetSetId = $this->connection->fetchOne(
-            'SELECT LOWER(HEX(`snippet_set`.`id`))
+            'SELECT ' . IdBinding::text('`snippet_set`.`id`') . '
             FROM `sales_channel_domain`
             INNER JOIN `snippet_set` ON `sales_channel_domain`.`snippet_set_id` = `snippet_set`.`id`
             WHERE `sales_channel_domain`.`sales_channel_id` = :salesChannelId AND `sales_channel_domain`.`language_id` = :languageId
             LIMIT 1',
             [
-                'salesChannelId' => Uuid::fromHexToBytes($salesChannelId),
-                'languageId' => Uuid::fromHexToBytes($languageId),
+                'salesChannelId' => IdBinding::value($salesChannelId),
+                'languageId' => IdBinding::value($languageId),
             ]
         );
 
@@ -245,7 +245,7 @@ class SnippetService
         }
 
         $sets = $this->connection->fetchAllKeyValue(
-            'SELECT iso, LOWER(HEX(id)) FROM snippet_set WHERE iso IN (:locales) LIMIT 2',
+            'SELECT iso, ' . IdBinding::text('id') . ' FROM snippet_set WHERE iso IN (:locales) LIMIT 2',
             ['locales' => array_unique([$locale, 'en-GB'])],
             ['locales' => ArrayParameterType::STRING]
         );
@@ -283,7 +283,7 @@ class SnippetService
     {
         /** @var array<string, string> $snippets */
         $snippets = $this->connection->fetchAllKeyValue('SELECT translation_key, value FROM snippet WHERE snippet_set_id = :snippetSetId', [
-            'snippetSetId' => Uuid::fromHexToBytes($snippetSetId),
+            'snippetSetId' => IdBinding::value($snippetSetId),
         ]);
 
         return $snippets;
@@ -382,7 +382,7 @@ class SnippetService
     private function getLocaleBySnippetSetId(string $snippetSetId): string
     {
         $locale = $this->connection->fetchOne('SELECT iso FROM snippet_set WHERE id = :snippetSetId', [
-            'snippetSetId' => Uuid::fromHexToBytes($snippetSetId),
+            'snippetSetId' => IdBinding::value($snippetSetId),
         ]);
 
         if ($locale === false) {

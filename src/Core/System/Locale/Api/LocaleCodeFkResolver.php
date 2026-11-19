@@ -4,6 +4,7 @@ namespace Shopware\Core\System\Locale\Api;
 
 use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Api\Sync\AbstractFkResolver;
 use Shopware\Core\Framework\Api\Sync\FkReference;
 use Shopware\Core\Framework\Log\Package;
@@ -42,7 +43,7 @@ class LocaleCodeFkResolver extends AbstractFkResolver
         }
 
         $hash = $this->connection->fetchAllKeyValue(
-            'SELECT code, LOWER(HEX(id)) FROM locale WHERE code IN (:codes)',
+            'SELECT code, ' . IdBinding::text('id') . ' FROM locale WHERE code IN (:codes)',
             ['codes' => $codes],
             ['codes' => ArrayParameterType::STRING]
         );

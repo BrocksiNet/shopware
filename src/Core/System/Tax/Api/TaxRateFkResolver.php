@@ -4,6 +4,7 @@ namespace Shopware\Core\System\Tax\Api;
 
 use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Api\Sync\AbstractFkResolver;
 use Shopware\Core\Framework\Api\Sync\FkReference;
 use Shopware\Core\Framework\Log\Package;
@@ -40,7 +41,7 @@ class TaxRateFkResolver extends AbstractFkResolver
 
         // tax_rate has no unique constraint — only resolve when exactly one tax matches the rate
         $hash = $this->connection->fetchAllKeyValue(
-            'SELECT tax_rate, LOWER(HEX(MIN(id))) FROM tax WHERE tax_rate IN (:rates) GROUP BY tax_rate HAVING COUNT(id) = 1',
+            'SELECT tax_rate, ' . IdBinding::text('MIN(id)') . ' FROM tax WHERE tax_rate IN (:rates) GROUP BY tax_rate HAVING COUNT(id) = 1',
             ['rates' => $rates],
             ['rates' => ArrayParameterType::STRING]
         );

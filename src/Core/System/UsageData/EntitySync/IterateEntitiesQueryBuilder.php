@@ -5,6 +5,7 @@ namespace Shopware\Core\System\UsageData\EntitySync;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Query\Expression\CompositeExpression;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\EntityDefinitionQueryHelper;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\QueryBuilder;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityDefinition;
@@ -12,7 +13,6 @@ use Shopware\Core\Framework\DataAbstractionLayer\Field\ReferenceVersionField;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\StorageAware;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\VersionField;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\System\UsageData\Services\EntityDefinitionService;
 use Shopware\Core\System\UsageData\UsageDataException;
 
@@ -119,8 +119,8 @@ class IterateEntitiesQueryBuilder
         $query = $this->createQueryBuilder();
         $query->setTitle("UsageData EntitySync - iterate entity deletions for '$entityName'");
         $query->select(\sprintf(
-            'LOWER(HEX(%s)) as %s',
-            $escapedIdFieldStorageName,
+            '%s as %s',
+            IdBinding::text($escapedIdFieldStorageName),
             $escapedIdFieldStorageName,
         ));
         $query->from(EntityDefinitionQueryHelper::escape('usage_data_entity_deletion'));
@@ -157,9 +157,8 @@ class IterateEntitiesQueryBuilder
             $escapedFieldStorageName = EntityDefinitionQueryHelper::escape($primaryKey->getStorageName());
 
             $selections[] = \sprintf(
-                'LOWER(HEX(%s.%s)) as %s',
-                $escapedEntityName,
-                $escapedFieldStorageName,
+                '%s as %s',
+                IdBinding::text($escapedEntityName . '.' . $escapedFieldStorageName),
                 $escapedFieldStorageName,
             );
         }
@@ -190,7 +189,7 @@ class IterateEntitiesQueryBuilder
         }
 
         if ($hasVersionFields) {
-            $queryBuilder->setParameter('versionId', Uuid::fromHexToBytes(Defaults::LIVE_VERSION));
+            $queryBuilder->setParameter('versionId', IdBinding::value(Defaults::LIVE_VERSION));
         }
 
         return $queryBuilder;

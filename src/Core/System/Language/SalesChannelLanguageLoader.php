@@ -3,6 +3,7 @@
 namespace Shopware\Core\System\Language;
 
 use Doctrine\DBAL\Connection;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\FetchModeHelper;
 use Shopware\Core\Framework\Log\Package;
 use Symfony\Contracts\Service\ResetInterface;
@@ -34,7 +35,7 @@ class SalesChannelLanguageLoader implements ResetInterface
             return $this->languages;
         }
 
-        $result = $this->connection->fetchAllAssociative('SELECT LOWER(HEX(`language_id`)), LOWER(HEX(`sales_channel_id`)) as salesChannelId FROM sales_channel_language');
+        $result = $this->connection->fetchAllAssociative('SELECT ' . IdBinding::text('`language_id`') . ', ' . IdBinding::text('`sales_channel_id`') . ' as salesChannelId FROM sales_channel_language');
 
         $grouped = FetchModeHelper::group($result);
 

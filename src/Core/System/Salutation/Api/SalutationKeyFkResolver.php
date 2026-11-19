@@ -4,6 +4,7 @@ namespace Shopware\Core\System\Salutation\Api;
 
 use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Api\Sync\AbstractFkResolver;
 use Shopware\Core\Framework\Api\Sync\FkReference;
 use Shopware\Core\Framework\Log\Package;
@@ -39,7 +40,7 @@ class SalutationKeyFkResolver extends AbstractFkResolver
         }
 
         $hash = $this->connection->fetchAllKeyValue(
-            'SELECT salutation_key, LOWER(HEX(id)) FROM salutation WHERE salutation_key IN (:keys)',
+            'SELECT salutation_key, ' . IdBinding::text('id') . ' FROM salutation WHERE salutation_key IN (:keys)',
             ['keys' => $keys],
             ['keys' => ArrayParameterType::STRING]
         );

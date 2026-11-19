@@ -7,6 +7,7 @@ use Doctrine\DBAL\ParameterType;
 use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use Psr\Clock\ClockInterface;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Plugin\Exception\DecorationPatternException;
 use Shopware\Core\Framework\Uuid\Uuid;
@@ -43,7 +44,7 @@ class IncrementSqlStorage extends AbstractIncrementStorage
                 RETURNING last_value',
                 [
                     'value' => $start,
-                    'id' => Uuid::fromHexToBytes($config['id']),
+                    'id' => IdBinding::value($config['id']),
                     'stateId' => $stateId,
                     'createdAt' => $this->clock->now()->format(Defaults::STORAGE_DATE_TIME_FORMAT),
                 ]
@@ -56,7 +57,7 @@ class IncrementSqlStorage extends AbstractIncrementStorage
                 `last_value` = @nr' . $varname . ' := IF(`last_value`+1 > :value, `last_value`+1, :value)',
             [
                 'value' => $start,
-                'id' => Uuid::fromHexToBytes($config['id']),
+                'id' => IdBinding::value($config['id']),
                 'stateId' => $stateId,
                 'createdAt' => $this->clock->now()->format(Defaults::STORAGE_DATE_TIME_FORMAT),
             ]
@@ -78,7 +79,7 @@ class IncrementSqlStorage extends AbstractIncrementStorage
         $result = $this->connection->executeQuery(
             'SELECT `last_value` FROM `number_range_state` WHERE number_range_id = :id',
             [
-                'id' => Uuid::fromHexToBytes($config['id']),
+                'id' => IdBinding::value($config['id']),
             ]
         );
         $lastNumber = $result->fetchOne();
@@ -98,7 +99,7 @@ class IncrementSqlStorage extends AbstractIncrementStorage
     {
         /** @var array<string, string> $states */
         $states = $this->connection->fetchAllKeyValue('
-            SELECT LOWER(HEX(`number_range_id`)), `last_value`
+            SELECT ' . IdBinding::text('`number_range_id`') . ', `last_value`
             FROM `number_range_state`
         ');
 
@@ -114,7 +115,7 @@ class IncrementSqlStorage extends AbstractIncrementStorage
                 `last_value` = :value',
             [
                 'value' => $value,
-                'id' => Uuid::fromHexToBytes($configurationId),
+                'id' => IdBinding::value($configurationId),
                 'stateId' => $stateId,
                 'createdAt' => $this->clock->now()->format(Defaults::STORAGE_DATE_TIME_FORMAT),
             ]
@@ -130,7 +131,7 @@ class IncrementSqlStorage extends AbstractIncrementStorage
                 `last_value` = GREATEST(`last_value`, :value)',
             [
                 'value' => $value,
-                'id' => Uuid::fromHexToBytes($configurationId),
+                'id' => IdBinding::value($configurationId),
                 'stateId' => $stateId,
                 'createdAt' => $this->clock->now()->format(Defaults::STORAGE_DATE_TIME_FORMAT),
             ],

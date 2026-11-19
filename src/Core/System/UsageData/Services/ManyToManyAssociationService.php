@@ -5,13 +5,13 @@ namespace Shopware\Core\System\UsageData\Services;
 use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\EntityDefinitionQueryHelper;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\QueryBuilder;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\Field;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\ManyToManyAssociationField;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\ReferenceVersionField;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 
 /**
  * @internal
@@ -49,7 +49,7 @@ class ManyToManyAssociationService
 
             $entityPrimaryKeyIds = [];
             foreach (array_column($primaryKeys, $primaryKeyName) as $value) {
-                $entityPrimaryKeyIds[] = Uuid::fromHexToBytes($value);
+                $entityPrimaryKeyIds[] = IdBinding::value($value);
             }
 
             $queryBuilder->setParameter('ids', $entityPrimaryKeyIds, ArrayParameterType::STRING);
@@ -57,7 +57,7 @@ class ManyToManyAssociationService
 
             $manyToManyMappingQueryResult = $queryBuilder->executeQuery()->fetchAllAssociative();
             foreach ($manyToManyMappingQueryResult as $mappingData) {
-                $mappingIds[$propertyName][$mappingData[$localColumn]][] = Uuid::fromBytesToHex($mappingData[$referenceColumn]);
+                $mappingIds[$propertyName][$mappingData[$localColumn]][] = IdBinding::toHex($mappingData[$referenceColumn]);
             }
         }
 
@@ -74,12 +74,12 @@ class ManyToManyAssociationService
         foreach ($primaryKeys as $primaryKey) {
             if ($primaryKey instanceof ReferenceVersionField) {
                 $hasReferenceVersionFields = true;
-                $queryBuilder->andWhere(EntityDefinitionQueryHelper::escape($primaryKey->getStorageName()) . ' = UNHEX(:versionId)');
+                $queryBuilder->andWhere(EntityDefinitionQueryHelper::escape($primaryKey->getStorageName()) . ' = :versionId');
             }
         }
 
         if ($hasReferenceVersionFields) {
-            $queryBuilder->setParameter('versionId', Defaults::LIVE_VERSION);
+            $queryBuilder->setParameter('versionId', IdBinding::value(Defaults::LIVE_VERSION), IdBinding::type());
         }
 
         return $queryBuilder;

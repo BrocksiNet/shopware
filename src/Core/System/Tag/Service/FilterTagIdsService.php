@@ -4,6 +4,7 @@ namespace Shopware\Core\System\Tag\Service;
 
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Query\Expression\CompositeExpression;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Adapter\Request\RequestParamHelper;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\CompiledFieldCollection;
@@ -61,7 +62,7 @@ class FilterTagIdsService
 
         $query = $this->criteriaQueryBuilder->build($query, $this->tagDefinition, $criteria, $context);
 
-        $select = array_merge(['LOWER(HEX(`tag`.`id`))'], $query->getSelectParts());
+        $select = array_merge([IdBinding::text('`tag`.`id`')], $query->getSelectParts());
         $query->select(...$select);
         $query->addGroupBy('`tag`.`id`');
         $query->setMaxResults($criteria->getLimit());

@@ -3,11 +3,11 @@
 namespace Shopware\Core\System\SystemConfig;
 
 use Doctrine\DBAL\Connection;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\ConfigJsonField;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Plugin;
 use Shopware\Core\Framework\Plugin\Exception\DecorationPatternException;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\Kernel;
 
 #[Package('framework')]
@@ -39,7 +39,7 @@ class SystemConfigLoader extends AbstractSystemConfigLoader
                 ->andWhere('sales_channel_id IS NULL');
         } else {
             $query->andWhere('sales_channel_id = :salesChannelId OR system_config.sales_channel_id IS NULL');
-            $query->setParameter('salesChannelId', Uuid::fromHexToBytes($salesChannelId));
+            $query->setParameter('salesChannelId', IdBinding::value($salesChannelId));
         }
 
         $query->addOrderBy('sales_channel_id', 'ASC');

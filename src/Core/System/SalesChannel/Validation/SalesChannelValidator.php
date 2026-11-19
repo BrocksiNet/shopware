@@ -330,8 +330,8 @@ class SalesChannelValidator implements EventSubscriberInterface
             \sprintf(
                 'SELECT ' . IdBinding::text('sales_channel.id') . ' AS sales_channel_id,
                 ' . IdBinding::text('sales_channel.type_id') . ' AS type_id,
-                LOWER(HEX(sales_channel.%s)) AS current_default,
-                LOWER(HEX(mapping.%s)) AS %s
+                ' . IdBinding::text('sales_channel.%s') . ' AS current_default,
+                ' . IdBinding::text('mapping.%s') . ' AS %s
                 FROM sales_channel
                 LEFT JOIN %s mapping
                     ON mapping.sales_channel_id = sales_channel.id

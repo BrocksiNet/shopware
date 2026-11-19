@@ -4,6 +4,7 @@ namespace Shopware\Core\System\Currency\Api;
 
 use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Api\Sync\AbstractFkResolver;
 use Shopware\Core\Framework\Api\Sync\FkReference;
 use Shopware\Core\Framework\Log\Package;
@@ -39,7 +40,7 @@ class CurrencyIsoCodeFkResolver extends AbstractFkResolver
         }
 
         $hash = $this->connection->fetchAllKeyValue(
-            'SELECT iso_code, LOWER(HEX(id)) FROM currency WHERE iso_code IN (:codes)',
+            'SELECT iso_code, ' . IdBinding::text('id') . ' FROM currency WHERE iso_code IN (:codes)',
             ['codes' => $codes],
             ['codes' => ArrayParameterType::STRING]
         );

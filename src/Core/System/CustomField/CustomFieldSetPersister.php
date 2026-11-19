@@ -3,10 +3,10 @@
 namespace Shopware\Core\System\CustomField;
 
 use Doctrine\DBAL\Connection;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\System\CustomField\Aggregate\CustomFieldSet\CustomFieldSetCollection;
 use Shopware\Core\System\CustomField\Aggregate\CustomFieldSetRelation\CustomFieldSetRelationCollection;
 use Shopware\Core\System\CustomField\Xml\CustomFields;
@@ -83,16 +83,18 @@ class CustomFieldSetPersister
 
             $customFieldSetId = $existingCustomFieldSets[$customFieldSet->getName()];
 
-            $existingRelations = Uuid::fromBytesToHexList(
+            $existingRelations = array_map(
+                IdBinding::toHex(...),
                 $this->connection->fetchAllKeyValue(
                     'SELECT entity_name, id FROM custom_field_set_relation WHERE set_id = :setId',
-                    ['setId' => Uuid::fromHexToBytes($customFieldSetId)]
+                    ['setId' => IdBinding::value($customFieldSetId)]
                 )
             );
-            $existingFields = Uuid::fromBytesToHexList(
+            $existingFields = array_map(
+                IdBinding::toHex(...),
                 $this->connection->fetchAllKeyValue(
                     'SELECT name, id FROM custom_field WHERE set_id = :setId',
-                    ['setId' => Uuid::fromHexToBytes($customFieldSetId)]
+                    ['setId' => IdBinding::value($customFieldSetId)]
                 )
             );
             $entityData = $customFieldSet->toEntityArray($appId, $existingRelations, $existingFields, $customFieldSetId, $defaultLocale);
@@ -127,7 +129,7 @@ class CustomFieldSetPersister
             /** @var array<string, string> $allCustomFields */
             $allCustomFields = $this->connection->fetchAllKeyValue(
                 'SELECT id, name FROM custom_field_set WHERE app_id = :appId',
-                ['appId' => Uuid::fromHexToBytes($appId)]
+                ['appId' => IdBinding::value($appId)]
             );
         } elseif ($extensionName !== null) {
             // Plugin behavior: look up all sets owned by the extension, so that sets which
@@ -143,7 +145,7 @@ class CustomFieldSetPersister
 
         $groupedByName = [];
         foreach ($allCustomFields as $id => $name) {
-            $groupedByName[$name][] = Uuid::fromBytesToHex($id);
+            $groupedByName[$name][] = IdBinding::toHex($id);
         }
 
         $existingCustomFieldSets = [];

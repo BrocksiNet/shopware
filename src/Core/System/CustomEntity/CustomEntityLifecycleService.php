@@ -5,6 +5,7 @@ namespace Shopware\Core\System\CustomEntity;
 
 use Doctrine\DBAL\Connection;
 use Psr\Clock\ClockInterface;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\App\AppEntity;
 use Shopware\Core\Framework\App\Source\SourceResolver;
 use Shopware\Core\Framework\Context;
@@ -12,7 +13,6 @@ use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsFilter;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\System\CustomEntity\Schema\CustomEntityPersister;
 use Shopware\Core\System\CustomEntity\Schema\CustomEntitySchemaUpdater;
 use Shopware\Core\System\CustomEntity\Xml\Config\AdminUi\AdminUiXmlSchema;
@@ -62,7 +62,7 @@ class CustomEntityLifecycleService
     {
         $entities = $this->connection->fetchFirstColumn(
             'SELECT fields FROM custom_entity WHERE app_id = :id',
-            ['id' => Uuid::fromHexToBytes($app->getId())]
+            ['id' => IdBinding::value($app->getId())]
         );
 
         foreach ($entities as $fields) {
@@ -84,7 +84,7 @@ class CustomEntityLifecycleService
     {
         $entities = $this->connection->fetchAllKeyValue(
             'SELECT name, fields FROM custom_entity WHERE app_id = :id',
-            ['id' => Uuid::fromHexToBytes($app->getId())]
+            ['id' => IdBinding::value($app->getId())]
         );
 
         foreach ($entities as $table => $fields) {

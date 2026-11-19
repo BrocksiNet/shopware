@@ -2,11 +2,10 @@
 
 namespace Shopware\Core\System\Snippet\Subscriber;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\Event\EntityDeleteEvent;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\System\Language\LanguageDefinition;
 use Shopware\Core\System\Snippet\Service\TranslationMetadataStore;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
@@ -71,8 +70,8 @@ class LanguageDeletionSubscriber implements EventSubscriberInterface
             INNER JOIN `locale` ON `locale`.`id` = `language`.`locale_id`
             WHERE `language`.`id` IN (:ids)
             SQL,
-            ['ids' => Uuid::fromHexToBytesList($languageIds)],
-            ['ids' => ArrayParameterType::BINARY],
+            ['ids' => IdBinding::values($languageIds)],
+            ['ids' => IdBinding::listType()],
         );
 
         return array_values(array_filter($codes));

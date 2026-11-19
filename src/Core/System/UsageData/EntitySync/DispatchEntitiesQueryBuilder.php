@@ -7,6 +7,7 @@ use Doctrine\DBAL\Query\Expression\CompositeExpression;
 use Doctrine\DBAL\Query\QueryBuilder as DoctrineQueryBuilder;
 use Doctrine\DBAL\Result;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\EntityDefinitionQueryHelper;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\QueryBuilder;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityDefinition;
@@ -15,7 +16,6 @@ use Shopware\Core\Framework\DataAbstractionLayer\Field\StorageAware;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\VersionField;
 use Shopware\Core\Framework\DataAbstractionLayer\FieldCollection;
 use Shopware\Core\Framework\Log\Package;
-use Shopware\Core\Framework\Uuid\Uuid;
 
 /**
  * @internal
@@ -70,7 +70,7 @@ class DispatchEntitiesQueryBuilder
             foreach ($primaryKey as $column => $id) {
                 ++$pkCount;
                 $condition = \sprintf('%s = :pk_%s', EntityDefinitionQueryHelper::escape($column), (string) $pkCount);
-                $this->queryBuilder->setParameter(\sprintf('pk_%s', (string) $pkCount), Uuid::fromHexToBytes($id));
+                $this->queryBuilder->setParameter(\sprintf('pk_%s', (string) $pkCount), IdBinding::value($id));
 
                 $combinedKeyCondition = $combinedKeyCondition === null
                     ? CompositeExpression::and($condition)
@@ -105,7 +105,7 @@ class DispatchEntitiesQueryBuilder
         }
 
         if ($hasVersionFields) {
-            $this->queryBuilder->setParameter('versionId', Uuid::fromHexToBytes(Defaults::LIVE_VERSION));
+            $this->queryBuilder->setParameter('versionId', IdBinding::value(Defaults::LIVE_VERSION));
         }
 
         return $this;

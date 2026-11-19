@@ -4,6 +4,7 @@ namespace Shopware\Core\System\Snippet\Files;
 
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Framework\Adapter\Cache\CacheInvalidator;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Adapter\Translation\Translator;
 use Shopware\Core\Framework\App\Lifecycle\Context\AppPersistContext;
 use Shopware\Core\Framework\App\Lifecycle\Context\AppRemovalContext;
@@ -69,7 +70,7 @@ class StorefrontSnippetLifecycleHandler extends AbstractLifecycleHandler
     private function invalidateTranslatorCache(): void
     {
         /** @var list<string> $snippetSetIds */
-        $snippetSetIds = $this->connection->fetchFirstColumn('SELECT LOWER(HEX(`id`)) FROM `snippet_set`');
+        $snippetSetIds = $this->connection->fetchFirstColumn('SELECT ' . IdBinding::text('`id`') . ' FROM `snippet_set`');
 
         $this->cacheInvalidator->invalidate(array_map(Translator::tag(...), $snippetSetIds), true);
     }

@@ -3,11 +3,11 @@
 namespace Shopware\Core\System\NumberRange\ValueGenerator;
 
 use Doctrine\DBAL\Connection;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\Feature;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Plugin\Exception\DecorationPatternException;
-use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\System\NumberRange\NumberRangeEvents;
 use Shopware\Core\System\NumberRange\NumberRangeException;
 use Shopware\Core\System\NumberRange\ValueGenerator\Pattern\AbstractValueGenerator;
@@ -122,7 +122,7 @@ class NumberRangeValueGenerator extends AbstractNumberRangeValueGenerator implem
         if ($salesChannelId) {
             /** @var array{id: string, pattern: string, start: int, technical_name: string}|false $config */
             $config = $this->connection->fetchAssociative('
-                SELECT LOWER(HEX(`number_range`.`id`)) AS `id`, `number_range`.`pattern`, `number_range`.`start`, `number_range_type`.`technical_name`
+                SELECT ' . IdBinding::text('`number_range`.`id`') . ' AS `id`, `number_range`.`pattern`, `number_range`.`start`, `number_range_type`.`technical_name`
                 FROM number_range
                 INNER JOIN number_range_type ON number_range_type.id = number_range.type_id
                 LEFT JOIN number_range_sales_channel ON number_range.id = number_range_sales_channel.number_range_id
@@ -130,11 +130,11 @@ class NumberRangeValueGenerator extends AbstractNumberRangeValueGenerator implem
                     number_range_sales_channel.sales_channel_id = :salesChannelId OR number_range_type.global = 1 OR number_range.global = 1
                 )
                 ORDER BY number_range.global ASC, number_range_type.global ASC
-            ', ['typeName' => $definition, 'salesChannelId' => Uuid::fromHexToBytes($salesChannelId)]);
+            ', ['typeName' => $definition, 'salesChannelId' => IdBinding::value($salesChannelId)]);
         } else {
             /** @var array{id: string, pattern: string, start: int, technical_name: string}|false $config */
             $config = $this->connection->fetchAssociative('
-                SELECT LOWER(HEX(`number_range`.`id`)) AS `id`, `number_range`.`pattern`, `number_range`.`start`, `number_range_type`.`technical_name`
+                SELECT ' . IdBinding::text('`number_range`.`id`') . ' AS `id`, `number_range`.`pattern`, `number_range`.`start`, `number_range_type`.`technical_name`
                 FROM number_range
                 INNER JOIN number_range_type ON number_range_type.id = number_range.type_id
                 WHERE `number_range_type`.`technical_name` = :typeName AND (number_range_type.global = 1 OR number_range.global = 1)
@@ -158,10 +158,10 @@ class NumberRangeValueGenerator extends AbstractNumberRangeValueGenerator implem
     {
         /** @var array{id: string, pattern: string, start: int}|false $config */
         $config = $this->connection->fetchAssociative('
-            SELECT LOWER(HEX(`number_range`.`id`)) AS `id`, `number_range`.`pattern`, `number_range`.`start`
+            SELECT ' . IdBinding::text('`number_range`.`id`') . ' AS `id`, `number_range`.`pattern`, `number_range`.`start`
             FROM number_range
             WHERE `number_range`.`id` = :numberRangeId
-        ', ['numberRangeId' => Uuid::fromHexToBytes($numberRangeId)]);
+        ', ['numberRangeId' => IdBinding::value($numberRangeId)]);
 
         if (!$config) {
             throw NumberRangeException::numberRangeNotFound($numberRangeId);
