@@ -40,8 +40,19 @@ class SqlTranslationMiddleware implements Middleware
                     public function prepare(string $sql): Statement
                     {
                         $statements = $this->translate($sql);
+                        if (\is_string($all = getenv('SQLITE_SQL_LOG'))) {
+                            file_put_contents($all, implode(';', array_filter($statements, 'is_string')) . "\n", \FILE_APPEND);
+                        }
                         if (\count($statements) === 1 && \is_string($statements[0])) {
-                            return parent::prepare($statements[0]);
+                            try {
+                                return new TextBindingStatement(parent::prepare($statements[0]));
+                            } catch (\Throwable $e) {
+                                if (\is_string($log = getenv('SQLITE_FAIL_LOG'))) {
+                                    file_put_contents($log, $e->getMessage() . ' | ' . $statements[0] . "\n", \FILE_APPEND);
+                                }
+
+                                throw $e;
+                            }
                         }
 
                         return new MultiStatement($this, $statements);
@@ -79,7 +90,15 @@ class SqlTranslationMiddleware implements Middleware
                             return $affected;
                         }
 
-                        return parent::exec($sql);
+                        try {
+                            return parent::exec($sql);
+                        } catch (\Throwable $e) {
+                            if (\is_string($log = getenv('SQLITE_FAIL_LOG'))) {
+                                file_put_contents($log, $e->getMessage() . ' | ' . $sql . "\n", \FILE_APPEND);
+                            }
+
+                            throw $e;
+                        }
                     }
 
                     /**
@@ -89,10 +108,35 @@ class SqlTranslationMiddleware implements Middleware
                     {
                         SqliteDdlRewriter::$last = $sql;
                         if (!preg_match('/^\s*(?:CREATE|ALTER|DROP|RENAME|SET)\b/i', $sql)) {
-                            return [$this->dml($sql)];
+                            return [$this->unescapeLiterals($this->dml($sql))];
                         }
 
-                        return $this->ddl->rewrite($sql) ?: ['SELECT 1'];
+                        return array_map(fn (string|\Closure $s) => \is_string($s) ? $this->unescapeLiterals((string) preg_replace('/(?<![\w`"\'])0x([0-9a-fA-F]{2,})(?![\w])/', 'X\'$1\'', $s)) : $s, $this->ddl->rewrite($sql) ?: ['SELECT 1']);
+                    }
+
+                    /**
+                     * MySQL reads backslash escapes inside string literals (`'[\"a\"]'`, `'it\'s'`), SQLite does not.
+                     * `\_` and `\%` stay: they are LIKE escapes.
+                     */
+                    private function unescapeLiterals(string $sql): string
+                    {
+                        if (!str_contains($sql, '\\')) {
+                            return $sql;
+                        }
+
+                        return (string) preg_replace_callback('/\'((?:[^\'\\\\]|\\\\.|\'\')*)\'/s', static function (array $m): string {
+                            $body = (string) preg_replace_callback('/\\\\(.)/s', static fn (array $e): string => match ($e[1]) {
+                                '\'' => '\'\'',
+                                'n' => "\n",
+                                'r' => "\r",
+                                't' => "\t",
+                                '0' => "\0",
+                                '_', '%' => $e[0],
+                                default => $e[1],
+                            }, $m[1]);
+
+                            return '\'' . $body . '\'';
+                        }, $sql);
                     }
 
                     /**
@@ -102,8 +146,48 @@ class SqlTranslationMiddleware implements Middleware
 
                     private function dml(string $sql): string
                     {
+                        if (stripos($sql, 'information_schema.') !== false) {
+                            $sql = (string) preg_replace(['/\binformation_schema\.columns\b/i', '/\binformation_schema\.tables\b/i'], ['sw_is_columns', 'sw_is_tables'], $sql);
+                        }
+                        if (str_contains($sql, '#')) {
+                            // MySQL `# comment` lines, SQLite only knows `--` and block comments
+                            $sql = (string) preg_replace_callback('/(\'(?:[^\'\\\\]|\\\\.|\'\')*\'|`[^`]*`|"[^"]*")|#[^\n]*/s', static fn (array $m): string => ($m[1] ?? '') !== '' ? $m[1] : '', $sql);
+                        }
+                        $sql = rtrim($sql, " \t\n\r;");
+                        if (stripos($sql, 'TRIM(') !== false) {
+                            $sql = (string) preg_replace_callback('/\bTRIM\s*(\((?:[^()\']|\'(?:[^\']|\'\')*\'|(?1))*\))/i', static function (array $m): string {
+                                $inner = substr($m[1], 1, -1);
+                                if (!preg_match('/^\s*(?:(LEADING|TRAILING|BOTH)\s+)?(\'(?:[^\']|\'\')*\')\s+FROM\s+(.*)$/is', $inner, $mm)) {
+                                    return $m[0];
+                                }
+                                $fn = ['LEADING' => 'ltrim', 'TRAILING' => 'rtrim'][strtoupper($mm[1])] ?? 'trim';
+
+                                return $fn . '(' . $mm[3] . ', ' . $mm[2] . ')';
+                            }, $sql);
+                        }
+                        if (stripos($sql, 'SEPARATOR') !== false) {
+                            $sql = (string) preg_replace_callback('/\bGROUP_CONCAT\s*(\((?:[^()\']|\'(?:[^\']|\'\')*\'|(?1))*\))/i', static function (array $m): string {
+                                $inner = substr($m[1], 1, -1);
+                                if (!preg_match('/^(.*)\sSEPARATOR\s+(\'(?:[^\']|\'\')*\')\s*$/is', $inner, $mm)) {
+                                    return $m[0];
+                                }
+                                $expr = preg_replace('/^\s*DISTINCT\s+/i', '', $mm[1]);
+
+                                return 'group_concat(' . $expr . ', ' . $mm[2] . ')';
+                            }, $sql);
+                        }
+                        if (stripos($sql, 'COALESCE') !== false) {
+                            $sql = $this->singleArgumentCoalesce($sql);
+                        }
+                        // null safe equals, row locks (SQLite locks the whole database)
+                        $sql = str_replace('<=>', ' IS ', $sql);
+                        $sql = (string) preg_replace('/\s+(?:FOR\s+(?:UPDATE|SHARE)(?:\s+(?:NOWAIT|SKIP\s+LOCKED))?|LOCK\s+IN\s+SHARE\s+MODE)\s*;?\s*$/i', '', $sql);
                         if (preg_match('/^\s*SELECT\s+@@(?:SESSION\.)?(\w+)\s*$/i', $sql, $v)) {
-                            return 'SELECT ' . (stripos($v[1], 'foreign_key_checks') !== false ? '1' : "''") . ' AS `@@' . $v[1] . '`';
+                            return 'SELECT ' . (stripos($v[1], 'foreign_key_checks') !== false ? '1' : '\'\'') . ' AS `@@' . $v[1] . '`';
+                        }
+                        if (preg_match('/INFORMATION_SCHEMA\.KEY_COLUMN_USAGE.*REFERENCED_TABLE_NAME\s*=\s*\'(\w+)\'/is', $sql, $v)) {
+                            return 'SELECT m.name AS TABLE_NAME, f.`from` AS COLUMN_NAME, sw_fk_name(m.name, f.`from`) AS CONSTRAINT_NAME, f.`table` AS REFERENCED_TABLE_NAME, f.`to` AS REFERENCED_COLUMN_NAME'
+                                . ' FROM sqlite_master m, pragma_foreign_key_list(m.name) f WHERE m.type = \'table\' AND f.`table` = \'' . $v[1] . '\' ORDER BY m.name, f.id, f.seq';
                         }
                         if (preg_match('/^\s*SHOW\s/i', $sql)) {
                             return SqliteShowRewriter::rewrite($sql);
@@ -118,7 +202,7 @@ class SqlTranslationMiddleware implements Middleware
                         $sql = (string) preg_replace('/^(\s*INSERT\s+INTO\s+`?\w+`?)\s*\(\s*(SELECT\b.*)\)\s*$/is', '$1 $2', $sql);
 
                         // 0x0fa9... is an integer literal in SQLite, MySQL treats it as binary
-                        $sql = (string) preg_replace('/(?<![\w`"\'])0x([0-9a-fA-F]{2,})(?![\w])/', "X'$1'", $sql);
+                        $sql = (string) preg_replace('/(?<![\w`"\'])0x([0-9a-fA-F]{2,})(?![\w])/', 'X\'$1\'', $sql);
 
                         if (!preg_match('/^\s*(?:UPDATE|DELETE|INSERT|REPLACE)\b/i', $sql)) {
                             return $sql;
@@ -175,6 +259,7 @@ class SqlTranslationMiddleware implements Middleware
                      */
                     private function deleteJoin(string $sql): string
                     {
+                        $sql = rtrim(trim($sql), ';');
                         if (!preg_match('/^(\s*DELETE\s+)("?\w+"?)\s+FROM\s+("?\w+"?)(?:\s+AS)?\s+("?\w+"?)?\s*((?:INNER\s+|LEFT\s+)?JOIN\b.*)$/is', $sql, $m)) {
                             return $sql;
                         }
@@ -195,13 +280,71 @@ class SqlTranslationMiddleware implements Middleware
                         return (string) preg_replace('/((?:\bSET|,)\s+)' . preg_quote($m[1], '/') . '\.("?\w+"?\s*=)/i', '$1$2', $sql);
                     }
 
+                    /**
+                     * MySQL accepts `COALESCE(x)`, SQLite wants two arguments.
+                     */
+                    private function singleArgumentCoalesce(string $sql): string
+                    {
+                        for ($pass = 0; $pass < 3; ++$pass) {
+                            $changed = false;
+                            $sql = (string) preg_replace_callback('/\bCOALESCE\s*(\((?:[^()\']|\'(?:[^\']|\'\')*\'|(?1))*\))/i', static function (array $m) use (&$changed): string {
+                                $inner = substr($m[1], 1, -1);
+                                $depth = 0;
+                                $quoted = false;
+                                for ($i = 0, $n = \strlen($inner); $i < $n; ++$i) {
+                                    $c = $inner[$i];
+                                    if ($c === '\'') {
+                                        $quoted = !$quoted;
+                                    } elseif (!$quoted && $c === '(') {
+                                        ++$depth;
+                                    } elseif (!$quoted && $c === ')') {
+                                        --$depth;
+                                    } elseif (!$quoted && $depth === 0 && $c === ',') {
+                                        return $m[0];
+                                    }
+                                }
+                                $changed = true;
+
+                                return '(' . $inner . ')';
+                            }, $sql);
+                            if (!$changed) {
+                                break;
+                            }
+                        }
+
+                        return $sql;
+                    }
+
                     private function updateLimit(string $sql): string
                     {
-                        if (!preg_match('/^(\s*UPDATE\s+)([`"]?\w+[`"]?)(\s+SET\s+.*?)(?:\s+WHERE\s+(.*?))?\s+LIMIT\s+(\d+)\s*;?$/is', $sql, $m)) {
+                        if (!preg_match('/^(\s*UPDATE\s+)([`"]?\w+[`"]?)(\s+SET\s+.*?)\s+LIMIT\s+(\d+)\s*;?$/is', $sql, $m)) {
                             return $sql;
                         }
 
-                        return $m[1] . $m[2] . $m[3] . ' WHERE rowid IN (SELECT rowid FROM ' . $m[2] . ($m[4] !== '' ? ' WHERE ' . $m[4] : '') . ' LIMIT ' . $m[5] . ')';
+                        // the WHERE of the UPDATE, not the one of a subquery in SET
+                        $depth = 0;
+                        $where = null;
+                        $set = $m[3];
+                        for ($i = 0, $n = \strlen($set); $i < $n; ++$i) {
+                            $ch = $set[$i];
+                            if ($ch === '\'') {
+                                for (++$i; $i < $n && !($set[$i] === '\'' && ($set[$i + 1] ?? '') !== '\''); ++$i) {
+                                    $i += $set[$i] === '\'' ? 1 : 0;
+                                }
+                            } elseif ($ch === '(') {
+                                ++$depth;
+                            } elseif ($ch === ')') {
+                                --$depth;
+                            } elseif ($depth === 0 && preg_match('/\GWHERE\s/i', $set, $w, 0, $i) && preg_match('/\s/', $set[$i - 1] ?? ' ')) {
+                                $where = $i;
+
+                                break;
+                            }
+                        }
+                        $condition = $where === null ? '' : ' WHERE ' . substr($set, $where + 6);
+                        $set = $where === null ? $set : substr($set, 0, $where);
+
+                        return $m[1] . $m[2] . $set . ' WHERE rowid IN (SELECT rowid FROM ' . $m[2] . $condition . ' LIMIT ' . $m[4] . ')';
                     }
 
                     private function backticksToQuotes(string $sql): string

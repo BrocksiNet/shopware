@@ -7,6 +7,7 @@ namespace Shopware\Core\Framework\Util\Database;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Platforms\AbstractPlatform;
 use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
+use Doctrine\DBAL\Platforms\SQLitePlatform;
 use Doctrine\DBAL\Schema\AbstractSchemaManager;
 use Doctrine\DBAL\Schema\Column as DbalColumn;
 use Doctrine\DBAL\Schema\Exception\TableDoesNotExist;
@@ -119,6 +120,14 @@ class TableHelper
             }
 
             // MySQL creates an index for every foreign key and names it like the constraint, PostgreSQL does not, and prefixes the names of indexes with the table
+            if ($connection->getDatabasePlatform() instanceof SQLitePlatform) {
+                // SQLite: index names are schema wide, the translation prefixes them with the table
+                return (bool) $connection->fetchOne(
+                    'SELECT 1 FROM sqlite_master WHERE type = \'index\' AND tbl_name = :table AND name = :prefixed',
+                    ['table' => $table, 'prefixed' => $table . '.' . $indexName]
+                );
+            }
+
             return $connection->getDatabasePlatform() instanceof PostgreSQLPlatform
                 && (bool) $connection->fetchOne(
                     'SELECT 1 FROM pg_constraint WHERE contype = \'f\' AND conname = :name AND conrelid = to_regclass(:table)'

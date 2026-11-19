@@ -14,12 +14,27 @@ class SqliteFunctions
 {
     public static function register(\PDO $pdo): void
     {
-        $create = static fn (string $name, callable $fn, int $args = -1) => $pdo->sqliteCreateFunction($name, $fn, $args, \PDO::SQLITE_DETERMINISTIC);
+        $create = static fn (string $name, callable $fn, int $args = -1) => $pdo->sqliteCreateFunction($name, $fn, $args, \in_array(strtoupper($name), ['UUID', 'UUID_SHORT', 'RAND', 'NOW', 'UTC_TIMESTAMP', 'CURDATE', 'UNIX_TIMESTAMP', 'SLEEP'], true) ? 0 : \PDO::SQLITE_DETERMINISTIC);
 
         foreach (['utf8mb4_unicode_ci', 'utf8_unicode_ci', 'utf8mb4_unicode_520_ci', 'utf8mb4_0900_as_cs', 'utf8mb4_general_ci', 'utf8mb4_0900_ai_ci', 'utf8_general_ci', 'utf8mb4_bin'] as $collation) {
             $bin = $collation === 'utf8mb4_bin';
             $pdo->sqliteCreateCollation($collation, static fn (string $a, string $b): int => $bin ? strcmp($a, $b) : strcmp(mb_strtolower($a), mb_strtolower($b)));
         }
+
+        // constraint name of the foreign key on `$column`, PRAGMA foreign_key_list does not know it
+        $create('sw_fk_name', static function (?string $table, ?string $column) use ($pdo): ?string {
+            $sql = $pdo->query('SELECT sql FROM sqlite_master WHERE type = \'table\' AND name = ' . $pdo->quote((string) $table))?->fetchColumn();
+            if (\is_string($sql) && preg_match('/CONSTRAINT\s+`([^`]+)`\s+FOREIGN\s+KEY\s*\(([^)]*)\)/i', $sql . ' ', $m) === 1) {
+                preg_match_all('/CONSTRAINT\s+`([^`]+)`\s+FOREIGN\s+KEY\s*\(([^)]*)\)/i', $sql, $all, \PREG_SET_ORDER);
+                foreach ($all as $constraint) {
+                    if (\in_array($column, array_map(static fn (string $c): string => trim($c, " `\n"), explode(',', $constraint[2])), true)) {
+                        return $constraint[1];
+                    }
+                }
+            }
+
+            return null;
+        }, 2);
 
         $create('CONCAT', static function (...$args): ?string {
             foreach ($args as $arg) {
@@ -69,7 +84,7 @@ class SqliteFunctions
 
             return strtolower($mode) === 'all' ? 1 : 0;
         });
-        $create('UUID', static fn () => sprintf('%08x-%04x-%04x-%04x-%012x', random_int(0, 0xffffffff), random_int(0, 0xffff), random_int(0x4000, 0x4fff), random_int(0x8000, 0xbfff), random_int(0, 0xffffffffffff)), 0);
+        $create('UUID', static fn () => \sprintf('%08x-%04x-%04x-%04x-%012x', random_int(0, 0xFFFFFFFF), random_int(0, 0xFFFF), random_int(0x4000, 0x4FFF), random_int(0x8000, 0xBFFF), random_int(0, 0xFFFFFFFFFFFF)), 0);
         $create('JSON_CONTAINS', static function (?string $target, ?string $candidate): ?int {
             if ($target === null || $candidate === null) {
                 return null;
@@ -80,7 +95,7 @@ class SqliteFunctions
                 return (int) \in_array($c, $t, false);
             }
 
-            return (int) ($t == $c);
+            return (int) ($t === $c);
         }, 2);
         $create('JSON_ARRAY_APPEND', static function (?string $json, string $path, mixed $value): ?string {
             $data = json_decode((string) $json, true);
@@ -93,6 +108,8 @@ class SqliteFunctions
             return json_encode($data);
         }, 3);
         $create('IF', static fn ($c, $a, $b) => $c ? $a : $b, 3);
+        // SQLite hex(NULL) is '' while MySQL gives NULL, which breaks LOWER(HEX(parent_id)) === null checks
+        $create('HEX', static fn (mixed $v) => $v === null ? null : strtoupper(bin2hex((string) $v)), 1);
         $create('UNHEX', static fn (?string $s) => $s === null ? null : (ctype_xdigit($s) && \strlen($s) % 2 === 0 ? hex2bin($s) : null), 1);
         $create('FIND_IN_SET', static function (?string $needle, ?string $list): ?int {
             if ($needle === null || $list === null) {
@@ -105,7 +122,7 @@ class SqliteFunctions
         $create('REGEXP', static fn (?string $pattern, ?string $subject) => $pattern === null || $subject === null ? null : (int) preg_match('~' . str_replace('~', '\~', $pattern) . '~iu', $subject), 2);
         $create('LPAD', static fn (?string $s, int $len, string $pad) => $s === null ? null : mb_substr(str_pad($s, $len, $pad, \STR_PAD_LEFT), 0, $len), 3);
         $create('UNIX_TIMESTAMP', static fn (?string $d = null) => $d === null ? time() : strtotime($d . ' UTC'));
-        $create('NOW', static fn () => gmdate('Y-m-d H:i:s'), 0);
+        $create('NOW', static fn (?int $precision = null) => (new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->format(($precision ?? 0) > 0 ? 'Y-m-d H:i:s.v' : 'Y-m-d H:i:s'));
         $create('UTC_TIMESTAMP', static fn () => gmdate('Y-m-d H:i:s'));
         $create('CURDATE', static fn () => gmdate('Y-m-d'), 0);
         $create('GREATEST', static fn (...$a) => \in_array(null, $a, true) ? null : max($a));

@@ -3,8 +3,8 @@
 namespace Shopware\Core\Framework\Adapter\Database\Sqlite;
 
 use Doctrine\DBAL\Driver\Result;
-use Doctrine\DBAL\Driver\Statement;
 use Doctrine\DBAL\Driver\Result as DriverResult;
+use Doctrine\DBAL\Driver\Statement;
 use Doctrine\DBAL\ParameterType;
 use Shopware\Core\Framework\Log\Package;
 
