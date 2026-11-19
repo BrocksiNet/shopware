@@ -5,6 +5,7 @@ namespace Shopware\Core\Framework\DataAbstractionLayer\Dbal;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use Psr\Log\LoggerInterface;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Adapter\Database\Dialect\SqlDialect;
 use Shopware\Core\Framework\Adapter\Database\Dialect\SqlDialectFactory;
 use Shopware\Core\Framework\Context;
@@ -38,7 +39,6 @@ use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsAnyFilter;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Parser\SqlQueryParser;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Struct\ArrayStruct;
-use Shopware\Core\Framework\Uuid\Uuid;
 
 use function Symfony\Component\String\u;
 
@@ -974,7 +974,7 @@ class EntityReader implements EntityReaderInterface
 
         if (!$association->is(Inherited::class)) {
             $query->andWhere($root . '.' . $localColumn . ' IN (:localIds)');
-            $query->setParameter('localIds', Uuid::fromHexToBytesList($collection->getIds()), $this->dialect()->idListParameterType());
+            $query->setParameter('localIds', IdBinding::values($collection->getIds()), $this->dialect()->idListParameterType());
         } else {
             // When the association is inherited, we need to join the base entity to the local table
             // the "join column" (column name = property name) contains the id of the parent entity if the association is inherited
@@ -995,7 +995,7 @@ class EntityReader implements EntityReaderInterface
             );
 
             $query->andWhere(EntityDefinitionQueryHelper::escape($definition->getEntityName()) . '.id IN (:localIds)');
-            $query->setParameter('localIds', Uuid::fromHexToBytesList($collection->getIds()), $this->dialect()->idListParameterType());
+            $query->setParameter('localIds', IdBinding::values($collection->getIds()), $this->dialect()->idListParameterType());
         }
 
         $orderBy = '';
@@ -1236,13 +1236,13 @@ class EntityReader implements EntityReaderInterface
         $wrapper->andWhere($root . '.id IN (:rootIds)');
 
         $bytes = $collection->map(
-            static fn (Entity $entity) => Uuid::fromHexToBytes($entity->getUniqueIdentifier())
+            static fn (Entity $entity) => IdBinding::value($entity->getUniqueIdentifier())
         );
 
         if ($definition->isInheritanceAware() && $context->considerInheritance()) {
             foreach ($collection->getElements() as $entity) {
                 if ($entity->get('parentId')) {
-                    $bytes[$entity->get('parentId')] = Uuid::fromHexToBytes($entity->get('parentId'));
+                    $bytes[$entity->get('parentId')] = IdBinding::value($entity->get('parentId'));
                 }
             }
         }

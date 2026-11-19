@@ -145,7 +145,7 @@ class SqlDialectTest extends TestCase
         $dialect = new PostgreSqlDialect(null, true);
 
         static::assertSame('jsonb_path_query_first("t"."c", \'$.a.b\'::jsonpath)', $dialect->jsonExtract('"t"."c"', '$.a.b'));
-        static::assertSame('(jsonb_path_query_first(c, \'$.a\'::jsonpath) #>> \'{}\')', $dialect->jsonExtractText('c', '$.a'));
+        static::assertSame('(jsonb_build_array(jsonb_path_query_first(c, \'$.a\'::jsonpath)) ->> 0)', $dialect->jsonExtractText('c', '$.a'));
         static::assertSame(
             'jsonb_set(COALESCE(c, \'{}\'::jsonb), \'{"a","b-c"}\'::text[], ?, true)',
             $dialect->jsonSet('c', '$."a"."b-c"', '?')
@@ -185,10 +185,14 @@ class SqlDialectTest extends TestCase
         static::assertSame('LOWER(HEX(`p`.`id`))', (new MySqlDialect())->idToText('`p`.`id`'));
         static::assertSame('REPLACE("p"."id"::text, \'-\', \'\')', (new PostgreSqlDialect(null, true))->idToText('"p"."id"'));
 
-        foreach ([new MySqlDialect(), new MariaDbDialect(), new PostgreSqlDialect(null, true)] as $dialect) {
+        foreach ([new MySqlDialect(), new MariaDbDialect()] as $dialect) {
             static::assertSame(ParameterType::BINARY, $dialect->idParameterType());
             static::assertSame(ArrayParameterType::BINARY, $dialect->idListParameterType());
         }
+
+        // PostgreSQL binds ids as hex strings
+        static::assertSame(ParameterType::STRING, (new PostgreSqlDialect(null, true))->idParameterType());
+        static::assertSame(ArrayParameterType::STRING, (new PostgreSqlDialect(null, true))->idListParameterType());
     }
 
     public function testGroupConcat(): void

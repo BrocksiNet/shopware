@@ -10,7 +10,7 @@ use Shopware\Core\Framework\Log\Package;
 
 /**
  * Ids are still bound as 16 raw bytes, the IdCodecMiddleware converts them for the uuid columns.
- * The id spike changes `idParameterType()` / `idListParameterType()` and `idToText()` together with the codec.
+ * Ids are bound as hex strings (`IdBinding`), PostgreSQL accepts the 32 character form for uuid columns.
  *
  * @internal
  */
@@ -85,8 +85,9 @@ class PostgreSqlDialect implements SqlDialect
 
     public function jsonExtractText(string $jsonColumnSql, string $path): string
     {
-        // #>> '{}' unquotes a json string and returns NULL for a json null
-        return \sprintf('(%s #>> \'{}\')', $this->jsonExtract($jsonColumnSql, $path));
+        // `->> 0` on a one element array unquotes a json string and returns NULL for a json null.
+        // The operator `#>> '{}'` does the same, but the MySQL translator reads the `#` as the start of a comment.
+        return \sprintf('(jsonb_build_array(%s) ->> 0)', $this->jsonExtract($jsonColumnSql, $path));
     }
 
     public function jsonSet(string $jsonColumnSql, string $path, string $valueSql): string
@@ -130,12 +131,12 @@ class PostgreSqlDialect implements SqlDialect
 
     public function idParameterType(): ParameterType
     {
-        return ParameterType::BINARY;
+        return ParameterType::STRING;
     }
 
     public function idListParameterType(): ArrayParameterType
     {
-        return ArrayParameterType::BINARY;
+        return ArrayParameterType::STRING;
     }
 
     public function groupConcat(string $expressionSql, string $separator = ',', ?string $orderBySql = null): string

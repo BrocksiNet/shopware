@@ -51,11 +51,11 @@ class JsonFieldAccessorBuilderTest extends TestCase
         $context = Context::createDefaultContext();
 
         static::assertSame(
-            '(jsonb_path_query_first("product"."data", \'$.name\'::jsonpath) #>> \'{}\')',
+            '(jsonb_build_array(jsonb_path_query_first("product"."data", \'$.name\'::jsonpath)) ->> 0)',
             $builder->buildAccessor('product', $this->field(), $context, 'data.name')
         );
         static::assertSame(
-            '(jsonb_path_query_first("product"."data", \'$.count\'::jsonpath) #>> \'{}\')::numeric',
+            '(jsonb_build_array(jsonb_path_query_first("product"."data", \'$.count\'::jsonpath)) ->> 0)::numeric',
             $builder->buildAccessor('product', $this->field(), $context, 'data.count')
         );
     }

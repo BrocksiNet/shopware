@@ -4,7 +4,6 @@ namespace Shopware\Core\Framework\Adapter\Database\Dialect;
 
 use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\ParameterType;
-use Shopware\Core\Framework\Adapter\Database\ConnectionFactory;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Uuid\Uuid;
 
@@ -32,7 +31,7 @@ final class IdBinding
 
     public static function isHexBinding(): bool
     {
-        return self::$hexBinding ??= ConnectionFactory::getDriver() === ConnectionFactory::DRIVER_POSTGRESQL;
+        return self::$hexBinding ??= SqlDialectFactory::getDefault()->idParameterType() === ParameterType::STRING;
     }
 
     public static function value(string $hex): string
