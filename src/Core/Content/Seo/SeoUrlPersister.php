@@ -4,6 +4,7 @@ namespace Shopware\Core\Content\Seo;
 
 use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
+use Doctrine\DBAL\ParameterType;
 use Psr\Clock\ClockInterface;
 use Shopware\Core\Content\Seo\Event\SeoUrlUpdateEvent;
 use Shopware\Core\Content\Seo\SeoUrl\SeoUrlCollection;
@@ -172,7 +173,8 @@ class SeoUrlPersister
 
             $insert['created_at'] = $dateTime;
 
-            $insertQuery->addInsert($table, $insert);
+            // bound as binary, so the PostgreSQL id codec converts every 16 byte id; as a string a random id that happens to be valid UTF-8 stays raw and fails as uuid
+            $insertQuery->addInsert($table, $insert, array_fill_keys(array_intersect(['id', 'sales_channel_id', 'language_id', 'foreign_key'], array_keys($insert)), ParameterType::BINARY));
         }
 
         $inuseSeoUrls = $this->findInUseCanonicalSeoUrls($seoPathInfos, $languageId, $salesChannelId);
