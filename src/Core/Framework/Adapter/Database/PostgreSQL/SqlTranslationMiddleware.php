@@ -37,9 +37,16 @@ class SqlTranslationMiddleware implements Middleware
 
                     private bool $inTransaction = false;
 
+                    /**
+                     * Test mode: MySQL keeps the transaction usable after a caught failing statement (unique violation, ...), PostgreSQL aborts it.
+                     * Every statement inside a transaction runs in its own savepoint then, the integration tests wrap each test in a transaction.
+                     */
+                    private readonly bool $statementSavepoints;
+
                     public function __construct(Connection $connection, private readonly MySQLToPostgreSQLTranslator $translator)
                     {
                         parent::__construct($connection);
+                        $this->statementSavepoints = (string) (getenv('SHOPWARE_PG_STATEMENT_SAVEPOINTS') ?: ($_SERVER['SHOPWARE_PG_STATEMENT_SAVEPOINTS'] ?? '')) === '1';
                     }
 
                     public function prepare(string $sql): Statement
@@ -47,7 +54,7 @@ class SqlTranslationMiddleware implements Middleware
                         [$translated, $caseMap] = $this->translator->translate($sql);
                         $statement = new ColumnCaseStatement(parent::prepare($this->rewriteStatement($translated)), $caseMap);
 
-                        if (!$this->inTransaction || !DdlRewriter::isDdl($translated)) {
+                        if (!$this->inTransaction || !(DdlRewriter::isDdl($translated) || $this->wrapsInSavepoint($translated))) {
                             return $statement;
                         }
 
@@ -59,7 +66,8 @@ class SqlTranslationMiddleware implements Middleware
                         [$translated, $caseMap] = $this->translator->translate($sql);
                         // session switches such as `SET FOREIGN_KEY_CHECKS=0` are also sent through executeQuery(), the rewriter turns them into `SELECT 1`
                         $translated = DdlRewriter::isDdl($translated) ? $this->rewriteStatement($translated) : $translated;
-                        $result = parent::query(ShowRewriter::matches($translated) ? ShowRewriter::rewrite($translated) : (InformationSchemaRewriter::matches($translated) ? InformationSchemaRewriter::rewrite($translated) : $translated));
+                        $sql = ShowRewriter::matches($translated) ? ShowRewriter::rewrite($translated) : (InformationSchemaRewriter::matches($translated) ? InformationSchemaRewriter::rewrite($translated) : $translated);
+                        $result = $this->inTransaction && $this->wrapsInSavepoint($sql) ? $this->inSavepoint(fn (): Result => parent::query($sql)) : parent::query($sql);
 
                         return $caseMap === [] ? $result : new ColumnCaseResult($result, $caseMap);
                     }
@@ -69,7 +77,7 @@ class SqlTranslationMiddleware implements Middleware
                         $translated = $this->translator->translate($sql)[0];
                         $rewritten = $this->rewriteStatement($translated);
 
-                        if (!$this->inTransaction || !DdlRewriter::isDdl($translated)) {
+                        if (!$this->inTransaction || !(DdlRewriter::isDdl($translated) || $this->wrapsInSavepoint($translated))) {
                             return parent::exec($rewritten);
                         }
 
@@ -99,6 +107,14 @@ class SqlTranslationMiddleware implements Middleware
                         parent::exec('RELEASE SAVEPOINT sw_ddl');
 
                         return $result;
+                    }
+
+                    /**
+                     * Doctrine's own nested transaction savepoints must stay outside of ours, releasing ours would drop them
+                     */
+                    private function wrapsInSavepoint(string $sql): bool
+                    {
+                        return $this->statementSavepoints && preg_match('/^\s*(?:SAVEPOINT|RELEASE|ROLLBACK)\b/i', $sql) !== 1;
                     }
 
                     public function beginTransaction(): void
