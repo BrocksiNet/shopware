@@ -12,6 +12,7 @@ use PHPUnit\Framework\TestCase;
 use Shopware\Core\Content\Seo\SeoUrlPlaceholderHandler;
 use Shopware\Core\Content\Seo\SeoUrlPlaceholderHandlerInterface;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\MySqlDialect;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\System\SalesChannel\Aggregate\SalesChannelDomain\SalesChannelDomainCollection;
@@ -228,7 +229,8 @@ class SeoUrlPlaceholderHandlerTest extends TestCase
         return new SeoUrlPlaceholderHandler(
             static::createStub(RequestStack::class),
             static::createStub(Router::class),
-            $connection ?? $this->connection
+            $connection ?? $this->connection,
+            new MySqlDialect()
         );
     }
 }

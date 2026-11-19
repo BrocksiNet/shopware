@@ -219,7 +219,12 @@ class SearchKeywordUpdater implements ResetInterface
      */
     private function insertDictionary(array $dictionary): void
     {
-        $queue = new MultiInsertQueryQueue($this->connection, 50, true, true);
+        // Insert-or-ignore instead of REPLACE: PostgreSQL has no REPLACE, the rewrite is "delete the colliding rows, then insert",
+        // and parallel indexers that delete the same keywords in a different order deadlock on the row locks.
+        // The keywords are also written in one fixed order for every writer.
+        ksort($dictionary, \SORT_STRING);
+
+        $queue = new MultiInsertQueryQueue($this->connection, 50, true, false);
 
         foreach ($dictionary as $insert) {
             $queue->addInsert(ProductKeywordDictionaryDefinition::ENTITY_NAME, $insert);

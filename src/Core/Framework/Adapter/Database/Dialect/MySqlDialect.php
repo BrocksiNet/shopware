@@ -103,6 +103,11 @@ class MySqlDialect implements SqlDialect
         );
     }
 
+    public function caseInsensitive(string $columnSql): string
+    {
+        return $columnSql;
+    }
+
     protected function convertJsonValue(string $extractSql, string $type): string
     {
         $unquoted = \sprintf('JSON_UNQUOTE(%s)', $extractSql);

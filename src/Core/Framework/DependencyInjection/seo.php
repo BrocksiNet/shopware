@@ -38,6 +38,7 @@ use Shopware\Core\Content\Seo\SeoUrlUpdater;
 use Shopware\Core\Content\Seo\Validation\Constraint\ValidSeoPathInfoValidator;
 use Shopware\Core\Content\Seo\Validation\SeoUrlValidationFactory;
 use Shopware\Core\Content\Seo\Validation\SeoUrlWriteValidator;
+use Shopware\Core\Framework\Adapter\Database\Dialect\SqlDialect;
 use Shopware\Core\Framework\Adapter\Twig\Extension\BuildBreadcrumbExtension;
 use Shopware\Core\Framework\Adapter\Twig\Extension\CategoryUrlExtension;
 use Shopware\Core\Framework\Adapter\Twig\Extension\EntitySeoUrlFunctionExtension;
@@ -203,6 +204,7 @@ return static function (ContainerConfigurator $containerConfigurator): void {
             service('request_stack'),
             service('router.default'),
             service(Connection::class),
+            service(SqlDialect::class),
         ]);
 
     $services->set(MediaExtension::class)

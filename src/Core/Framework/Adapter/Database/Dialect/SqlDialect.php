@@ -117,4 +117,13 @@ interface SqlDialect
      * `$type` is one of the JSON_BIND_* constants.
      */
     public function jsonBind(string $placeholderSql, string $type): string;
+
+    /**
+     * A string column in a form that is compared case-insensitively with `=`, `IN` and `LIKE` against placeholders bound
+     * with lower-case values (`mb_strtolower()` on the PHP side).
+     * MySQL and MariaDB: the column itself (the `utf8mb4_unicode_ci` collation does it).
+     * PostgreSQL: the columns have a nondeterministic collation, which hashes and compares per row through ICU and cannot use an index,
+     * so the expression is `lower(column) COLLATE ucs_basic`, (`ucs_basic` is written without quotes because the translator reads a double quoted token as a string literal), which can use the expression indexes of the PostgreSQL migration.
+     */
+    public function caseInsensitive(string $columnSql): string;
 }

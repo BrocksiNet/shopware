@@ -126,6 +126,11 @@ class SqliteDialect implements SqlDialect
         );
     }
 
+    public function caseInsensitive(string $columnSql): string
+    {
+        return \sprintf('lower(%s)', $columnSql);
+    }
+
     private function stringLiteral(string $value): string
     {
         return '\'' . str_replace('\'', '\'\'', $value) . '\'';

@@ -274,6 +274,7 @@ return static function (ContainerConfigurator $containerConfigurator): void {
     $services->set(KeywordLoader::class)
         ->args([
             service(Connection::class),
+            service(SqlDialect::class),
         ]);
 
     $services->set('api.request_criteria_builder', RequestCriteriaBuilder::class)

@@ -5,6 +5,7 @@ namespace Shopware\Core\Content\Seo;
 use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\SqlDialect;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\QueryBuilder;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Uuid\Uuid;
@@ -24,7 +25,8 @@ class SeoUrlPlaceholderHandler implements SeoUrlPlaceholderHandlerInterface
     public function __construct(
         private readonly RequestStack $requestStack,
         private readonly RouterInterface $router,
-        private readonly Connection $connection
+        private readonly Connection $connection,
+        private readonly SqlDialect $dialect,
     ) {
     }
 
@@ -128,11 +130,11 @@ class SeoUrlPlaceholderHandler implements SeoUrlPlaceholderHandlerInterface
 
         $query->from('seo_url');
         $query->andWhere('seo_url.is_canonical = 1');
-        $query->andWhere('seo_url.path_info IN (:pathInfo)');
+        $query->andWhere($this->dialect->caseInsensitive('seo_url.path_info') . ' IN (:pathInfo)');
         $query->andWhere('seo_url.language_id = :languageId');
         $query->andWhere('seo_url.sales_channel_id = :salesChannelId OR seo_url.sales_channel_id IS NULL');
         $query->andWhere('seo_url.is_deleted = 0');
-        $query->setParameter('pathInfo', $mapping, ArrayParameterType::STRING);
+        $query->setParameter('pathInfo', array_map(mb_strtolower(...), array_values($mapping)), ArrayParameterType::STRING);
         $query->setParameter('languageId', Uuid::fromHexToBytes($context->getLanguageId()));
         $query->setParameter('salesChannelId', Uuid::fromHexToBytes($context->getSalesChannelId()));
 

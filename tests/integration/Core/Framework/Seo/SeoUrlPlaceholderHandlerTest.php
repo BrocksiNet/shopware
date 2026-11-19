@@ -8,6 +8,7 @@ use Shopware\Core\Content\Seo\SeoUrl\SeoUrlCollection;
 use Shopware\Core\Content\Seo\SeoUrlPlaceholderHandler;
 use Shopware\Core\Content\Seo\SeoUrlPlaceholderHandlerInterface;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\SqlDialect;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\Log\Package;
@@ -46,7 +47,8 @@ class SeoUrlPlaceholderHandlerTest extends TestCase
         $this->seoUrlPlaceholderHandler = new SeoUrlPlaceholderHandler(
             static::getContainer()->get('request_stack'),
             $router,
-            static::getContainer()->get(Connection::class)
+            static::getContainer()->get(Connection::class),
+            static::getContainer()->get(SqlDialect::class)
         );
     }
 

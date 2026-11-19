@@ -7,6 +7,7 @@ use Doctrine\DBAL\Platforms\MySQLPlatform;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Shopware\Core\Content\Product\SearchKeyword\KeywordLoader;
+use Shopware\Core\Framework\Adapter\Database\Dialect\MySqlDialect;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\Log\Package;
 
@@ -38,6 +39,6 @@ class KeywordLoaderTest extends TestCase
                 return true;
             }));
 
-        (new KeywordLoader($connection))->fetch($tokenSlops, Context::createDefaultContext());
+        (new KeywordLoader($connection, new MySqlDialect()))->fetch($tokenSlops, Context::createDefaultContext());
     }
 }

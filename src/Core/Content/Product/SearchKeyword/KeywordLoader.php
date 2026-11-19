@@ -3,6 +3,7 @@
 namespace Shopware\Core\Content\Product\SearchKeyword;
 
 use Doctrine\DBAL\Connection;
+use Shopware\Core\Framework\Adapter\Database\Dialect\SqlDialect;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\QueryBuilder;
 use Shopware\Core\Framework\Log\Package;
@@ -16,6 +17,7 @@ class KeywordLoader
      */
     public function __construct(
         private readonly Connection $connection,
+        private readonly SqlDialect $dialect,
     ) {
     }
 
@@ -40,13 +42,13 @@ class KeywordLoader
             $slopsWheres = [];
             foreach ($slops['normal'] as $slop) {
                 ++$counter;
-                $slopsWheres[] = 'keyword LIKE :reg' . $counter;
-                $query->setParameter('reg' . $counter, $slop);
+                $slopsWheres[] = $this->dialect->caseInsensitive('keyword') . ' LIKE :reg' . $counter;
+                $query->setParameter('reg' . $counter, mb_strtolower($slop));
             }
             foreach ($slops['reversed'] as $slop) {
                 ++$counter;
-                $slopsWheres[] = 'reversed LIKE :reg' . $counter;
-                $query->setParameter('reg' . $counter, $slop);
+                $slopsWheres[] = $this->dialect->caseInsensitive('reversed') . ' LIKE :reg' . $counter;
+                $query->setParameter('reg' . $counter, mb_strtolower($slop));
             }
             $query->addSelect('IF (' . implode(' OR ', $slopsWheres) . ', 1, 0) as \'' . $index++ . '\'');
             $wheres = array_merge($wheres, $slopsWheres);

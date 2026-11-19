@@ -198,4 +198,9 @@ class PostgreSqlDialect implements SqlDialect
 
         return $this->primaryKeys[$table] = $columns;
     }
+
+    public function caseInsensitive(string $columnSql): string
+    {
+        return \sprintf('lower(%s) COLLATE ucs_basic', $columnSql);
+    }
 }
