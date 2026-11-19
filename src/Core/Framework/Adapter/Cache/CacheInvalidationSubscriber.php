@@ -735,7 +735,7 @@ class CacheInvalidationSubscriber
     private function getParentIds(array $ids): array
     {
         return $this->connection->fetchFirstColumn(
-            'SELECT DISTINCT LOWER(HEX(COALESCE(parent_id, id))) as id FROM product WHERE id IN (:ids) AND version_id = :version',
+            'SELECT DISTINCT ' . IdBinding::text('COALESCE(parent_id, id)') . ' as id FROM product WHERE id IN (:ids) AND version_id = :version',
             ['ids' => IdBinding::values($ids), 'version' => IdBinding::value(Defaults::LIVE_VERSION)],
             ['ids' => IdBinding::listType()]
         );
@@ -888,7 +888,7 @@ class CacheInvalidationSubscriber
         }
 
         return $this->connection->fetchFirstColumn(
-            'SELECT DISTINCT LOWER(HEX(COALESCE(product.parent_id, product.id)))
+            'SELECT DISTINCT ' . IdBinding::text('COALESCE(product.parent_id, product.id)') . '
              FROM product_cross_selling
              INNER JOIN product
                 ON product.id = product_cross_selling.product_id

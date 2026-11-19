@@ -7,6 +7,7 @@ use Doctrine\DBAL\Exception\ConnectionException;
 use Doctrine\DBAL\Exception\DriverException;
 use Shopware\Core\Defaults;
 use Shopware\Core\Framework\Adapter\Cache\CacheTagCollector;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Plugin\Exception\DecorationPatternException;
@@ -278,7 +279,7 @@ class Translator extends AbstractTranslator
         }
 
         // get snippet set by locale but in case there are more than one sets with a same locale, we should prioritize the domain's snippet set
-        $snippetSetIds = $this->connection->fetchFirstColumn('SELECT LOWER(HEX(id)) FROM snippet_set WHERE iso = :iso', ['iso' => $locale]);
+        $snippetSetIds = $this->connection->fetchFirstColumn('SELECT ' . IdBinding::text('id') . ' FROM snippet_set WHERE iso = :iso', ['iso' => $locale]);
 
         if ($snippetSetIds !== []) {
             $snippetSetId = \in_array($snippetSetId, $snippetSetIds, true) ? $snippetSetId : $snippetSetIds[0];
