@@ -2,6 +2,8 @@
 
 namespace Shopware\Tests\Integration\Core\Framework\DataAbstractionLayer\Search\Parser;
 
+use Doctrine\DBAL\Connection;
+use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Shopware\Core\Content\Product\Aggregate\ProductManufacturer\ProductManufacturerCollection;
@@ -222,6 +224,44 @@ class SqlQueryParserTest extends TestCase
 
         static::assertContains($targetId, $foundIds->getIds());
         static::assertNotContains($erroneousId, $foundIds->getIds());
+    }
+
+    public function testStringFiltersAreCaseInsensitive(): void
+    {
+        $targetId = $this->createManufacturer(['link' => 'Müller Test 42']);
+        $otherId = $this->createManufacturer(['link' => 'Other 42']);
+
+        $filters = [
+            new EqualsFilter('link', 'MÜLLER TEST 42'),
+            new EqualsAnyFilter('link', ['nothing', 'MÜLLER TEST 42']),
+            new ContainsFilter('link', 'ÜLLER TES'),
+            new PrefixFilter('link', 'MÜLLER'),
+            new SuffixFilter('link', 'TEST 42'),
+        ];
+
+        foreach ($filters as $filter) {
+            $foundIds = $this->manufacturerRepository->searchIds((new Criteria())->addFilter($filter), Context::createDefaultContext())->getIds();
+
+            static::assertContains($targetId, $foundIds, $filter::class);
+            static::assertNotContains($otherId, $foundIds, $filter::class);
+        }
+    }
+
+    /**
+     * PostgreSQL compares `lower(column)`, which is case-insensitive but accent-sensitive, the `utf8mb4_unicode_ci` collation of MySQL and MariaDB ignores accents as well.
+     */
+    public function testStringFiltersAndAccents(): void
+    {
+        $targetId = $this->createManufacturer(['link' => 'Müller Accent']);
+
+        $criteria = (new Criteria())->addFilter(new EqualsFilter('link', 'muller accent'));
+        $foundIds = $this->manufacturerRepository->searchIds($criteria, Context::createDefaultContext())->getIds();
+
+        if (static::getContainer()->get(Connection::class)->getDatabasePlatform() instanceof PostgreSQLPlatform) {
+            static::assertNotContains($targetId, $foundIds);
+        } else {
+            static::assertContains($targetId, $foundIds);
+        }
     }
 
     public function testEqualsAnyFilter(): void
