@@ -341,14 +341,20 @@ class VariantListingIndexerTest extends TestCase
 
     private function fetchListing(): Listing
     {
-        $listing = $this->connection->fetchAllAssociative(
-            'SELECT LOWER(HEX(id)) as id, option_ids
+        // one row per display group, picked in PHP: a GROUP BY with non-aggregated columns only works on MySQL and MariaDB
+        $rows = $this->connection->fetchAllAssociative(
+            'SELECT LOWER(HEX(id)) as id, option_ids, display_group
              FROM product
              WHERE product.parent_id = :parentId
-             AND display_group IS NOT NULL
-             GROUP BY display_group',
+             AND display_group IS NOT NULL',
             ['parentId' => Uuid::fromHexToBytes($this->productId)]
         );
+
+        $listing = [];
+        foreach ($rows as $row) {
+            $listing[$row['display_group']] ??= $row;
+        }
+        $listing = array_values($listing);
 
         $optionIds = array_map(static fn ($item) => json_decode((string) $item['option_ids'], true, 512, \JSON_THROW_ON_ERROR), $listing);
 

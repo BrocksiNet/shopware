@@ -4,6 +4,7 @@ namespace Shopware\Core\Framework\Adapter\Database\Dialect;
 
 use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\ParameterType;
+use Doctrine\DBAL\Platforms\AbstractPlatform;
 use Shopware\Core\Framework\Log\Package;
 
 /**
@@ -151,6 +152,11 @@ class MySqlDialect implements SqlDialect
     public function subqueryFence(): string
     {
         return '';
+    }
+
+    public function schemaDdlPlatform(AbstractPlatform $connectionPlatform): AbstractPlatform
+    {
+        return $connectionPlatform;
     }
 
     protected function convertJsonValue(string $extractSql, string $type): string

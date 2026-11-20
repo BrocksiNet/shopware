@@ -4,6 +4,7 @@ namespace Shopware\Core\Framework\Adapter\Database\Dialect;
 
 use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\ParameterType;
+use Doctrine\DBAL\Platforms\AbstractPlatform;
 use Shopware\Core\Framework\Log\Package;
 
 /**
@@ -197,4 +198,12 @@ interface SqlDialect
      * MySQL and MariaDB: null, callers keep the session variable counter (`@n`, `@c`) they have always used there.
      */
     public function rowNumberPerPartition(string $partitionSql): ?string;
+
+    /**
+     * The DBAL platform that renders schema diffs (`getAlterSchemaSQL`) to the DDL the connection executes, e.g. for custom entity tables.
+     * MySQL, MariaDB and SQLite: the connection platform.
+     * PostgreSQL: MySQL DDL, the connection translates every DDL statement from MySQL and does not read the native PostgreSQL DDL of the DBAL platform
+     * (`BYTEA` for a fixed `BINARY(16)` id column, `TIMESTAMP(0) WITHOUT TIME ZONE`).
+     */
+    public function schemaDdlPlatform(AbstractPlatform $connectionPlatform): AbstractPlatform;
 }

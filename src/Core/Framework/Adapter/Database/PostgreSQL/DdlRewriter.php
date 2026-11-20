@@ -184,6 +184,9 @@ class DdlRewriter
         $table = self::ident($m[3][0]);
         $items = self::splitTopLevel(substr($statement, $open + 1, $close - $open - 1));
         $options = substr($statement, $close + 1);
+        if (preg_match('/\bCOMMENT\s*=?\s*(\'(?:[^\'\\\\]|\\\\.|\'\')*\')/is', $options, $tc) === 1) {
+            $tableComment = $tc[1];
+        }
         $tableCollation = preg_match('/\bCOLLATE\s*=?\s*(\w+)/i', $options, $c) === 1 ? strtolower($c[1]) : 'utf8mb4_unicode_ci';
 
         $jsonColumns = [];
@@ -196,6 +199,7 @@ class DdlRewriter
         $lines = [];
         $indexes = [];
         $indexedPrefixes = [];
+        $comments = [];
         $foreignKeys = [];
         $unnamedForeignKeys = 0;
         foreach ($items as $item) {
@@ -243,6 +247,9 @@ class DdlRewriter
 
             $column = $this->parseColumn($item, $table, $jsonColumns, $tableCollation);
             $lines[] = $this->renderColumn($column);
+            if (isset($column['comment'])) {
+                $comments[] = 'COMMENT ON COLUMN ' . self::quote($table) . '.' . self::quote($column['name']) . ' IS ' . $column['comment'];
+            }
             if ($column['primary']) {
                 $indexedPrefixes[] = [$column['name']];
             }
@@ -267,6 +274,8 @@ class DdlRewriter
         return [
             'CREATE ' . trim(trim($m[1][0]) . ' TABLE ' . trim($m[2][0])) . ' ' . self::quote($table) . " (\n    " . implode(",\n    ", $lines) . "\n)",
             ...$indexes,
+            ...$comments,
+            ...(isset($tableComment) ? ['COMMENT ON TABLE ' . self::quote($table) . ' IS ' . $tableComment] : []),
         ];
     }
 
@@ -379,6 +388,9 @@ class DdlRewriter
                 foreach (self::splitTopLevel($definitions) as $definition) {
                     $column = $this->parseColumn(trim($definition), $table, [], 'utf8mb4_unicode_ci');
                     $statements[] = $alter('ADD COLUMN ' . $this->renderColumn($column));
+                    if (isset($column['comment'])) {
+                        $statements[] = 'COMMENT ON COLUMN ' . self::quote($table) . '.' . self::quote($column['name']) . ' IS ' . $column['comment'];
+                    }
                     if ($column['unique']) {
                         $statements[] = $this->createIndex($table, $column['name'], self::quote($column['name']), true);
                     }
@@ -429,7 +441,7 @@ class DdlRewriter
     /**
      * MODIFY / CHANGE replace the full definition: type, nullability and default
      *
-     * @param array{name: string, type: string, collate: ?string, notNull: ?bool, default: ?string, identity: bool, generated: ?string, primary: bool, unique: bool, textLike: bool, extra?: string} $column
+     * @param array{name: string, type: string, collate: ?string, notNull: ?bool, default: ?string, identity: bool, generated: ?string, primary: bool, unique: bool, textLike: bool, extra?: string, comment?: string} $column
      *
      * @return list<string>
      */
@@ -533,7 +545,7 @@ class DdlRewriter
     /**
      * @param array<string, bool> $jsonColumns
      *
-     * @return array{name: string, type: string, collate: ?string, notNull: ?bool, default: ?string, identity: bool, generated: ?string, primary: bool, unique: bool, textLike: bool, extra?: string}
+     * @return array{name: string, type: string, collate: ?string, notNull: ?bool, default: ?string, identity: bool, generated: ?string, primary: bool, unique: bool, textLike: bool, extra?: string, comment?: string}
      */
     private function parseColumn(string $definition, string $table, array $jsonColumns, string $tableCollation): array
     {
@@ -581,7 +593,11 @@ class DdlRewriter
                 // after the attributes, MySQL accepts it in any order
                 $unsigned = $unsigned || strtoupper($w[1]) === 'UNSIGNED';
             } elseif (preg_match('/^COMMENT\s+/i', $tail, $w) === 1) {
-                [, $end] = $this->readValue($rest, $i + \strlen($w[0]));
+                [$comment, $end] = $this->readValue($rest, $i + \strlen($w[0]));
+                if (str_starts_with($comment, '\'')) {
+                    // kept as COMMENT ON COLUMN, the DBAL schema manager reads it back (custom entities mark their columns with it)
+                    $column['comment'] = $comment;
+                }
                 $i = $end;
 
                 continue;
@@ -652,7 +668,7 @@ class DdlRewriter
     }
 
     /**
-     * @param array{name: string, type: string, collate: ?string, notNull: ?bool, default: ?string, identity: bool, generated: ?string, primary: bool, unique: bool, textLike: bool, extra?: string} $column
+     * @param array{name: string, type: string, collate: ?string, notNull: ?bool, default: ?string, identity: bool, generated: ?string, primary: bool, unique: bool, textLike: bool, extra?: string, comment?: string} $column
      */
     private function mapType(string $table, string $name, string $dataType, string $args, bool $unsigned, bool $json, array &$column): string
     {

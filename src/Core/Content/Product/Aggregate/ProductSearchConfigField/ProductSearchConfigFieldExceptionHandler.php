@@ -25,6 +25,11 @@ class ProductSearchConfigFieldExceptionHandler implements ExceptionHandlerInterf
             return new DuplicateProductSearchConfigFieldException($field, $e);
         }
 
+        // PostgreSQL: the constraint name is shortened to 63 characters with a hash, the key is listed as "Key (field, product_search_config_id)=(test, <uuid>)"
+        if (preg_match('/SQLSTATE\[23505\].*"[^"]*\.uniq\.search_config_field\.[^"]*".*Key \(field, product_search_config_id\)=\(([^,]*),/s', $e->getMessage(), $match)) {
+            return new DuplicateProductSearchConfigFieldException($match[1], $e);
+        }
+
         return null;
     }
 }

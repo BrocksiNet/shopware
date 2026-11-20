@@ -142,9 +142,11 @@ class VariantListingUpdaterTest extends TestCase
         $draftVersionId = Uuid::randomHex();
         $draftVersionBytes = Uuid::fromHexToBytes($draftVersionId);
 
+        // the selected row is the parent product, its parent_id and parent_version_id are NULL
+        // (a bare placeholder inside IF() in an INSERT ... SELECT has no type on PostgreSQL)
         $this->connection->executeStatement(
             'INSERT INTO product (id, version_id, parent_id, parent_version_id, product_number, stock, variant_listing_config, display_group)
-                SELECT id, :draftVersion, parent_id, IF(parent_id IS NULL, NULL, :draftVersion), product_number, stock, variant_listing_config, display_group
+                SELECT id, :draftVersion, parent_id, NULL, product_number, stock, variant_listing_config, display_group
                 FROM product
                 WHERE id = :parentId AND version_id = :liveVersion',
             [

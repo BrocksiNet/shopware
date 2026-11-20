@@ -5,6 +5,8 @@ namespace Shopware\Core\Framework\Adapter\Database\Dialect;
 use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\ParameterType;
+use Doctrine\DBAL\Platforms\AbstractPlatform;
+use Doctrine\DBAL\Platforms\MySQL84Platform;
 use Shopware\Core\Framework\Adapter\AdapterException;
 use Shopware\Core\Framework\Log\Package;
 
@@ -197,6 +199,11 @@ class PostgreSqlDialect implements SqlDialect
     public function subqueryFence(): string
     {
         return ' OFFSET 0';
+    }
+
+    public function schemaDdlPlatform(AbstractPlatform $connectionPlatform): AbstractPlatform
+    {
+        return new MySQL84Platform();
     }
 
     /**

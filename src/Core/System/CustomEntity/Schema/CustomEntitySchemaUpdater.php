@@ -6,6 +6,7 @@ use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Exception;
 use Doctrine\DBAL\Platforms\AbstractPlatform;
 use Doctrine\DBAL\Schema\Schema;
+use Shopware\Core\Framework\Adapter\Database\Dialect\SqlDialectFactory;
 use Shopware\Core\Framework\Log\Package;
 use Symfony\Component\Lock\LockFactory;
 
@@ -88,7 +89,7 @@ class CustomEntitySchemaUpdater
 
     private function getPlatform(): AbstractPlatform
     {
-        return $this->connection->getDatabasePlatform();
+        return SqlDialectFactory::forConnection($this->connection)->schemaDdlPlatform($this->connection->getDatabasePlatform());
     }
 
     private function cleanup(Schema $schema): void

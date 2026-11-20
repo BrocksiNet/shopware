@@ -85,7 +85,9 @@ class CheapestPriceAccessorBuilder implements FieldAccessorBuilderInterface
         $multiplier = '';
         if ($this->useCashRounding($context)) {
             $multiplier = 100 / ($context->getRounding()->getInterval() * 100);
-            $template = '(ROUND(' . $template . ' * #multiplier#, 0) / #multiplier#)';
+            $this->dialect ??= SqlDialectFactory::getDefault();
+            // the division has scale 4 on MySQL and MariaDB, PostgreSQL returns 16 digits
+            $template = $this->dialect->decimalDivisionScale('(ROUND(' . $template . ' * #multiplier#, 0) / #multiplier#)', 4);
         }
 
         $select = [];

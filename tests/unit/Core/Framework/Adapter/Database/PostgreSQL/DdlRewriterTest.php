@@ -237,6 +237,11 @@ EOSQL,
             ['CREATE INDEX "t.fk.t.p" ON "t" ("p")', 'COMMENT ON INDEX "t.fk.t.p" IS \'implicit foreign key index\''],
         ];
 
+        yield 'table and column comments are kept' => [
+            'CREATE TABLE `t` (`id` BINARY(16) NOT NULL, `n` VARCHAR(255) NULL COMMENT \'marker\', PRIMARY KEY (`id`)) ENGINE=InnoDB COMMENT=\'custom-entity-element\'',
+            ['COMMENT ON TABLE "t" IS \'custom-entity-element\'', 'COMMENT ON COLUMN "t"."n" IS \'marker\''],
+        ];
+
         yield 'json check constraint makes the column jsonb' => [
             'CREATE TABLE `t` (`id` BINARY(16) NOT NULL, `j` LONGTEXT NULL, PRIMARY KEY (`id`), CONSTRAINT `json.t.j` CHECK (JSON_VALID(`j`)))',
             ['"j" jsonb'],

@@ -5,6 +5,7 @@ namespace Shopware\Core\Framework\Adapter\Database\Sqlite;
 use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\ParameterType;
+use Doctrine\DBAL\Platforms\AbstractPlatform;
 use Shopware\Core\Framework\Adapter\AdapterException;
 use Shopware\Core\Framework\Adapter\Database\Dialect\SqlDialect;
 use Shopware\Core\Framework\Log\Package;
@@ -174,6 +175,11 @@ class SqliteDialect implements SqlDialect
     public function subqueryFence(): string
     {
         return '';
+    }
+
+    public function schemaDdlPlatform(AbstractPlatform $connectionPlatform): AbstractPlatform
+    {
+        return $connectionPlatform;
     }
 
     private function stringLiteral(string $value): string
