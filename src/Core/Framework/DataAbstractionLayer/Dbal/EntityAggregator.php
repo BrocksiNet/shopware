@@ -4,6 +4,7 @@ namespace Shopware\Core\Framework\DataAbstractionLayer\Dbal;
 
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
+use Shopware\Core\Framework\Adapter\Database\Dialect\SqlDialectFactory;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\DataAbstractionLayerException;
 use Shopware\Core\Framework\DataAbstractionLayer\DefinitionInstanceRegistry;
@@ -668,7 +669,8 @@ class EntityAggregator implements EntityAggregatorInterface
         Context $context
     ): void {
         if ($sorting->getField() !== '_count') {
-            $this->criteriaQueryBuilder->addSortings($definition, new Criteria(), [$sorting], $query, $context);
+            // bucket sorting is computed on the grouped rows, so MySQL's NULL placement costs no index and keeps the buckets in the same order on every database
+            $this->criteriaQueryBuilder->addSortings($definition, new Criteria(), [$sorting], $query, $context, SqlDialectFactory::forConnection($this->connection));
 
             return;
         }

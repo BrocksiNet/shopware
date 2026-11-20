@@ -113,6 +113,16 @@ class MySqlDialect implements SqlDialect
         return $columnSql;
     }
 
+    public function caseInsensitiveStringFilters(): bool
+    {
+        return false;
+    }
+
+    public function sortDirectionWithMySqlNulls(string $direction): string
+    {
+        return $direction;
+    }
+
     public function caseInsensitiveValue(string $value): string
     {
         return $value;

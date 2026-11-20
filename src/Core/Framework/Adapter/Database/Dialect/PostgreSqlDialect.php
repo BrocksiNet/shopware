@@ -159,6 +159,16 @@ class PostgreSqlDialect implements SqlDialect
         return \sprintf('lower(%s) COLLATE ucs_basic', $columnSql);
     }
 
+    public function caseInsensitiveStringFilters(): bool
+    {
+        return true;
+    }
+
+    public function sortDirectionWithMySqlNulls(string $direction): string
+    {
+        return mb_strtoupper($direction) === 'DESC' ? 'DESC NULLS LAST' : 'ASC NULLS FIRST';
+    }
+
     public function caseInsensitiveValue(string $value): string
     {
         return mb_strtolower($value);

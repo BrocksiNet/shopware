@@ -166,11 +166,16 @@ class SqlQueryParser
         $key = $this->getKey();
 
         $field = $this->queryHelper->getFieldAccessor($query->getField(), $definition, $root, $context);
+        $value = (string) $query->getValue();
+        if ($this->foldsStringFilter($query->getField(), $definition, $root)) {
+            $field = $this->dialect()->caseInsensitive($field);
+            $value = $this->dialect()->caseInsensitiveValue($value);
+        }
 
         $result = new ParseResult();
         $result->addWhere($field . ' LIKE :' . $key);
 
-        $escaped = addcslashes((string) $query->getValue(), '\\_%');
+        $escaped = addcslashes($value, '\\_%');
         $result->addParameter($key, '%' . $escaped . '%');
 
         return $result;
@@ -181,11 +186,16 @@ class SqlQueryParser
         $key = $this->getKey();
 
         $field = $this->queryHelper->getFieldAccessor($query->getField(), $definition, $root, $context);
+        $value = $query->getValue();
+        if ($this->foldsStringFilter($query->getField(), $definition, $root)) {
+            $field = $this->dialect()->caseInsensitive($field);
+            $value = $this->dialect()->caseInsensitiveValue($value);
+        }
 
         $result = new ParseResult();
         $result->addWhere($field . ' LIKE :' . $key);
 
-        $escaped = addcslashes($query->getValue(), '\\_%');
+        $escaped = addcslashes($value, '\\_%');
         $result->addParameter($key, $escaped . '%');
 
         return $result;
@@ -196,11 +206,16 @@ class SqlQueryParser
         $key = $this->getKey();
 
         $field = $this->queryHelper->getFieldAccessor($query->getField(), $definition, $root, $context);
+        $value = $query->getValue();
+        if ($this->foldsStringFilter($query->getField(), $definition, $root)) {
+            $field = $this->dialect()->caseInsensitive($field);
+            $value = $this->dialect()->caseInsensitiveValue($value);
+        }
 
         $result = new ParseResult();
         $result->addWhere($field . ' LIKE :' . $key);
 
-        $escaped = addcslashes($query->getValue(), '\\_%');
+        $escaped = addcslashes($value, '\\_%');
         $result->addParameter($key, '%' . $escaped);
 
         return $result;
@@ -247,7 +262,7 @@ class SqlQueryParser
             $value = array_filter(array_map(static fn (bool|float|int|string $id): string => IdBinding::value((string) $id), $value));
         }
 
-        if ($value !== [] && $this->isCustomFieldString($field, $query->getField()) && array_filter($value, \is_string(...)) === $value) {
+        if ($value !== [] && ($this->isCustomFieldString($field, $query->getField()) || $this->isFoldedStringField($field)) && array_filter($value, \is_string(...)) === $value) {
             $select = $this->dialect()->caseInsensitive($select);
             $value = array_map(fn (string $v): string => $this->dialect()->caseInsensitiveValue($v), $value);
         }
@@ -300,7 +315,7 @@ class SqlQueryParser
         }
 
         $value = $query->getValue();
-        $caseInsensitive = \is_string($value) && $this->isCustomFieldString($field, $query->getField());
+        $caseInsensitive = \is_string($value) && ($this->isCustomFieldString($field, $query->getField()) || $this->isFoldedStringField($field));
         if ($caseInsensitive) {
             $select = $this->dialect()->caseInsensitive($select);
             $value = $this->dialect()->caseInsensitiveValue($value);
@@ -340,6 +355,19 @@ class SqlQueryParser
         $mapped = $field->getPropertyMapping()[0] ?? null;
 
         return $mapped instanceof StringField || $mapped instanceof LongTextField;
+    }
+
+    /**
+     * Regular string columns, which the dialect asks to compare through `caseInsensitive()` (PostgreSQL only, the other databases already compare case-insensitive through the column collation).
+     */
+    private function isFoldedStringField(?Field $field): bool
+    {
+        return ($field instanceof StringField || $field instanceof LongTextField) && $this->dialect()->caseInsensitiveStringFilters();
+    }
+
+    private function foldsStringFilter(string $path, EntityDefinition $definition, string $root): bool
+    {
+        return $this->isFoldedStringField($this->queryHelper->getField($path, $definition, $root));
     }
 
     private function dialect(): SqlDialect

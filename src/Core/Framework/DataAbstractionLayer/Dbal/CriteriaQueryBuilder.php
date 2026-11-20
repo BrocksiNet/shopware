@@ -2,6 +2,7 @@
 
 namespace Shopware\Core\Framework\DataAbstractionLayer\Dbal;
 
+use Shopware\Core\Framework\Adapter\Database\Dialect\SqlDialect;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\DataAbstractionLayerException;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\FieldResolver\CriteriaPartResolver;
@@ -102,8 +103,9 @@ class CriteriaQueryBuilder
 
     /**
      * @param array<FieldSorting> $sortings
+     * @param SqlDialect|null $nullsLikeMySql when given, the sort directions get the NULL placement of MySQL (see `SqlDialect::sortDirectionWithMySqlNulls()`)
      */
-    public function addSortings(EntityDefinition $definition, Criteria $criteria, array $sortings, QueryBuilder $query, Context $context): void
+    public function addSortings(EntityDefinition $definition, Criteria $criteria, array $sortings, QueryBuilder $query, Context $context, ?SqlDialect $nullsLikeMySql = null): void
     {
         foreach ($sortings as $sorting) {
             $this->validateSortingDirection($sorting->getDirection());
@@ -123,6 +125,7 @@ class CriteriaQueryBuilder
             }
 
             $accessor = $this->helper->getFieldAccessor($sorting->getField(), $definition, $definition->getEntityName(), $context);
+            $direction = $nullsLikeMySql?->sortDirectionWithMySqlNulls($sorting->getDirection()) ?? $sorting->getDirection();
 
             if ($sorting instanceof CountSorting) {
                 $query->addOrderBy(\sprintf('COUNT(%s)', $accessor), $sorting->getDirection());
@@ -139,7 +142,7 @@ class CriteriaQueryBuilder
             }
 
             if (!$this->hasGroupBy($criteria, $query)) {
-                $query->addOrderBy($accessor, $sorting->getDirection());
+                $query->addOrderBy($accessor, $direction);
 
                 continue;
             }
@@ -153,7 +156,7 @@ class CriteriaQueryBuilder
             } else {
                 $accessor = 'MIN(' . $accessor . ')';
             }
-            $query->addOrderBy($accessor, $sorting->getDirection());
+            $query->addOrderBy($accessor, $direction);
         }
     }
 

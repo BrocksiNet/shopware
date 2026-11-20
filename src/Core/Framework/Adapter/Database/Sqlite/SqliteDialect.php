@@ -151,6 +151,16 @@ class SqliteDialect implements SqlDialect
         return $numberSql;
     }
 
+    public function caseInsensitiveStringFilters(): bool
+    {
+        return false;
+    }
+
+    public function sortDirectionWithMySqlNulls(string $direction): string
+    {
+        return $direction;
+    }
+
     public function caseInsensitiveValue(string $value): string
     {
         return mb_strtolower($value);

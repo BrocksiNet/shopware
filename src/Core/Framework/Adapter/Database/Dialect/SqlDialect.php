@@ -134,6 +134,23 @@ interface SqlDialect
     public function caseInsensitive(string $columnSql): string;
 
     /**
+     * Whether the string filters of the DAL (`equals`, `equalsAny`, `contains`, `prefix`, `suffix` on string columns) have to wrap the column in `caseInsensitive()`
+     * and bind `caseInsensitiveValue()` to be case-insensitive.
+     * MySQL, MariaDB: false (the column collation compares case-insensitive).
+     * SQLite: false (the `NOCASE` column collation and `LIKE` are case-insensitive for ASCII, `lower()` would not add anything and would bypass the column indexes).
+     * PostgreSQL: true, the filters are case-insensitive but accent-sensitive (`Müller` does not match `muller`), see docs/23-postgresql-api-reads.md of the research repository.
+     */
+    public function caseInsensitiveStringFilters(): bool;
+
+    /**
+     * The sort direction (`ASC` or `DESC`) with the NULL placement that MySQL, MariaDB and SQLite have (NULL is the smallest value: first for `ASC`, last for `DESC`).
+     * MySQL, MariaDB, SQLite: the direction unchanged.
+     * PostgreSQL: `ASC NULLS FIRST` / `DESC NULLS LAST`; by default NULL is the largest value there.
+     * The suffix keeps a btree index from serving the sort (it is built `ASC NULLS LAST`), use it only where the sort is not served by an index (aggregation buckets).
+     */
+    public function sortDirectionWithMySqlNulls(string $direction): string;
+
+    /**
      * A number extracted from JSON as a double, so that arithmetic on it rounds like MySQL and MariaDB do (`text + 0.0` is a DOUBLE there).
      * MySQL, MariaDB, SQLite: the expression unchanged.
      * PostgreSQL: `CAST(expr AS double precision)`; with `numeric` the product `13.016666666666666 * 1.5` stays exact (19.524999999999999) where the double product is 19.525 and rounds up.
