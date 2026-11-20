@@ -11,9 +11,13 @@ use Shopware\Core\Content\Product\ProductDefinition;
 use Shopware\Core\Content\Product\Stock\AbstractStockStorage;
 use Shopware\Core\Defaults;
 use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
+use Shopware\Core\Framework\Adapter\Database\Dialect\SqlDialect;
+use Shopware\Core\Framework\Adapter\Database\Dialect\SqlDialectFactory;
+use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\Common\IterableQuery;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\Common\IteratorFactory;
 use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\RetryableQuery;
+use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\RetryableTransaction;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Event\EntityWrittenContainerEvent;
 use Shopware\Core\Framework\DataAbstractionLayer\Indexing\ChildCountUpdater;
@@ -113,21 +117,23 @@ class ProductIndexer extends EntityIndexer
             $parentAndChildIdsToBeChunked = [];
         }
 
-        Profiler::trace('product:indexer:inheritance', function () use ($ids, $event): void {
-            $this->inheritanceUpdater->update(ProductDefinition::ENTITY_NAME, $ids, $event->getContext());
-        });
+        $this->withProductRowLocks($ids, $event->getContext(), function () use ($ids, $event, $childrenIds): void {
+            Profiler::trace('product:indexer:inheritance', function () use ($ids, $event): void {
+                $this->inheritanceUpdater->update(ProductDefinition::ENTITY_NAME, $ids, $event->getContext());
+            });
 
-        $stocks = $event->getPrimaryKeysWithPropertyChange(ProductDefinition::ENTITY_NAME, ['stock', 'isCloseout', 'minPurchase']);
+            $stocks = $event->getPrimaryKeysWithPropertyChange(ProductDefinition::ENTITY_NAME, ['stock', 'isCloseout', 'minPurchase']);
 
-        // Variants inherit `isCloseout` and `minPurchase`, so a change on the parent changes their availability as well.
-        // If none of the written products has variants, there is nothing to look up
-        $inheritedStocks = $event->getPrimaryKeysWithPropertyChange(ProductDefinition::ENTITY_NAME, ['isCloseout', 'minPurchase']);
-        if ($inheritedStocks !== [] && $childrenIds !== []) {
-            $stocks = \array_unique([...$stocks, ...$this->getInheritingChildrenIds($inheritedStocks)]);
-        }
+            // Variants inherit `isCloseout` and `minPurchase`, so a change on the parent changes their availability as well.
+            // If none of the written products has variants, there is nothing to look up
+            $inheritedStocks = $event->getPrimaryKeysWithPropertyChange(ProductDefinition::ENTITY_NAME, ['isCloseout', 'minPurchase']);
+            if ($inheritedStocks !== [] && $childrenIds !== []) {
+                $stocks = \array_unique([...$stocks, ...$this->getInheritingChildrenIds($inheritedStocks)]);
+            }
 
-        Profiler::trace('product:indexer:stock', function () use ($stocks, $event): void {
-            $this->stockStorage->index(array_values($stocks), $event->getContext());
+            Profiler::trace('product:indexer:stock', function () use ($stocks, $event): void {
+                $this->stockStorage->index(array_values($stocks), $event->getContext());
+            });
         });
 
         foreach (\array_chunk($parentAndChildIdsToBeChunked, self::UPDATE_IDS_CHUNK_SIZE) as $chunk) {
@@ -191,6 +197,39 @@ class ProductIndexer extends EntityIndexer
 
         $context = $message->getContext();
 
+        $this->withProductRowLocks($ids, $context, function () use ($message, $ids, $parentIds, $context): void {
+            $this->runUpdaters($message, $ids, $parentIds, $context);
+        });
+
+        Profiler::trace('product:indexer:event', function () use ($ids, $context, $message): void {
+            $this->eventDispatcher->dispatch(new ProductIndexerEvent($ids, $context, $message->getSkip()));
+        });
+
+        $this->eventDispatcher->dispatch(new InvalidateProductCache($ids, false));
+    }
+
+    public function getOptions(): array
+    {
+        return [
+            self::INHERITANCE_UPDATER,
+            self::STOCK_UPDATER,
+            self::VARIANT_LISTING_UPDATER,
+            self::CHILD_COUNT_UPDATER,
+            self::MANY_TO_MANY_ID_FIELD_UPDATER,
+            self::CATEGORY_DENORMALIZER_UPDATER,
+            self::CHEAPEST_PRICE_UPDATER,
+            self::RATING_AVERAGE_UPDATER,
+            self::STREAM_UPDATER,
+            self::SEARCH_KEYWORD_UPDATER,
+        ];
+    }
+
+    /**
+     * @param list<string> $ids
+     * @param array<string> $parentIds
+     */
+    private function runUpdaters(EntityIndexingMessage $message, array $ids, array $parentIds, Context $context): void
+    {
         if ($message->allow(self::INHERITANCE_UPDATER)) {
             Profiler::trace('product:indexer:inheritance', function () use ($ids, $context): void {
                 $this->inheritanceUpdater->update(ProductDefinition::ENTITY_NAME, $ids, $context);
@@ -266,28 +305,38 @@ class ProductIndexer extends EntityIndexer
                 ['ids' => IdBinding::listType()]
             );
         });
-
-        Profiler::trace('product:indexer:event', function () use ($ids, $context, $message): void {
-            $this->eventDispatcher->dispatch(new ProductIndexerEvent($ids, $context, $message->getSkip()));
-        });
-
-        $this->eventDispatcher->dispatch(new InvalidateProductCache($ids, false));
     }
 
-    public function getOptions(): array
+    /**
+     * On PostgreSQL the many bulk statements of the updaters lock rows in the order of their query plans, so two
+     * indexers that share a product row deadlock and every deadlock costs `deadlock_timeout`.
+     * Locks the given products, their children and their parents once in primary key order before the first
+     * statement runs, so parallel indexers queue on the first shared row instead.
+     * Other databases run the closure as it is.
+     *
+     * @param array<string> $ids
+     */
+    private function withProductRowLocks(array $ids, Context $context, \Closure $closure): void
     {
-        return [
-            self::INHERITANCE_UPDATER,
-            self::STOCK_UPDATER,
-            self::VARIANT_LISTING_UPDATER,
-            self::CHILD_COUNT_UPDATER,
-            self::MANY_TO_MANY_ID_FIELD_UPDATER,
-            self::CATEGORY_DENORMALIZER_UPDATER,
-            self::CHEAPEST_PRICE_UPDATER,
-            self::RATING_AVERAGE_UPDATER,
-            self::STREAM_UPDATER,
-            self::SEARCH_KEYWORD_UPDATER,
-        ];
+        if (SqlDialectFactory::forConnection($this->connection)->getName() !== SqlDialect::POSTGRESQL) {
+            $closure();
+
+            return;
+        }
+
+        RetryableTransaction::retryable($this->connection, function () use ($ids, $context, $closure): void {
+            $this->connection->executeStatement(
+                'SELECT id FROM product WHERE version_id = :version AND id IN (
+                    SELECT id FROM product WHERE id IN (:ids)
+                    UNION SELECT id FROM product WHERE parent_id IN (:ids)
+                    UNION SELECT parent_id FROM product WHERE id IN (:ids)
+                ) ORDER BY id FOR UPDATE',
+                ['ids' => IdBinding::values($ids), 'version' => IdBinding::value($context->getVersionId())],
+                ['ids' => IdBinding::listType()]
+            );
+
+            $closure();
+        });
     }
 
     /**

@@ -3,6 +3,8 @@
 namespace Shopware\Tests\Unit\Core\Content\Product\DataAbstractionLayer;
 
 use Doctrine\DBAL\Connection;
+use Doctrine\DBAL\Platforms\MariaDBPlatform;
+use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
@@ -118,6 +120,45 @@ class ProductIndexerTest extends TestCase
         $stockStorage->expects($this->once())->method('index')->with([$parentId], $context);
 
         $this->createIndexer($connection, $stockStorage)->update($this->writtenEvent($context, $parentId, ['stock' => 0]));
+    }
+
+    public function testUpdateLocksTheProductRowsInIdOrderOnPostgreSql(): void
+    {
+        $productId = Uuid::randomHex();
+
+        $connection = static::createStub(Connection::class);
+        $connection->method('getDatabasePlatform')->willReturn(new PostgreSQLPlatform());
+        $connection->method('fetchFirstColumn')->willReturn([]);
+        $connection->method('transactional')->willReturnCallback(static fn (\Closure $closure): mixed => $closure());
+
+        $statements = [];
+        $connection->method('executeStatement')->willReturnCallback(static function (string $sql) use (&$statements): int {
+            $statements[] = $sql;
+
+            return 0;
+        });
+
+        $stockStorage = static::createMock(AbstractStockStorage::class);
+        $stockStorage->expects($this->once())->method('index');
+
+        $this->createIndexer($connection, $stockStorage)->update($this->writtenEvent(Context::createDefaultContext(), $productId));
+
+        $lock = array_values(array_filter($statements, static fn (string $sql): bool => str_contains($sql, 'FOR UPDATE')));
+        static::assertCount(1, $lock);
+        static::assertStringContainsString('ORDER BY id FOR UPDATE', $lock[0]);
+    }
+
+    public function testUpdateTakesNoRowLocksOnMySql(): void
+    {
+        $connection = $this->createMock(Connection::class);
+        $connection->method('getDatabasePlatform')->willReturn(new MariaDBPlatform());
+        $connection->method('fetchFirstColumn')->willReturn([]);
+        $connection->expects($this->never())->method('transactional');
+
+        $stockStorage = static::createMock(AbstractStockStorage::class);
+        $stockStorage->expects($this->once())->method('index');
+
+        $this->createIndexer($connection, $stockStorage)->update($this->writtenEvent(Context::createDefaultContext(), Uuid::randomHex()));
     }
 
     private function createIndexer(Connection $connection, AbstractStockStorage $stockStorage): ProductIndexer
