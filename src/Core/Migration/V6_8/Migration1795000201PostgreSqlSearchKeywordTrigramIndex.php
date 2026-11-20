@@ -18,11 +18,11 @@ use Shopware\Core\Framework\Migration\MigrationStep;
  * @internal
  */
 #[Package('framework')]
-class Migration1795000200PostgreSqlSearchKeywordTrigramIndex extends MigrationStep
+class Migration1795000201PostgreSqlSearchKeywordTrigramIndex extends MigrationStep
 {
     public function getCreationTimestamp(): int
     {
-        return 1795000200;
+        return 1795000201;
     }
 
     public function update(Connection $connection): void
