@@ -11,6 +11,7 @@ use Shopware\Core\Content\Product\ProductCollection;
 use Shopware\Core\Content\Product\ProductEntity;
 use Shopware\Core\Content\Product\SearchKeyword\ProductSearchKeywordAnalyzerInterface;
 use Shopware\Core\Defaults;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Api\Context\SystemSource;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\Common\RepositoryIterator;
@@ -68,6 +69,11 @@ class SearchKeywordUpdater implements ResetInterface
             return;
         }
 
+        if ($ids === []) {
+            return;
+        }
+
+        $ids = $this->filterProductsOfVersion($ids, $context->getVersionId());
         if ($ids === []) {
             return;
         }
@@ -178,6 +184,30 @@ class SearchKeywordUpdater implements ResetInterface
         $this->buildCriteria(array_column($configFields, 'field'), $criteria, $context);
 
         return new RepositoryIterator($this->productRepository, $context, $criteria);
+    }
+
+    /**
+     * Reading in a version context falls back to the live product, so a product that has no row in the version
+     * (a version that was just deleted, or never cloned the product) would be indexed for a version it is not in.
+     * MySQL drops those keyword rows silently with `INSERT IGNORE`, PostgreSQL raises the foreign key error.
+     *
+     * @param array<string> $ids
+     *
+     * @return array<string>
+     */
+    private function filterProductsOfVersion(array $ids, string $versionId): array
+    {
+        if ($versionId === Defaults::LIVE_VERSION) {
+            return $ids;
+        }
+
+        $existing = $this->connection->fetchFirstColumn(
+            'SELECT ' . IdBinding::selectText('id') . ' FROM product WHERE id IN (:ids) AND version_id = :version',
+            ['ids' => IdBinding::values($ids), 'version' => IdBinding::value($versionId)],
+            ['ids' => IdBinding::listType()]
+        );
+
+        return array_values(array_intersect($ids, $existing));
     }
 
     /**
