@@ -154,6 +154,10 @@ class TestBootstrapper
 
         $dbUrlParts = parse_url($_SERVER['DATABASE_URL'] ?? '') ?: [];
 
+        if (str_starts_with($_SERVER['DATABASE_URL'] ?? '', 'sqlite:')) {
+            return $this->databaseUrl = $this->getSqliteDatabaseUrl((string) $_SERVER['DATABASE_URL']);
+        }
+
         $dbUrlParts['path'] ??= 'root';
         if (!str_ends_with($dbUrlParts['path'], '_test')) {
             $dbUrlParts['path'] .= '_test';
@@ -315,6 +319,25 @@ class TestBootstrapper
         }
 
         return $this->getPluginPathFromFilesystem($pluginName);
+    }
+
+    /**
+     * A file database: the test database is the file with `_test` before the extension,
+     * `sqlite:////var/www/html/var/shopware.sqlite` becomes `sqlite:////var/www/html/var/shopware_test.sqlite`.
+     */
+    private function getSqliteDatabaseUrl(string $url): string
+    {
+        $query = '';
+        if (($pos = strpos($url, '?')) !== false) {
+            $query = substr($url, $pos);
+            $url = substr($url, 0, $pos);
+        }
+
+        if (!preg_match('/^(sqlite:\/\/\/.*?)([^\/]*?)(\.[^.\/]+)?$/', $url, $m) || $m[2] === '' || str_ends_with($m[2], '_test')) {
+            return $url . $query;
+        }
+
+        return $m[1] . $m[2] . '_test' . $m[3] . $query;
     }
 
     private function getPluginPathFromKernelPluginLoader(string $pluginName): ?string
