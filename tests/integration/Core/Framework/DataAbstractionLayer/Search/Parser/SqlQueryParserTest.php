@@ -4,6 +4,7 @@ namespace Shopware\Tests\Integration\Core\Framework\DataAbstractionLayer\Search\
 
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
+use Doctrine\DBAL\Platforms\SQLitePlatform;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Shopware\Core\Content\Product\Aggregate\ProductManufacturer\ProductManufacturerCollection;
@@ -248,7 +249,7 @@ class SqlQueryParserTest extends TestCase
     }
 
     /**
-     * PostgreSQL compares `lower(column)`, which is case-insensitive but accent-sensitive, the `utf8mb4_unicode_ci` collation of MySQL and MariaDB ignores accents as well.
+     * PostgreSQL and SQLite compare `lower(column)`, which is case-insensitive but accent-sensitive, the `utf8mb4_unicode_ci` collation of MySQL and MariaDB ignores accents as well.
      */
     public function testStringFiltersAndAccents(): void
     {
@@ -257,7 +258,9 @@ class SqlQueryParserTest extends TestCase
         $criteria = (new Criteria())->addFilter(new EqualsFilter('link', 'muller accent'));
         $foundIds = $this->manufacturerRepository->searchIds($criteria, Context::createDefaultContext())->getIds();
 
-        if (static::getContainer()->get(Connection::class)->getDatabasePlatform() instanceof PostgreSQLPlatform) {
+        $platform = static::getContainer()->get(Connection::class)->getDatabasePlatform();
+
+        if ($platform instanceof PostgreSQLPlatform || $platform instanceof SQLitePlatform) {
             static::assertNotContains($targetId, $foundIds);
         } else {
             static::assertContains($targetId, $foundIds);

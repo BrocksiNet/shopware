@@ -88,9 +88,13 @@ class SqliteDialect implements SqlDialect
     {
         $text = $this->jsonExtractText($jsonColumnSql, $path);
 
+        // `->>` gives the INTEGER 0 / 1 for a JSON boolean, which is not equal to the text '0'
         return match ($type) {
             self::JSON_TYPE_FLOAT => \sprintf('CAST(%s AS REAL)', $text),
-            self::JSON_TYPE_BOOL => \sprintf('(CASE WHEN %s IS NULL THEN NULL WHEN %s IN (\'false\', \'0\') THEN 0 ELSE 1 END)', $text, $text),
+            self::JSON_TYPE_BOOL => \sprintf('(CASE WHEN %s IS NULL THEN NULL WHEN %s IN (0, \'false\', \'0\') THEN 0 ELSE 1 END)', $text, $text),
+            // strftime reads the ISO 8601 text the DAL stores (`1990-01-01T00:00:00.000+00:00`) and gives the MySQL format with milliseconds
+            self::JSON_TYPE_DATETIME => \sprintf('strftime(\'%%Y-%%m-%%d %%H:%%M:%%f\', %s)', $text),
+            self::JSON_TYPE_DATE => \sprintf('date(%s)', $text),
             default => $text,
         };
     }
@@ -100,7 +104,8 @@ class SqliteDialect implements SqlDialect
         return match ($type) {
             self::JSON_BIND_INT => \sprintf('CAST(%s AS INTEGER)', $placeholderSql),
             self::JSON_BIND_FLOAT => \sprintf('CAST(%s AS REAL)', $placeholderSql),
-            self::JSON_BIND_BOOL => \sprintf('json(%s)', $placeholderSql),
+            // json(1) is the number 1, a JSON boolean needs the text true / false
+            self::JSON_BIND_BOOL => \sprintf('json(CASE WHEN %s THEN \'true\' ELSE \'false\' END)', $placeholderSql),
             self::JSON_BIND_OBJECT, self::JSON_BIND_ARRAY => \sprintf('json(%s)', $placeholderSql),
             default => $placeholderSql,
         };
@@ -149,12 +154,14 @@ class SqliteDialect implements SqlDialect
 
     public function castToFloat(string $numberSql): string
     {
-        return $numberSql;
+        // pdo_sqlite binds a PHP float as TEXT and a number is never >= a TEXT, the cast makes a placeholder a number
+        return \sprintf('CAST(%s AS REAL)', $numberSql);
     }
 
     public function caseInsensitiveStringFilters(): bool
     {
-        return false;
+        // `=` and `LIKE` of SQLite are case-sensitive (LIKE for ASCII only), the filters fold the column through lower() like on PostgreSQL
+        return true;
     }
 
     public function sortDirectionWithMySqlNulls(string $direction): string

@@ -55,6 +55,11 @@ class SqliteFunctions
 
             return json_decode($v, true) ?? $v;
         }, 1);
+        // round(20.055, 2) is 20.05 in SQLite (binary float) and 20.06 on MySQL (decimal), PHP pre-rounds like the decimal
+        $create('ROUND', static fn (mixed $n) => $n === null ? null : round((float) $n), 1);
+        $create('ROUND', static fn (mixed $n, mixed $d) => $n === null || $d === null ? null : round((float) $n, (int) $d), 2);
+        // the built-in lower() folds ASCII only, the DAL string filters compare lower(column) with a multibyte lowered value
+        $create('LOWER', static fn (?string $s) => $s === null ? null : mb_strtolower($s), 1);
         $create('CHAR_LENGTH', static fn (?string $s) => $s === null ? null : mb_strlen($s), 1);
         $create('CHARACTER_LENGTH', static fn (?string $s) => $s === null ? null : mb_strlen($s), 1);
         $create('REVERSE', static fn (?string $s) => $s === null ? null : implode('', array_reverse(mb_str_split($s))), 1);
@@ -92,6 +97,17 @@ class SqliteFunctions
             $t = json_decode($target, true);
             $c = json_decode($candidate, true);
             if (\is_array($t) && array_is_list($t)) {
+                // an array candidate is contained when every element of it is (MySQL: JSON_CONTAINS('["a","b"]', '["a"]') is 1)
+                if (\is_array($c) && array_is_list($c)) {
+                    foreach ($c as $element) {
+                        if (!\in_array($element, $t, false)) {
+                            return 0;
+                        }
+                    }
+
+                    return 1;
+                }
+
                 return (int) \in_array($c, $t, false);
             }
 
@@ -138,6 +154,7 @@ class SqliteFunctions
             return $n >= 0 ? implode($d, \array_slice($parts, 0, $n)) : implode($d, \array_slice($parts, $n));
         }, 3);
         $create('DATE_FORMAT', static fn (?string $d, string $f) => $d === null ? null : self::dateFormat($d, $f), 2);
+        $create('QUARTER', static fn (?string $d) => $d === null ? null : (int) ceil((int) (new \DateTimeImmutable($d, new \DateTimeZone('UTC')))->format('n') / 3), 1);
         $create('MD5', static fn (?string $s) => $s === null ? null : md5($s), 1);
         $create('SHA2', static fn (?string $s, int $bits) => $s === null ? null : hash('sha' . $bits, $s), 2);
         $create('RAND', static fn () => mt_rand() / mt_getrandmax(), 0);
@@ -145,7 +162,7 @@ class SqliteFunctions
 
     private static function dateFormat(string $date, string $format): string
     {
-        $map = ['%Y' => 'Y', '%m' => 'm', '%d' => 'd', '%H' => 'H', '%i' => 'i', '%s' => 's', '%y' => 'y', '%e' => 'j', '%c' => 'n', '%M' => 'F', '%b' => 'M', '%W' => 'l', '%a' => 'D', '%j' => 'z', '%T' => 'H:i:s', '%%' => '%'];
+        $map = ['%Y' => 'Y', '%m' => 'm', '%d' => 'd', '%H' => 'H', '%i' => 'i', '%s' => 's', '%y' => 'y', '%e' => 'j', '%v' => 'W', '%x' => 'o', '%c' => 'n', '%M' => 'F', '%b' => 'M', '%W' => 'l', '%a' => 'D', '%j' => 'z', '%T' => 'H:i:s', '%%' => '%'];
 
         return (new \DateTimeImmutable($date, new \DateTimeZone('UTC')))->format(strtr($format, $map));
     }

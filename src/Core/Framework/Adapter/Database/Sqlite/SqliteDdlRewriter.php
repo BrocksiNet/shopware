@@ -53,6 +53,12 @@ class SqliteDdlRewriter
      */
     private function rewriteStatement(string $sql): array
     {
+        if (preg_match('/^SET\s+(?:SESSION\s+)?(?:@@(?:SESSION\.)?)?foreign_key_checks\s*=\s*(0|1|ON|OFF)\s*;?$/i', $sql, $m)) {
+            // `PRAGMA foreign_keys` is ignored inside a transaction, where the check is deferred to the commit instead (a rollback skips it)
+            return \in_array(strtoupper($m[1]), ['0', 'OFF'], true)
+                ? ['PRAGMA foreign_keys = OFF', 'PRAGMA defer_foreign_keys = ON']
+                : ['PRAGMA defer_foreign_keys = OFF', 'PRAGMA foreign_keys = ON'];
+        }
         if (preg_match('/^SET\s+(?:SESSION\s+|GLOBAL\s+)?(?:default_storage_engine|foreign_key_checks|unique_checks|sql_mode|sql_notes|group_concat_max_len|innodb_\w+)\b/i', $sql)) {
             return ['SELECT 1'];
         }
@@ -61,6 +67,14 @@ class SqliteDdlRewriter
         }
         if (preg_match('/^ALTER\s+TABLE\s+(`?\w+`?)\s+(.*)$/is', $sql, $m)) {
             return $this->alterTable($m[1], $m[2]);
+        }
+        if (preg_match('/^DROP\s+TABLE\s+(IF\s+EXISTS\s+)?(.+,.+)$/is', $sql, $m)) {
+            // MySQL drops several tables with one statement
+            return array_map(static fn (string $t): string => 'DROP TABLE ' . $m[1] . trim($t), DdlRewriter::splitTopLevel($m[2]));
+        }
+        if (preg_match('/^DROP\s+TRIGGER\s+(?!IF\b)/i', $sql)) {
+            // the version and rounding triggers of the MySQL migrations do not exist in SQLite
+            return [(string) preg_replace('/^DROP\s+TRIGGER\s+/i', 'DROP TRIGGER IF EXISTS ', $sql)];
         }
         if (preg_match('/^DROP\s+INDEX\s+`?([\w.]+)`?\s+ON\s+`?(\w+)`?$/i', $sql, $m)) {
             // MySQL creates an index for every foreign key, SQLite does not: the index may not exist
@@ -130,7 +144,11 @@ class SqliteDdlRewriter
     private function column(string $line): string
     {
         $line = (string) preg_replace('/\s+(?:UNSIGNED|ZEROFILL)\b/i', '', $line);
+        // MySQL allows a name for the primary key: `PRIMARY KEY `id` (`id`)`
+        $line = (string) preg_replace('/^PRIMARY\s+KEY\s+`?\w+`?\s*\(/i', 'PRIMARY KEY (', $line);
+        $line = (string) preg_replace('/^FOREIGN\s+KEY\s+`([^`]+)`\s*\(/i', 'CONSTRAINT `$1` FOREIGN KEY (', $line);
         $line = (string) preg_replace('/\s+AUTO_INCREMENT\b/i', '', $line);
+        $line = (string) preg_replace('/\bENUM\s*\((?:[^\')]|\'(?:[^\']|\'\')*\')*\)/i', 'VARCHAR(255)', $line);
         $line = (string) preg_replace('/\s+ON\s+UPDATE\s+CURRENT_TIMESTAMP(?:\(\d*\))?/i', '', $line);
         $line = (string) preg_replace('/\\s+COMMENT\\s+\'(?:[^\']|\'\')*\'/i', '', $line);
         $line = (string) preg_replace('/\s+(?:CHARACTER\s+SET|CHARSET)\s+\w+/i', '', $line);

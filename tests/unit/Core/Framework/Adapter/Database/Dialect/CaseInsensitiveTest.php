@@ -38,11 +38,11 @@ class CaseInsensitiveTest extends TestCase
         static::assertSame('äpfel abc', (new SqliteDialect())->caseInsensitiveValue('Äpfel ABC'));
     }
 
-    public function testOnlyPostgreSqlFoldsStringFilters(): void
+    public function testPostgreSqlAndSqliteFoldStringFilters(): void
     {
         static::assertFalse((new MySqlDialect())->caseInsensitiveStringFilters());
         static::assertTrue((new PostgreSqlDialect())->caseInsensitiveStringFilters());
-        static::assertFalse((new SqliteDialect())->caseInsensitiveStringFilters());
+        static::assertTrue((new SqliteDialect())->caseInsensitiveStringFilters());
     }
 
     public function testSortDirectionWithMySqlNulls(): void
@@ -64,6 +64,6 @@ class CaseInsensitiveTest extends TestCase
     {
         static::assertSame('x', (new MySqlDialect())->castToFloat('x'));
         static::assertSame('CAST(x AS double precision)', (new PostgreSqlDialect())->castToFloat('x'));
-        static::assertSame('x', (new SqliteDialect())->castToFloat('x'));
+        static::assertSame('CAST(x AS REAL)', (new SqliteDialect())->castToFloat('x'));
     }
 }

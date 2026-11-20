@@ -45,7 +45,7 @@ class SqlTranslationMiddleware implements Middleware
                         }
                         if (\count($statements) === 1 && \is_string($statements[0])) {
                             try {
-                                return new TextBindingStatement(parent::prepare($statements[0]));
+                                return new TextBindingStatement(parent::prepare($statements[0]), $statements[0], fn (string $q): Statement => parent::prepare($q));
                             } catch (\Throwable $e) {
                                 if (\is_string($log = getenv('SQLITE_FAIL_LOG'))) {
                                     file_put_contents($log, $e->getMessage() . ' | ' . $statements[0] . "\n", \FILE_APPEND);
@@ -111,13 +111,23 @@ class SqlTranslationMiddleware implements Middleware
                             return [$this->unescapeLiterals($this->dml($sql))];
                         }
 
-                        return array_map(fn (string|\Closure $s) => \is_string($s) ? $this->unescapeLiterals((string) preg_replace('/(?<![\w`"\'])0x([0-9a-fA-F]{2,})(?![\w])/', 'X\'$1\'', $s)) : $s, $this->ddl->rewrite($sql) ?: ['SELECT 1']);
+                        return array_map(fn (string|\Closure $s) => \is_string($s) ? $this->unescapeLiterals((string) self::hexLiterals($s)) : $s, $this->ddl->rewrite($sql) ?: ['SELECT 1']);
                     }
 
                     /**
                      * MySQL reads backslash escapes inside string literals (`'[\"a\"]'`, `'it\'s'`), SQLite does not.
                      * `\_` and `\%` stay: they are LIKE escapes.
                      */
+                    /**
+                     * MySQL reads 0x0fa9... as binary, SQLite as an integer; ids are TEXT of the raw bytes here (see TextBindingStatement), so the literal becomes the same text
+                     */
+                    private static function hexLiterals(string $sql): string
+                    {
+                        $sql = (string) preg_replace('/\bDEFAULT\s+0x([0-9a-fA-F]{2,})(?![\w])/i', 'DEFAULT (CAST(X\'$1\' AS TEXT))', $sql);
+
+                        return (string) preg_replace('/(?<![\w`"\'])0x([0-9a-fA-F]{2,})(?![\w])/', 'CAST(X\'$1\' AS TEXT)', $sql);
+                    }
+
                     private function unescapeLiterals(string $sql): string
                     {
                         if (!str_contains($sql, '\\')) {
@@ -207,6 +217,10 @@ class SqlTranslationMiddleware implements Middleware
                         if (preg_match('/^\s*TRUNCATE\s+(?:TABLE\s+)?`?(\w+)`?\s*;?\s*$/i', $sql, $m)) {
                             return 'DELETE FROM `' . $m[1] . '`';
                         }
+                        if (stripos($sql, 'LIKE') !== false) {
+                            // MySQL (and PostgreSQL) take the backslash as escape character of a LIKE pattern, SQLite has none unless asked
+                            $sql = (string) preg_replace('/\bLIKE\s+(\?|:\w+)(?!\s*ESCAPE\b)/i', 'LIKE $1 ESCAPE char(92)', $sql);
+                        }
                         if (preg_match('/^\s*(?:SAVEPOINT|RELEASE|ROLLBACK|BEGIN|COMMIT|SELECT|PRAGMA|WITH)\b/i', $sql) && !preg_match('/0x[0-9a-f]{2}/i', $sql)) {
                             return $sql;
                         }
@@ -214,7 +228,7 @@ class SqlTranslationMiddleware implements Middleware
                         $sql = (string) preg_replace('/^(\s*INSERT\s+(?:IGNORE\s+)?INTO\s+`?\w+`?(?:\s*\([^()]*\))?)\s*\(\s*(SELECT\b.*)\)\s*$/is', '$1 $2', $sql);
 
                         // 0x0fa9... is an integer literal in SQLite, MySQL treats it as binary
-                        $sql = (string) preg_replace('/(?<![\w`"\'])0x([0-9a-fA-F]{2,})(?![\w])/', 'X\'$1\'', $sql);
+                        $sql = self::hexLiterals($sql);
 
                         if (!preg_match('/^\s*(?:UPDATE|DELETE|INSERT|REPLACE)\b/i', $sql)) {
                             return $sql;
@@ -242,7 +256,7 @@ class SqlTranslationMiddleware implements Middleware
                         }
                         if (stripos($sql, 'DELETE') !== false) {
                             $sql = $this->deleteJoin($sql);
-                            $sql = DeleteRewriter::rewrite($sql);
+                            $sql = (string) preg_replace('/\bctid\b/', 'rowid', DeleteRewriter::rewrite($sql));
                         }
                         if ((stripos($sql, 'INSERT') !== false || stripos($sql, 'REPLACE') !== false) && stripos($sql, ' SET') !== false) {
                             $sql = InsertSetRewriter::rewrite($sql);

@@ -82,6 +82,8 @@ class SqliteDialectTest extends TestCase
         static::assertSame('CAST((c ->> \'$.a\') AS REAL)', $dialect->jsonValue('c', '$.a', SqlDialect::JSON_TYPE_FLOAT));
         static::assertSame('(c ->> \'$.a\')', $dialect->jsonValue('c', '$.a'));
         static::assertSame('CAST(? AS INTEGER)', $dialect->jsonBind('?', SqlDialect::JSON_BIND_INT));
+        static::assertSame('json(CASE WHEN ? THEN \'true\' ELSE \'false\' END)', $dialect->jsonBind('?', SqlDialect::JSON_BIND_BOOL));
+        static::assertSame('date((c ->> \'$.a\'))', $dialect->jsonValue('c', '$.a', SqlDialect::JSON_TYPE_DATE));
         static::assertSame('json(?)', $dialect->jsonBind('?', SqlDialect::JSON_BIND_OBJECT));
         static::assertSame('json_set(COALESCE(c, \'{}\'), \'$.a\', ?)', $dialect->jsonSet('c', '$.a', '?'));
     }
@@ -100,9 +102,9 @@ class SqliteDialectTest extends TestCase
         $dialect = new SqliteDialect();
 
         static::assertSame('group_concat(x, \',\' ORDER BY y)', $dialect->groupConcat('x', ',', 'y'));
-        static::assertFalse($dialect->caseInsensitiveStringFilters());
+        static::assertTrue($dialect->caseInsensitiveStringFilters());
         static::assertSame('DESC', $dialect->sortDirectionWithMySqlNulls('DESC'));
-        static::assertSame('x', $dialect->castToFloat('x'));
+        static::assertSame('CAST(x AS REAL)', $dialect->castToFloat('x'));
         static::assertSame('x', $dialect->decimalDivisionScale('x', 4));
         static::assertSame([], $dialect->upsertCollisionColumns('t', ['id']));
         static::assertSame('müller', $dialect->caseInsensitiveValue('MÜLLER'));

@@ -122,7 +122,8 @@ class LockValidator implements EventSubscriberInterface
                 ->where(EntityDefinitionQueryHelper::escape('id') . ' IN (:ids) AND ' . EntityDefinitionQueryHelper::escape('locked') . ' = 1')
                 ->setParameter('ids', $primaryKeys, IdBinding::listType())
                 ->executeQuery()
-                ->rowCount() > 0;
+                // rowCount() of a SELECT is not defined for PDO: SQLite returns the count of the last write
+                ->fetchOne() !== false;
         }
 
         return array_filter($locked);

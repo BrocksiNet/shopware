@@ -41,7 +41,7 @@ class SqlDialectFactory
 
     /**
      * For the static call sites without a service (`EntityDefinitionQueryHelper::escape()`), selected by `DATABASE_URL`.
-     * Only for identifier quoting: the PostgreSQL instance has no connection.
+     * Only for identifier quoting and expressions that need no connection: the PostgreSQL and SQLite instances have none.
      */
     public static function getDefault(): SqlDialect
     {
@@ -49,9 +49,11 @@ class SqlDialectFactory
             return self::$default;
         }
 
-        return self::$default = ConnectionFactory::getDriver() === ConnectionFactory::DRIVER_POSTGRESQL
-            ? new PostgreSqlDialect()
-            : new MySqlDialect();
+        return self::$default = match (ConnectionFactory::getDriver()) {
+            ConnectionFactory::DRIVER_POSTGRESQL => new PostgreSqlDialect(),
+            ConnectionFactory::DRIVER_SQLITE => new SqliteDialect(),
+            default => new MySqlDialect(),
+        };
     }
 
     public static function resetDefault(): void
