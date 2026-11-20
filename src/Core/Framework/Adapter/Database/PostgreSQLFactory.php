@@ -10,6 +10,7 @@ use Doctrine\DBAL\Tools\DsnParser;
 use Shopware\Core\DevOps\Environment\EnvironmentHelper;
 use Shopware\Core\Framework\Adapter\Database\PostgreSQL\ExceptionConverterMiddleware;
 use Shopware\Core\Framework\Adapter\Database\PostgreSQL\IdCodecMiddleware;
+use Shopware\Core\Framework\Adapter\Database\PostgreSQL\PlanCacheMiddleware;
 use Shopware\Core\Framework\Adapter\Database\PostgreSQL\SessionMiddleware;
 use Shopware\Core\Framework\Adapter\Database\PostgreSQL\SqlTranslationMiddleware;
 use Shopware\Core\Framework\Adapter\Database\PostgreSQL\TimingMiddleware;
@@ -35,8 +36,13 @@ class PostgreSQLFactory
         $timing = (string) EnvironmentHelper::getVariable('SHOPWARE_PG_TIMING', getenv('SHOPWARE_PG_TIMING'));
         $probe = static fn (string $label): array => $timing === '' ? [] : [new TimingMiddleware($label, $timing)];
 
+        // Plan cache (docs/22): prepared statements live as long as the backend, so it needs a persistent connection
+        $planCache = EnvironmentHelper::getVariable('DATABASE_PERSISTENT_CONNECTION') && EnvironmentHelper::getVariable('DATABASE_PLAN_CACHE')
+            ? [new PlanCacheMiddleware()]
+            : [];
+
         $config = (new Configuration())
-            ->setMiddlewares([new SessionMiddleware(), ...$probe('driver'), new SqlTranslationMiddleware(), ...$probe('translated'), new IdCodecMiddleware(), ...$probe('codec'), new ExceptionConverterMiddleware(), ...$middlewares]);
+            ->setMiddlewares([...$planCache, new SessionMiddleware(), ...$probe('driver'), new SqlTranslationMiddleware(), ...$probe('translated'), new IdCodecMiddleware(), ...$probe('codec'), new ExceptionConverterMiddleware(), ...$middlewares]);
 
         return DriverManager::getConnection(self::getConnectionParameters(), $config);
     }
