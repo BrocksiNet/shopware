@@ -113,6 +113,26 @@ class MySqlDialect implements SqlDialect
         return $columnSql;
     }
 
+    public function caseInsensitiveValue(string $value): string
+    {
+        return $value;
+    }
+
+    public function decimalDivisionScale(string $expressionSql, int $scale): string
+    {
+        return $expressionSql;
+    }
+
+    public function upsertCollisionColumns(string $table, array $conflictColumns): array
+    {
+        return [];
+    }
+
+    public function castToFloat(string $numberSql): string
+    {
+        return $numberSql;
+    }
+
     public function rowNumberPerPartition(string $partitionSql): ?string
     {
         return null;

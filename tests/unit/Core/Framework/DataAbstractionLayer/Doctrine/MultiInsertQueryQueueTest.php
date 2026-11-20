@@ -289,6 +289,36 @@ class MultiInsertQueryQueueTest extends TestCase
         static::assertSame('INSERT INTO "table2" ("id", "name") VALUES (?,?);', $executed[1]['query']);
     }
 
+    public function testRowsWithTheSameConflictKeyAreMergedForPostgreSql(): void
+    {
+        $executed = [];
+        $queue = new MultiInsertQueryQueue($this->createRecordingConnection($executed), 250, false, false, new PostgreSqlDialect());
+        $queue->addInsert('table1', ['id' => 1, 'name' => 'first', 'other' => 'a']);
+        $queue->addInsert('table1', ['id' => 2, 'name' => 'second', 'other' => 'b']);
+        $queue->addInsert('table1', ['id' => 1, 'name' => 'last', 'other' => 'c']);
+        $queue->setConflictTarget('table1', ['id']);
+        $queue->addUpdateFieldOnDuplicateKey('table1', 'name');
+
+        $queue->execute();
+
+        static::assertCount(1, $executed);
+        // the first row is kept, the update column takes the value of the last row, as MySQL applies the rows one after the other
+        static::assertSame([1, 'last', 'a', 2, 'second', 'b'], $executed[0]['values']);
+    }
+
+    public function testRowsWithTheSameKeyAreNotMergedForMySql(): void
+    {
+        $executed = [];
+        $queue = new MultiInsertQueryQueue($this->createRecordingConnection($executed));
+        $queue->addInsert('table1', ['id' => 1, 'name' => 'first']);
+        $queue->addInsert('table1', ['id' => 1, 'name' => 'last']);
+        $queue->addUpdateFieldOnDuplicateKey('table1', 'name');
+
+        $queue->execute();
+
+        static::assertSame([1, 'first', 1, 'last'], $executed[0]['values']);
+    }
+
     public function testIgnoreErrorsBecomesInsertIgnoreOrOnConflictDoNothing(): void
     {
         $executed = [];

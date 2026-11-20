@@ -148,6 +148,6 @@ class PriceFieldAccessorBuilderTest extends TestCase
     public static function dialects(): iterable
     {
         yield 'mysql' => [new MySqlDialect(), '\'$.c%s.gross\'', '))'];
-        yield 'postgresql' => [new PostgreSqlDialect(), '\'$.c%s.gross\'', '::jsonpath)) ->> 0)::numeric)'];
+        yield 'postgresql' => [new PostgreSqlDialect(), '\'$.c%s.gross\'', '::jsonpath)) ->> 0)::numeric) AS double precision)'];
     }
 }

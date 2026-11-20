@@ -133,6 +133,10 @@ class MultiInsertQueryQueue
             $updateColumns = array_values(array_intersect($this->updateFieldsOnDuplicateKey[$table] ?? [], $columns)); // only fields that are in the columns can be updated
             $conflictColumns = $updateColumns !== [] ? ($this->conflictTargets[$table] ?? []) : [];
 
+            if ($updateColumns !== [] && !$this->useReplace) {
+                $rows = $this->mergeCollidingRows($rows, $this->dialect()->upsertCollisionColumns($table, $conflictColumns), $updateColumns);
+            }
+
             $rowsChunks = array_chunk($rows, $this->chunkSize);
             foreach ($rowsChunks as $rowsChunk) {
                 if ($deleteBeforeInsert) {
@@ -162,6 +166,64 @@ class MultiInsertQueryQueue
         }
 
         return $queries;
+    }
+
+    /**
+     * Rows with the same key in one statement are merged, as MySQL applies them one after the other:
+     * the first row is kept and the update columns take the values of the last row.
+     *
+     * @param list<DataRow> $rows
+     * @param list<string> $keyColumns
+     * @param list<string> $updateColumns
+     *
+     * @return list<DataRow>
+     */
+    private function mergeCollidingRows(array $rows, array $keyColumns, array $updateColumns): array
+    {
+        if ($keyColumns === []) {
+            return $rows;
+        }
+
+        /** @var array<string, DataRow> $merged */
+        $merged = [];
+        /** @var list<DataRow> $unkeyed */
+        $unkeyed = [];
+        foreach ($rows as $row) {
+            $key = [];
+            foreach ($keyColumns as $column) {
+                if (!isset($row['data'][$column])) {
+                    // DEFAULT or NULL never collides
+                    $unkeyed[] = $row;
+                    continue 2;
+                }
+                $key[] = $row['data'][$column];
+            }
+            $hash = serialize($key);
+
+            if (!isset($merged[$hash])) {
+                $merged[$hash] = $row;
+                continue;
+            }
+
+            $target = $merged[$hash];
+            $targetTypes = $target['types'] ?? [];
+            foreach ($updateColumns as $column) {
+                if (!\array_key_exists($column, $row['data'])) {
+                    continue;
+                }
+
+                $target['data'][$column] = $row['data'][$column];
+                if (isset($row['types'][$column])) {
+                    $targetTypes[$column] = $row['types'][$column];
+                } else {
+                    unset($targetTypes[$column]);
+                }
+            }
+            $target['types'] = $target['types'] === null && $targetTypes === [] ? null : $targetTypes;
+            $merged[$hash] = $target;
+        }
+
+        return [...array_values($merged), ...$unkeyed];
     }
 
     /**

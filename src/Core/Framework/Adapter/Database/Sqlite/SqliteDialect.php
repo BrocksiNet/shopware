@@ -136,6 +136,26 @@ class SqliteDialect implements SqlDialect
         return \sprintf('lower(%s)', $columnSql);
     }
 
+    public function decimalDivisionScale(string $expressionSql, int $scale): string
+    {
+        return $expressionSql;
+    }
+
+    public function upsertCollisionColumns(string $table, array $conflictColumns): array
+    {
+        return [];
+    }
+
+    public function castToFloat(string $numberSql): string
+    {
+        return $numberSql;
+    }
+
+    public function caseInsensitiveValue(string $value): string
+    {
+        return mb_strtolower($value);
+    }
+
     public function rowNumberPerPartition(string $partitionSql): ?string
     {
         return \sprintf('ROW_NUMBER() OVER (PARTITION BY %s ORDER BY %s)', $partitionSql, $partitionSql);

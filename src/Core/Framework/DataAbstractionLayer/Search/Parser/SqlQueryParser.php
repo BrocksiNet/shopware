@@ -5,13 +5,19 @@ namespace Shopware\Core\Framework\DataAbstractionLayer\Search\Parser;
 use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
+use Shopware\Core\Framework\Adapter\Database\Dialect\SqlDialect;
+use Shopware\Core\Framework\Adapter\Database\Dialect\SqlDialectFactory;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\DataAbstractionLayerException;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\EntityDefinitionQueryHelper;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityDefinition;
+use Shopware\Core\Framework\DataAbstractionLayer\Field\CustomFields;
+use Shopware\Core\Framework\DataAbstractionLayer\Field\Field;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\FkField;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\IdField;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\ListField;
+use Shopware\Core\Framework\DataAbstractionLayer\Field\LongTextField;
+use Shopware\Core\Framework\DataAbstractionLayer\Field\StringField;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\ContainsFilter;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsAnyFilter;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsFilter;
@@ -35,6 +41,8 @@ class SqlQueryParser
     /**
      * @internal
      */
+    private ?SqlDialect $dialect = null;
+
     public function __construct(
         private readonly EntityDefinitionQueryHelper $queryHelper,
         private readonly Connection $connection
@@ -239,6 +247,11 @@ class SqlQueryParser
             $value = array_filter(array_map(static fn (bool|float|int|string $id): string => IdBinding::value((string) $id), $value));
         }
 
+        if ($value !== [] && $this->isCustomFieldString($field, $query->getField()) && array_filter($value, \is_string(...)) === $value) {
+            $select = $this->dialect()->caseInsensitive($select);
+            $value = array_map(fn (string $v): string => $this->dialect()->caseInsensitiveValue($v), $value);
+        }
+
         $where = [];
         if ($value !== []) {
             $result->addParameter($key, $value, ArrayParameterType::STRING);
@@ -286,13 +299,19 @@ class SqlQueryParser
             return $result;
         }
 
+        $value = $query->getValue();
+        $caseInsensitive = \is_string($value) && $this->isCustomFieldString($field, $query->getField());
+        if ($caseInsensitive) {
+            $select = $this->dialect()->caseInsensitive($select);
+            $value = $this->dialect()->caseInsensitiveValue($value);
+        }
+
         if ($negated || $query->getValue() === null) {
             $result->addWhere($select . ' <=> :' . $key);
         } else {
             $result->addWhere($select . ' = :' . $key);
         }
 
-        $value = $query->getValue();
         if ($value === null) {
             $result->addParameter($key, null);
 
@@ -306,6 +325,26 @@ class SqlQueryParser
         $result->addParameter($key, $value);
 
         return $result;
+    }
+
+    /**
+     * Custom field string values are compared case-insensitive on every database, as on MySQL.
+     * The accessor builder has set the property mapping of the custom fields field to the attribute that the path points to.
+     */
+    private function isCustomFieldString(?Field $field, string $path): bool
+    {
+        if (!$field instanceof CustomFields || !str_contains($path, '.')) {
+            return false;
+        }
+
+        $mapped = $field->getPropertyMapping()[0] ?? null;
+
+        return $mapped instanceof StringField || $mapped instanceof LongTextField;
+    }
+
+    private function dialect(): SqlDialect
+    {
+        return $this->dialect ??= SqlDialectFactory::forConnection($this->connection);
     }
 
     private function parseMultiFilter(MultiFilter $query, EntityDefinition $definition, string $root, Context $context, bool $negated): ParseResult

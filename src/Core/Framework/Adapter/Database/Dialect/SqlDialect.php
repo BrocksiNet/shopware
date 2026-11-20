@@ -134,6 +134,39 @@ interface SqlDialect
     public function caseInsensitive(string $columnSql): string;
 
     /**
+     * A number extracted from JSON as a double, so that arithmetic on it rounds like MySQL and MariaDB do (`text + 0.0` is a DOUBLE there).
+     * MySQL, MariaDB, SQLite: the expression unchanged.
+     * PostgreSQL: `CAST(expr AS double precision)`; with `numeric` the product `13.016666666666666 * 1.5` stays exact (19.524999999999999) where the double product is 19.525 and rounds up.
+     */
+    public function castToFloat(string $numberSql): string;
+
+    /**
+     * The columns by which two rows of one multi row upsert collide, or an empty list if the database applies such rows one after the other.
+     * PostgreSQL: the given conflict columns or the primary key; `ON CONFLICT DO UPDATE` raises "cannot affect row a second time" when two rows of one statement have the same key.
+     * MySQL, MariaDB, SQLite: an empty list.
+     *
+     * @param list<string> $conflictColumns
+     *
+     * @return list<string>
+     */
+    public function upsertCollisionColumns(string $table, array $conflictColumns): array;
+
+    /**
+     * The result of a decimal division with the scale that MySQL and MariaDB produce (`div_precision_increment`, 4 digits more than the dividend).
+     * MySQL, MariaDB: the expression unchanged.
+     * PostgreSQL: `CAST(expr AS NUMERIC(30, scale))`, because a `numeric` division returns at least 16 digits and the DAL returns aggregates as strings.
+     * SQLite: the expression unchanged.
+     */
+    public function decimalDivisionScale(string $expressionSql, int $scale): string;
+
+    /**
+     * The value to bind against a column wrapped in `caseInsensitive()`.
+     * MySQL and MariaDB: the value unchanged (the collation compares case-insensitive, SQL and parameters stay as before).
+     * PostgreSQL and SQLite: the value in lower case (`mb_strtolower()`), because `caseInsensitive()` lowers only the column side.
+     */
+    public function caseInsensitiveValue(string $value): string;
+
+    /**
      * Appended to a derived table that computes an expensive expression (for example `lower(column)`), so that the expression is evaluated once per row
      * and not inlined into every reference of the outer query.
      * PostgreSQL: ` OFFSET 0`, an optimization fence for the planner that keeps it from pulling the subquery up.

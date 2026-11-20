@@ -2,12 +2,12 @@
 
 namespace Shopware\Tests\Integration\Core\Framework\DataAbstractionLayer\Dbal;
 
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use PHPUnit\Framework\TestCase;
 use Shopware\Core\Content\Category\CategoryCollection;
 use Shopware\Core\Content\Category\CategoryEntity;
 use Shopware\Core\Content\Category\DataAbstractionLayer\CategoryIndexer;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Indexing\EntityIndexingMessage;
@@ -281,16 +281,16 @@ class TreeIndexerTest extends TestCase
         $categoryD = $this->createCategory($categoryC);
 
         $this->connection->executeStatement(
-            'UPDATE category SET path = NULL, level = 0 WHERE HEX(id) IN (:ids)',
+            'UPDATE category SET path = NULL, level = 0 WHERE id IN (:ids)',
             [
-                'ids' => [
+                'ids' => IdBinding::values([
                     $categoryA,
                     $categoryB,
                     $categoryC,
                     $categoryD,
-                ],
+                ]),
             ],
-            ['ids' => ArrayParameterType::STRING]
+            ['ids' => IdBinding::listType()]
         );
 
         $categories = $this->categoryRepository->search(

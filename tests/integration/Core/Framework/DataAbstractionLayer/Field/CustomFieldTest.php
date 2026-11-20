@@ -14,6 +14,7 @@ use Shopware\Core\Framework\DataAbstractionLayer\Read\EntityReaderInterface;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\EntityAggregatorInterface;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\EntitySearcherInterface;
+use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsAnyFilter;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsFilter;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Sorting\FieldSorting;
 use Shopware\Core\Framework\DataAbstractionLayer\VersionManager;
@@ -560,6 +561,29 @@ class CustomFieldTest extends TestCase
         $result = $repo->search($criteriaFalse, Context::createDefaultContext());
         $expected = [$aId, $upperAId];
         static::assertSame(array_combine($expected, $expected), $result->getEntities()->getIds());
+    }
+
+    public function testStringEqualsAnyCriteriaIsCaseInsensitive(): void
+    {
+        $this->addCustomFields(['string' => CustomFieldTypes::TEXT]);
+
+        $aId = Uuid::randomHex();
+        $upperAId = Uuid::randomHex();
+        $bId = Uuid::randomHex();
+
+        $repo = $this->getTestRepository();
+        $repo->create([
+            ['id' => $aId, 'custom' => ['string' => 'a']],
+            ['id' => $upperAId, 'custom' => ['string' => 'A']],
+            ['id' => $bId, 'custom' => ['string' => 'b']],
+        ], Context::createDefaultContext());
+
+        $criteria = new Criteria();
+        $criteria->addFilter(new EqualsAnyFilter('custom.string', ['a', 'C']));
+        $result = $repo->search($criteria, Context::createDefaultContext());
+
+        $expected = [$aId, $upperAId];
+        static::assertEqualsCanonicalizing($expected, array_values($result->getEntities()->getIds()));
     }
 
     public function testBooleanEqualsCriteria(): void

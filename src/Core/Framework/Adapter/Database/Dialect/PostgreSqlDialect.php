@@ -159,6 +159,26 @@ class PostgreSqlDialect implements SqlDialect
         return \sprintf('lower(%s) COLLATE ucs_basic', $columnSql);
     }
 
+    public function caseInsensitiveValue(string $value): string
+    {
+        return mb_strtolower($value);
+    }
+
+    public function decimalDivisionScale(string $expressionSql, int $scale): string
+    {
+        return \sprintf('CAST(%s AS NUMERIC(30, %d))', $expressionSql, $scale);
+    }
+
+    public function upsertCollisionColumns(string $table, array $conflictColumns): array
+    {
+        return $conflictColumns !== [] ? $conflictColumns : $this->getPrimaryKey($table);
+    }
+
+    public function castToFloat(string $numberSql): string
+    {
+        return \sprintf('CAST(%s AS double precision)', $numberSql);
+    }
+
     public function rowNumberPerPartition(string $partitionSql): ?string
     {
         return \sprintf('ROW_NUMBER() OVER (PARTITION BY %s ORDER BY %s)', $partitionSql, $partitionSql);

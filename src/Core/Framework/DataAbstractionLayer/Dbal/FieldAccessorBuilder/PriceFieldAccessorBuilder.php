@@ -84,7 +84,7 @@ class PriceFieldAccessorBuilder implements FieldAccessorBuilderInterface
         $template = '(#extract# #factor#)';
 
         $variables = [
-            '#extract#' => $this->extract($root, $field->getStorageName(), $currencyId, $jsonAccessor),
+            '#extract#' => $this->castToFloat($this->extract($root, $field->getStorageName(), $currencyId, $jsonAccessor)),
             '#factor#' => '+ 0.0',
         ];
 
@@ -92,7 +92,7 @@ class PriceFieldAccessorBuilder implements FieldAccessorBuilderInterface
 
         if ($currencyId !== Defaults::CURRENCY) {
             $variables = [
-                '#extract#' => $this->extract($root, $field->getStorageName(), Defaults::CURRENCY, $jsonAccessor),
+                '#extract#' => $this->castToFloat($this->extract($root, $field->getStorageName(), Defaults::CURRENCY, $jsonAccessor)),
                 '#factor#' => $currencyFactor,
             ];
 
@@ -120,7 +120,12 @@ class PriceFieldAccessorBuilder implements FieldAccessorBuilderInterface
                 '#multiplier#' => (string) $multiplier,
             ];
 
-            $template = str_replace(array_keys($variables), array_values($variables), '(ROUND(#accessor# * #multiplier#, 0) / #multiplier#)');
+            $this->dialect ??= SqlDialectFactory::forConnection($this->connection);
+            // the division has scale 4 on MySQL and MariaDB, PostgreSQL returns 16 digits
+            $template = $this->dialect->decimalDivisionScale(
+                str_replace(array_keys($variables), array_values($variables), '(ROUND(#accessor# * #multiplier#, 0) / #multiplier#)'),
+                4
+            );
         }
 
         $result = \sprintf($template, implode(',', $select));
@@ -133,6 +138,13 @@ class PriceFieldAccessorBuilder implements FieldAccessorBuilderInterface
         }
 
         return $result;
+    }
+
+    private function castToFloat(string $numberSql): string
+    {
+        $this->dialect ??= SqlDialectFactory::forConnection($this->connection);
+
+        return $this->dialect->castToFloat($numberSql);
     }
 
     private function extract(string $root, string $storageName, string $currencyId, string $property): string
