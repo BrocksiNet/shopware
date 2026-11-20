@@ -3,6 +3,7 @@
 namespace Shopware\Core\Framework\DataAbstractionLayer\Dbal;
 
 use Shopware\Core\Framework\Adapter\Database\Dialect\SqlDialect;
+use Shopware\Core\Framework\Adapter\Database\Dialect\SqlDialectFactory;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\DataAbstractionLayerException;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\FieldResolver\CriteriaPartResolver;
@@ -78,7 +79,7 @@ class CriteriaQueryBuilder
             $query->removeState(EntityDefinitionQueryHelper::HAS_TO_MANY_JOIN);
         }
 
-        $this->addSortings($definition, $criteria, $criteria->getSorting(), $query, $context);
+        $this->addSortings($definition, $criteria, $criteria->getSorting(), $query, $context, SqlDialectFactory::getDefault());
 
         return $query;
     }

@@ -1224,8 +1224,8 @@ class EntityReader implements EntityReaderInterface
                 $sorting = str_replace(Criteria::SCORE_FIELD, $scoreExpression, $sorting);
             }
 
-            // Strip the ASC/DESC at the end of the sort
-            $query->addSelect(\sprintf('%s as sort_%d', substr((string) $sorting, 0, -4), $i));
+            // Strip the direction (ASC/DESC, on PostgreSQL with NULLS FIRST/LAST) at the end of the sort
+            $query->addSelect(\sprintf('%s as sort_%d', $this->splitSortDirection((string) $sorting)[0], $i));
         }
 
         $root = EntityDefinitionQueryHelper::escape($definition->getEntityName());
@@ -1238,7 +1238,7 @@ class EntityReader implements EntityReaderInterface
         );
 
         foreach ($orderByParts as $i => $sorting) {
-            $wrapper->addOrderBy(\sprintf('sort_%s', $i), trim(substr((string) $sorting, -4)));
+            $wrapper->addOrderBy(\sprintf('sort_%s', $i), $this->splitSortDirection((string) $sorting)[1]);
         }
 
         $wrapper->from($root, $root);
@@ -1570,5 +1570,20 @@ class EntityReader implements EntityReaderInterface
     private function dialect(): SqlDialect
     {
         return $this->dialect ??= SqlDialectFactory::forConnection($this->connection);
+    }
+
+    /**
+     * Splits an ORDER BY part into the sorted expression and its direction, including the NULL placement that
+     * the dialect appends (`ASC NULLS FIRST`).
+     *
+     * @return array{0: string, 1: string}
+     */
+    private function splitSortDirection(string $sorting): array
+    {
+        if (preg_match('/^(.*)\s+(ASC|DESC)(\s+NULLS\s+(?:FIRST|LAST))?\s*$/isD', $sorting, $matches) !== 1) {
+            return [$sorting, 'ASC'];
+        }
+
+        return [$matches[1], trim($matches[2] . ($matches[3] ?? ''))];
     }
 }

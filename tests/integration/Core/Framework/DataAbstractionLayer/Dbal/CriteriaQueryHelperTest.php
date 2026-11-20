@@ -5,6 +5,7 @@ namespace Shopware\Tests\Integration\Core\Framework\DataAbstractionLayer\Dbal;
 use Doctrine\DBAL\Connection;
 use PHPUnit\Framework\TestCase;
 use Shopware\Core\Content\Product\ProductDefinition;
+use Shopware\Core\Framework\Adapter\Database\Dialect\SqlDialectFactory;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\DataAbstractionLayerException;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\CriteriaQueryBuilder;
@@ -116,7 +117,7 @@ class CriteriaQueryHelperTest extends TestCase
         $builder->build($queryBuilder, $productDefinition, $criteria, Context::createDefaultContext());
 
         static::assertSame($queryBuilder->getOrderByParts(), [
-            str_replace('`', EntityDefinitionQueryHelper::escape('x')[0], 'MIN(`product`.`created_at`) ASC'),
+            str_replace('`', EntityDefinitionQueryHelper::escape('x')[0], 'MIN(`product`.`created_at`) ') . SqlDialectFactory::getDefault()->sortDirectionWithMySqlNulls('ASC'),
             '_score DESC',
         ]);
     }
@@ -134,7 +135,7 @@ class CriteriaQueryHelperTest extends TestCase
         $builder->build($queryBuilder, $productDefinition, $criteria, Context::createDefaultContext());
 
         static::assertSame($queryBuilder->getOrderByParts(), [
-            str_replace('`', EntityDefinitionQueryHelper::escape('x')[0], 'MIN(`product`.`created_at`) ASC'),
+            str_replace('`', EntityDefinitionQueryHelper::escape('x')[0], 'MIN(`product`.`created_at`) ') . SqlDialectFactory::getDefault()->sortDirectionWithMySqlNulls('ASC'),
             '_score ASC',
         ]);
     }
