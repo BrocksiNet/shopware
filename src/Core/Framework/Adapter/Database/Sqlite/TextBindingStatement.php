@@ -21,6 +21,12 @@ class TextBindingStatement extends AbstractStatementMiddleware
             $type = ParameterType::STRING;
         }
 
+        // PDO sends a string typed int or bool as TEXT, and TEXT '1' is not equal to INTEGER 1 for an expression without column affinity (`IFNULL(a, b) = ?`)
+        if (\is_bool($value) || \is_int($value)) {
+            $value = (int) $value;
+            $type = ParameterType::INTEGER;
+        }
+
         parent::bindValue($param, $value, $type);
     }
 }

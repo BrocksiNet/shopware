@@ -185,7 +185,7 @@ class SqlTranslationMiddleware implements Middleware
                             $sql = (string) preg_replace_callback('/\bJSON_TYPE\s*\(\s*JSON_EXTRACT\s*\(([^()\']*(?:\'[^\']*\'[^()\']*)*)\)\s*\)/i', static function (array $m): string {
                                 $t = 'json_type(' . $m[1] . ')';
 
-                                return '(CASE ' . $t . " WHEN 'text' THEN 'STRING' WHEN 'true' THEN 'BOOLEAN' WHEN 'false' THEN 'BOOLEAN' WHEN 'real' THEN 'DOUBLE' ELSE UPPER(" . $t . ') END)';
+                                return '(CASE ' . $t . ' WHEN \'text\' THEN \'STRING\' WHEN \'true\' THEN \'BOOLEAN\' WHEN \'false\' THEN \'BOOLEAN\' WHEN \'real\' THEN \'DOUBLE\' ELSE UPPER(' . $t . ') END)';
                             }, $sql);
                         }
                         if (stripos($sql, 'COALESCE') !== false) {
@@ -211,7 +211,7 @@ class SqlTranslationMiddleware implements Middleware
                             return $sql;
                         }
 
-                        $sql = (string) preg_replace('/^(\s*INSERT\s+INTO\s+`?\w+`?)\s*\(\s*(SELECT\b.*)\)\s*$/is', '$1 $2', $sql);
+                        $sql = (string) preg_replace('/^(\s*INSERT\s+(?:IGNORE\s+)?INTO\s+`?\w+`?(?:\s*\([^()]*\))?)\s*\(\s*(SELECT\b.*)\)\s*$/is', '$1 $2', $sql);
 
                         // 0x0fa9... is an integer literal in SQLite, MySQL treats it as binary
                         $sql = (string) preg_replace('/(?<![\w`"\'])0x([0-9a-fA-F]{2,})(?![\w])/', 'X\'$1\'', $sql);
@@ -227,6 +227,9 @@ class SqlTranslationMiddleware implements Middleware
                         $sql = (string) preg_replace('/^(\s*UPDATE)\s+IGNORE\s+/i', '$1 ', $sql);
                         $sql = $this->updateAlias($sql);
                         $sql = $this->backticksToQuotes($sql);
+                        if (stripos($sql, 'DEFAULT') !== false) {
+                            $sql = $this->defaultInValues($sql);
+                        }
                         if (stripos($sql, 'UPDATE') !== false) {
                             $sql = $this->stripSetQualifier($sql);
                             $sql = $this->updateLimit($sql);
@@ -251,6 +254,66 @@ class SqlTranslationMiddleware implements Middleware
                         }
 
                         return $sql;
+                    }
+
+                    /**
+                     * SQLite has no `DEFAULT` in a `VALUES` row (the multi row insert of the DAL uses it for columns a row does not set),
+                     * it becomes the declared default of the column, or NULL.
+                     */
+                    private function defaultInValues(string $sql): string
+                    {
+                        if (!preg_match('/^(\s*INSERT\s+(?:OR\s+\w+\s+)?INTO\s+"?(\w+)"?\s*\(([^)]*)\)\s*VALUES\s*)(.*)$/is', $sql, $m)) {
+                            return $sql;
+                        }
+                        $columns = array_map(static fn (string $c): string => trim($c, " \t\n\"`"), explode(',', $m[3]));
+                        $rest = $m[4];
+                        $out = '';
+                        $depth = 0;
+                        $index = 0;
+                        $defaults = null;
+                        for ($i = 0, $n = \strlen($rest); $i < $n; ++$i) {
+                            $c = $rest[$i];
+                            if ($c === '\'') {
+                                $j = $i + 1;
+                                while ($j < $n && !($rest[$j] === '\'' && ($rest[$j + 1] ?? '') !== '\'')) {
+                                    $j += $rest[$j] === '\'' ? 2 : 1;
+                                }
+                                $out .= substr($rest, $i, $j - $i + 1);
+                                $i = $j;
+
+                                continue;
+                            }
+                            if ($c === '(') {
+                                ++$depth;
+                                $index = $depth === 1 ? 0 : $index;
+                            } elseif ($c === ')') {
+                                --$depth;
+                            } elseif ($c === ',' && $depth === 1) {
+                                ++$index;
+                            } elseif ($depth === 1 && preg_match('/\GDEFAULT\b/i', $rest, $d, 0, $i) && !preg_match('/[\w"]/', $rest[$i - 1] ?? ' ')) {
+                                $defaults ??= $this->columnDefaults($m[2]);
+                                $out .= $defaults[$columns[$index] ?? ''] ?? 'NULL';
+                                $i += 6;
+
+                                continue;
+                            }
+                            $out .= $c;
+                        }
+
+                        return $m[1] . $out;
+                    }
+
+                    /**
+                     * @return array<string, string>
+                     */
+                    private function columnDefaults(string $table): array
+                    {
+                        $defaults = [];
+                        foreach (parent::query('SELECT name, dflt_value FROM pragma_table_xinfo(' . parent::quote($table) . ')')->fetchAllNumeric() as [$name, $default]) {
+                            $defaults[(string) $name] = $default === null ? 'NULL' : '(' . $default . ')';
+                        }
+
+                        return $defaults;
                     }
 
                     /**

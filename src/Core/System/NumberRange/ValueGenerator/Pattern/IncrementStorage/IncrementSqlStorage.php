@@ -5,6 +5,7 @@ namespace Shopware\Core\System\NumberRange\ValueGenerator\Pattern\IncrementStora
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\ParameterType;
 use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
+use Doctrine\DBAL\Platforms\SQLitePlatform;
 use Psr\Clock\ClockInterface;
 use Shopware\Core\Defaults;
 use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
@@ -35,8 +36,9 @@ class IncrementSqlStorage extends AbstractIncrementStorage
         $varname = Uuid::randomHex();
         $stateId = Uuid::randomBytes();
 
-        if ($this->connection->getDatabasePlatform() instanceof PostgreSQLPlatform) {
-            // PostgreSQL has no user variables, the new value is read with RETURNING in the same statement
+        $platform = $this->connection->getDatabasePlatform();
+        if ($platform instanceof PostgreSQLPlatform || $platform instanceof SQLitePlatform) {
+            // PostgreSQL and SQLite have no user variables, the new value is read with RETURNING in the same statement
             return (int) $this->connection->fetchOne(
                 'INSERT INTO number_range_state (id, last_value, number_range_id, created_at) VALUES (:stateId, :value, :id, :createdAt)
                 ON CONFLICT (number_range_id) DO UPDATE
