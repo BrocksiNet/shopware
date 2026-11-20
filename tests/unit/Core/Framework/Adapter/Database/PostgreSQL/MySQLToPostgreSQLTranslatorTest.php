@@ -183,8 +183,8 @@ class MySQLToPostgreSQLTranslatorTest extends TestCase
     {
         $translator = new MySQLToPostgreSQLTranslator();
 
-        static::assertSame("SELECT a #>> '{}' FROM t", $translator->translate("SELECT a #>> '{}' FROM t")[0]);
-        static::assertSame("SELECT a #> '{x}' FROM t", $translator->translate("SELECT a #> '{x}' FROM t")[0]);
+        static::assertSame('SELECT a #>> \'{}\' FROM t', $translator->translate('SELECT a #>> \'{}\' FROM t')[0]);
+        static::assertSame('SELECT a #> \'{x}\' FROM t', $translator->translate('SELECT a #> \'{x}\' FROM t')[0]);
         static::assertSame("SELECT 1 \nFROM t", $translator->translate("SELECT 1 # comment #> here\nFROM t")[0]);
         static::assertSame('SELECT 1 ', $translator->translate('SELECT 1 # trailing comment')[0]);
     }
@@ -211,7 +211,7 @@ class MySQLToPostgreSQLTranslatorTest extends TestCase
         ];
         yield 'string literal after operator stays a string' => [
             'SELECT 1 FROM t WHERE a = "x" AND b IN ("y", "z")',
-            "SELECT 1 FROM t WHERE a = 'x' AND b IN ('y', 'z')",
+            'SELECT 1 FROM t WHERE a = \'x\' AND b IN (\'y\', \'z\')',
         ];
         yield 'select list and tuple comparison' => [
             'SELECT 1 as "exists", "media_id", "language_id" FROM "media_translation" WHERE ("media_id","language_id") IN ((?,?))',
@@ -246,5 +246,22 @@ class MySQLToPostgreSQLTranslatorTest extends TestCase
         static::assertSame($backtick, $quoted);
         static::assertSame($backtickMap, $quotedMap);
         static::assertSame([$name], array_values($quotedMap));
+    }
+
+    public function testTranslationIsSharedBetweenInstancesThroughApcu(): void
+    {
+        if (!\function_exists('apcu_enabled') || !apcu_enabled()) {
+            static::markTestSkipped('APCu is not enabled for the CLI (apc.enable_cli)');
+        }
+
+        $sql = 'SELECT `t`.`x` AS `a_' . bin2hex(random_bytes(4)) . '` FROM `t` WHERE `t`.`y` <=> :y';
+        $first = (new MySQLToPostgreSQLTranslator())->translate($sql);
+
+        $stored = array_map(
+            static fn (array $entry): mixed => apcu_fetch($entry['key']),
+            iterator_to_array(new \APCUIterator('/^sw_pg_translation_/'), false)
+        );
+        static::assertContains($first, $stored);
+        static::assertSame($first, (new MySQLToPostgreSQLTranslator())->translate($sql));
     }
 }

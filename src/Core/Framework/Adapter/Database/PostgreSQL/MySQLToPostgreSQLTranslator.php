@@ -26,6 +26,10 @@ class MySQLToPostgreSQLTranslator
 {
     private const CACHE_LIMIT = 5000;
 
+    private const SHARED_CACHE_MAX_LENGTH = 65536;
+
+    private const SHARED_CACHE_TTL = 86400;
+
     private const MAX_IDENTIFIER_LENGTH = 63;
 
     /**
@@ -59,7 +63,32 @@ class MySQLToPostgreSQLTranslator
             $this->cache = [];
         }
 
-        return $this->cache[$sql] = $this->rewrite($sql);
+        // the array lives as long as the process, a PHP-FPM request starts with the rewrite of every statement again, APCu keeps the result between requests
+        $shared = \function_exists('apcu_fetch') && \strlen($sql) <= self::SHARED_CACHE_MAX_LENGTH;
+        $key = $shared ? 'sw_pg_translation_' . self::sharedVersion() . Hasher::hash($sql) : '';
+        if ($shared) {
+            $hit = apcu_fetch($key, $success);
+            if ($success) {
+                return $this->cache[$sql] = $hit;
+            }
+        }
+
+        $result = $this->cache[$sql] = $this->rewrite($sql);
+        if ($shared) {
+            apcu_store($key, $result, self::SHARED_CACHE_TTL);
+        }
+
+        return $result;
+    }
+
+    /**
+     * The key of the shared cache changes with the translator code, a deployment must not read translations of the old rules.
+     */
+    private static function sharedVersion(): string
+    {
+        static $version = null;
+
+        return $version ??= (string) filemtime(__FILE__) . '_';
     }
 
     /**
