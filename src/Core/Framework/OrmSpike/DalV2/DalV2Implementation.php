@@ -28,6 +28,8 @@ use Shopware\Core\Framework\OrmSpike\DalV2\Profile\TimedDispatcher;
 use Shopware\Core\Framework\OrmSpike\DalV2\Profile\TimedHydrator;
 use Shopware\Core\Framework\OrmSpike\DalV2\Profile\TimedReader;
 use Shopware\Core\Framework\OrmSpike\DalV2\Profile\TimedSearcher;
+use Shopware\Core\Framework\OrmSpike\DalV2\Projection\ProjectionScenarios;
+use Shopware\Core\Framework\OrmSpike\DalV2\Projection\Projector;
 use Shopware\Core\Framework\OrmSpike\DalV2\Read\StatsFusionAggregator;
 use Shopware\Core\Framework\OrmSpike\DalV2\Read\WindowCountSearcher;
 use Shopware\Core\Framework\OrmSpike\DalV2\Write\SwitchableWriteGateway;
@@ -59,6 +61,10 @@ final class DalV2Implementation implements Implementation
     private int $calls = 0;
 
     private int $wallNs = 0;
+
+    private ?ProjectionScenarios $scenarios = null;
+
+    private ?SalesChannelRepository $projectionRepository = null;
 
     public function __construct(
         private readonly Connection $connection,
@@ -92,12 +98,13 @@ final class DalV2Implementation implements Implementation
     {
         $this->options = $options;
         $this->inner = null;
+        $this->scenarios = null;
     }
 
     public function s1Listing(Params $params): array
     {
         $start = $this->begin();
-        $result = $this->inner()->s1Listing($params);
+        $result = $this->proj() ? $this->scenarios()->s1Listing($params) : $this->inner()->s1Listing($params);
         $this->end($start);
 
         return $result;
@@ -106,7 +113,7 @@ final class DalV2Implementation implements Implementation
     public function s2Detail(Params $params): array
     {
         $start = $this->begin();
-        $result = $this->inner()->s2Detail($params);
+        $result = $this->proj() ? $this->scenarios()->s2Detail($params) : $this->inner()->s2Detail($params);
         $this->end($start);
 
         return $result;
@@ -115,7 +122,7 @@ final class DalV2Implementation implements Implementation
     public function s3Search(Params $params): array
     {
         $start = $this->begin();
-        $result = $this->inner()->s3Search($params);
+        $result = $this->proj() ? $this->scenarios()->s3Search($params) : $this->inner()->s3Search($params);
         $this->end($start);
 
         return $result;
@@ -138,10 +145,22 @@ final class DalV2Implementation implements Implementation
     public function s5CriteriaFromJson(Params $params): array
     {
         $start = $this->begin();
-        $result = $this->inner()->s5CriteriaFromJson($params);
+        $result = $this->proj() ? $this->scenarios()->s5CriteriaFromJson($params) : $this->inner()->s5CriteriaFromJson($params);
         $this->end($start);
 
         return $result;
+    }
+
+    private function proj(): bool
+    {
+        return ($this->options['proj'] ?? '0') === '1';
+    }
+
+    private function scenarios(): ProjectionScenarios
+    {
+        $this->inner();
+
+        return $this->scenarios ??= new ProjectionScenarios(new Projector($this->projectionRepository), $this->contextFactory, $this->requestCriteriaBuilder, $this->productDefinition);
     }
 
     private function profile(): bool
@@ -215,6 +234,7 @@ final class DalV2Implementation implements Implementation
             $this->eventFactory,
             $this->instrumentor,
         );
+        $this->projectionRepository = $salesChannelRepository;
         $productRepository = new EntityRepository(
             $this->productRepository->getDefinition(),
             $reader,
