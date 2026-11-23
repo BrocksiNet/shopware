@@ -186,13 +186,15 @@ class WriteGatewayV2 implements EntityWriteGatewayInterface
         $mappings = new MultiInsertQueryQueue($this->connection, $this->batchSize, false, true);
         $inserts = new MultiInsertQueryQueue($this->connection, $this->batchSize);
 
-        /** @var array<string, array{table: string, commands: list<UpdateCommand>}> $pendingUpdates */
-        $pendingUpdates = [];
+        // Only a run of consecutive updates with the same table, columns and key columns is batched, and a run ends
+        // before a primary key repeats, so the database sees the writes in the order the commands were given.
+        /** @var array{signature: string, table: string, commands: list<UpdateCommand>, keys: array<string, true>}|null $pendingUpdates */
+        $pendingUpdates = null;
         $flushUpdates = function () use (&$pendingUpdates): void {
-            foreach ($pendingUpdates as $group) {
-                $this->executeBatchedUpdate($group['table'], $group['commands']);
+            if ($pendingUpdates !== null) {
+                $this->executeBatchedUpdate($pendingUpdates['table'], $pendingUpdates['commands']);
             }
-            $pendingUpdates = [];
+            $pendingUpdates = null;
         };
 
         $executeInserts = static function () use ($mappings, $inserts, $flushUpdates): void {
@@ -248,8 +250,13 @@ class WriteGatewayV2 implements EntityWriteGatewayInterface
                         $payload = $command->getPayload();
                         ksort($payload);
                         $signature = $table . '|' . implode(',', array_keys($payload)) . '|' . implode(',', array_keys($command->getPrimaryKey()));
-                        $pendingUpdates[$signature] ??= ['table' => $table, 'commands' => []];
-                        $pendingUpdates[$signature]['commands'][] = $command;
+                        $key = serialize($command->getPrimaryKey());
+                        if ($pendingUpdates !== null && ($pendingUpdates['signature'] !== $signature || isset($pendingUpdates['keys'][$key]))) {
+                            $flushUpdates();
+                        }
+                        $pendingUpdates ??= ['signature' => $signature, 'table' => $table, 'commands' => [], 'keys' => []];
+                        $pendingUpdates['commands'][] = $command;
+                        $pendingUpdates['keys'][$key] = true;
 
                         continue;
                     }
