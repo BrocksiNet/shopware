@@ -5,6 +5,8 @@ namespace Shopware\Core\Framework\OrmSpike\DalV2\Write;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Exception;
 use Doctrine\DBAL\ParameterType;
+use Doctrine\DBAL\Schema\Index\IndexType;
+use Doctrine\DBAL\Schema\Name\OptionallyQualifiedName;
 use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Adapter\Database\Dialect\SqlDialect;
 use Shopware\Core\Framework\Adapter\Database\Dialect\SqlDialectFactory;
@@ -66,6 +68,11 @@ class WriteGatewayV2 implements EntityWriteGatewayInterface
     private ?PrimaryKeyBag $primaryKeyBag = null;
 
     private ?SqlDialect $dialect;
+
+    /**
+     * @var array<string, array<string, true>>
+     */
+    private array $uniqueColumns = [];
 
     public function __construct(
         private readonly int $batchSize,
@@ -188,13 +195,25 @@ class WriteGatewayV2 implements EntityWriteGatewayInterface
 
         // Only a run of consecutive updates with the same table, columns and key columns is batched, and a run ends
         // before a primary key repeats, so the database sees the writes in the order the commands were given.
+        // Updates of a column in a unique index are never batched, see touchesUniqueIndex().
         /** @var array{signature: string, table: string, commands: list<UpdateCommand>, keys: array<string, true>}|null $pendingUpdates */
         $pendingUpdates = null;
-        $flushUpdates = function () use (&$pendingUpdates): void {
-            if ($pendingUpdates !== null) {
-                $this->executeBatchedUpdate($pendingUpdates['table'], $pendingUpdates['commands']);
+        // a failed batch marks its own failing command, so the command that triggered the flush must not be marked
+        $batchFailed = false;
+        $flushUpdates = function () use (&$pendingUpdates, &$batchFailed): void {
+            if ($pendingUpdates === null) {
+                return;
             }
+            $run = $pendingUpdates;
             $pendingUpdates = null;
+
+            try {
+                $this->executeBatchedUpdate($run['table'], $run['commands']);
+            } catch (\Exception $e) {
+                $batchFailed = true;
+
+                throw $e;
+            }
         };
 
         $executeInserts = static function () use ($mappings, $inserts, $flushUpdates): void {
@@ -244,7 +263,7 @@ class WriteGatewayV2 implements EntityWriteGatewayInterface
                         continue;
                     }
 
-                    if ($command instanceof UpdateCommand && $this->batchUpdates) {
+                    if ($command instanceof UpdateCommand && $this->batchUpdates && !$this->touchesUniqueIndex($table, $command)) {
                         $mappings->execute();
                         $inserts->execute();
                         $payload = $command->getPayload();
@@ -284,7 +303,9 @@ class WriteGatewayV2 implements EntityWriteGatewayInterface
 
                     throw DataAbstractionLayerException::unsupportedCommandType($command);
                 } catch (\Exception $e) {
-                    $command->setFailed(true);
+                    if (!$batchFailed) {
+                        $command->setFailed(true);
+                    }
 
                     $innerException = $this->exceptionHandlerRegistry->matchException($e);
 
@@ -610,10 +631,89 @@ class WriteGatewayV2 implements EntityWriteGatewayInterface
             $params = array_merge($setParams, $whenParams);
             $types = $setTypes;
 
-            RetryableQuery::retryable($this->connection, function () use ($sql, $params, $types): void {
-                $this->connection->executeStatement($sql, $params, $types + array_fill(0, \count($params), ParameterType::STRING));
+            $this->runBatchOrReplay($table, $chunk, function () use ($sql, $params, $types): void {
+                RetryableQuery::retryable($this->connection, function () use ($sql, $params, $types): void {
+                    $this->connection->executeStatement($sql, $params, $types + array_fill(0, \count($params), ParameterType::STRING));
+                });
             });
         }
+    }
+
+    /**
+     * A failed batch statement does not tell which command failed, and the database applies its rows in scan order, not in command order.
+     * On failure the batch is undone (savepoint, or nothing to undo outside a transaction because the statement is atomic)
+     * and the commands run one by one in their given order: the first failing command is marked failed and its exception is thrown,
+     * exactly as without batching. If all of them succeed one by one, the write goes on.
+     *
+     * @param list<UpdateCommand> $chunk
+     * @param \Closure(): void $batch
+     */
+    private function runBatchOrReplay(string $table, array $chunk, \Closure $batch): void
+    {
+        $savepoint = $this->connection->isTransactionActive() ? 'dal_v2_batched_update' : null;
+        if ($savepoint !== null) {
+            $this->connection->createSavepoint($savepoint);
+        }
+
+        try {
+            $batch();
+        } catch (\Exception) {
+            if ($savepoint !== null) {
+                $this->connection->rollbackSavepoint($savepoint);
+                $this->connection->releaseSavepoint($savepoint);
+            }
+
+            foreach ($chunk as $command) {
+                try {
+                    $this->updateSingly($table, [$command]);
+                } catch (\Exception $e) {
+                    $command->setFailed(true);
+
+                    throw $e;
+                }
+            }
+
+            return;
+        }
+
+        if ($savepoint !== null) {
+            $this->connection->releaseSavepoint($savepoint);
+        }
+    }
+
+    /**
+     * One UPDATE changes its rows in scan order, a run of single UPDATEs in command order. Unique indexes are checked per row on
+     * MySQL, MariaDB, SQLite and for non-deferrable PostgreSQL constraints, so the two can differ: with a=1 and b=2, "b to 3, a to 2"
+     * succeeds one by one, but fails as one statement when a is changed first, and "a to 2, b to 3" fails one by one but can succeed as one statement.
+     * Updates of a column in any unique index (the primary key included) are therefore never batched.
+     */
+    private function touchesUniqueIndex(string $table, UpdateCommand $command): bool
+    {
+        if (!isset($this->uniqueColumns[$table])) {
+            $columns = [];
+            $schemaManager = $this->connection->createSchemaManager();
+            \assert($table !== '');
+            foreach ($schemaManager->introspectTableIndexesByQuotedName($table) as $index) {
+                if ($index->getType() === IndexType::UNIQUE) {
+                    foreach ($index->getIndexedColumns() as $column) {
+                        $columns[strtolower($column->getColumnName()->getIdentifier()->getValue())] = true;
+                    }
+                }
+            }
+            $primaryKey = $schemaManager->introspectTablePrimaryKeyConstraint(OptionallyQualifiedName::quoted($table));
+            foreach ($primaryKey?->getColumnNames() ?? [] as $column) {
+                $columns[strtolower($column->getIdentifier()->getValue())] = true;
+            }
+            $this->uniqueColumns[$table] = $columns;
+        }
+
+        foreach (array_keys($command->getPayload()) as $column) {
+            if (isset($this->uniqueColumns[$table][strtolower($column)])) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
