@@ -3,6 +3,8 @@
 namespace Shopware\Core\Framework\OrmSpike\Cycle\Entity;
 
 use Shopware\Core\Framework\Log\Package;
+use Shopware\Core\Framework\OrmSpike\Fair\Constraint\HexUuid;
+use Symfony\Component\Validator\Constraints as Assert;
 
 /**
  * @internal
@@ -14,8 +16,12 @@ class ProductTranslation
 
     public string $productVersionId;
 
+    #[Assert\NotBlank]
+    #[HexUuid]
     public string $languageId;
 
+    #[Assert\NotBlank(normalizer: 'trim')]
+    #[Assert\Length(max: 255, normalizer: 'trim')]
     public ?string $name = null;
 
     public ?string $description = null;

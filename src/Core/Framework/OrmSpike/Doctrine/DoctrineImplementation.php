@@ -10,11 +10,16 @@ use Doctrine\ORM\Tools\Pagination\Paginator;
 use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Adapter\Database\Dialect\SqlDialect;
 use Shopware\Core\Framework\Adapter\Database\Dialect\SqlDialectFactory;
+use Shopware\Core\Framework\Context;
+use Shopware\Core\Framework\DataAbstractionLayer\Indexing\EntityIndexerRegistry;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\OrmSpike\Doctrine\Entity\Category;
 use Shopware\Core\Framework\OrmSpike\Doctrine\Entity\Product;
 use Shopware\Core\Framework\OrmSpike\Doctrine\Entity\ProductTranslation;
 use Shopware\Core\Framework\OrmSpike\Doctrine\Entity\ProductVisibility;
+use Shopware\Core\Framework\OrmSpike\Fair\WriteContract;
+use Shopware\Core\Framework\OrmSpike\Fair\WrittenEvents;
+use Shopware\Core\Framework\OrmSpike\Fair\WrittenProduct;
 use Shopware\Core\Framework\OrmSpike\Harness\Implementation;
 use Shopware\Core\Framework\OrmSpike\Harness\Params;
 use Shopware\Core\Framework\OrmSpike\Harness\ResultContract;
@@ -25,6 +30,11 @@ use Shopware\Core\Framework\OrmSpike\Harness\WriteSet;
  *
  * - `idiomatic`: entities, DQL with fetch joins of the to-one associations, `Paginator`, lazy collections for translations, prices, options
  *   and categories (so the N+1 selects show up), entity writes through `persist` and `flush`.
+ *
+ * `--option full=1` adds what the DAL does before and after a write: Symfony validator constraints on the entities (before any `persist` reaches
+ * the database), the write protection check, and an `EntityWrittenContainerEvent` for the create and for the stock update (docs/35).
+ * The bare variants stay as they were. `optimized` sends the DQL `UPDATE` as before, so its update event is built by hand like the others.
+ *
  * - `optimized`: DQL that selects scalars only (array hydration, no entities), joins as in the hand-written SQL, `COUNT(*) OVER()` through a
  *   custom DQL function, batched by-id reads for the to-many data, a DQL `UPDATE` for the stock.
  *
@@ -39,10 +49,15 @@ final class DoctrineImplementation implements Implementation
 
     private bool $optimized = false;
 
+    private bool $full = false;
+
     private ?SqlDialect $dialect = null;
 
-    public function __construct(private readonly EntityManagerInterface $em)
-    {
+    public function __construct(
+        private readonly EntityManagerInterface $em,
+        private readonly WriteContract $contract,
+        private readonly WrittenEvents $events,
+    ) {
     }
 
     public static function key(): string
@@ -53,6 +68,7 @@ final class DoctrineImplementation implements Implementation
     public function configure(array $options): void
     {
         $this->optimized = ($options['mode'] ?? 'idiomatic') === 'optimized';
+        $this->full = ($options['full'] ?? '0') === '1';
     }
 
     public function s1Listing(Params $params): array
@@ -163,7 +179,24 @@ final class DoctrineImplementation implements Implementation
             $this->em->persist($product);
             $products[$row['id']] = $product;
         }
+
+        if ($this->full) {
+            $context = Context::createDefaultContext();
+            $context->addState(EntityIndexerRegistry::DISABLE_INDEXING);
+            $this->guard(fn () => $this->checkCreate($products, $context));
+        }
         $this->em->flush();
+        if ($this->full) {
+            $this->events->created($this->written($products), $params, $context);
+        }
+
+        if ($this->full) {
+            foreach ($set->products as $row) {
+                $products[$row['id']]->stock = $row['newStock'];
+                $products[$row['id']]->updatedAt = $now;
+            }
+            $this->guard(fn () => $this->checkUpdate($products, $context));
+        }
 
         if ($this->optimized) {
             // one DQL UPDATE statement, bypasses the unit of work (no lifecycle events, managed entities are stale)
@@ -188,6 +221,9 @@ final class DoctrineImplementation implements Implementation
             }
             $this->em->flush();
         }
+        if ($this->full) {
+            $this->events->stockUpdated($this->written($products), $params, $context);
+        }
         $this->em->clear();
     }
 
@@ -206,6 +242,87 @@ final class DoctrineImplementation implements Implementation
             'total' => $result['total'],
             'items' => array_map(static fn (array $i): array => ['id' => $i['id'], 'productNumber' => $i['productNumber'], 'manufacturer' => $i['manufacturer']], $result['items']),
         ];
+    }
+
+    /**
+     * Runs a check before the write, a rejection drops everything the unit of work has scheduled.
+     */
+    private function guard(\Closure $check): void
+    {
+        try {
+            $check();
+        } catch (\Throwable $e) {
+            $this->em->clear();
+
+            throw $e;
+        }
+    }
+
+    /**
+     * @param array<string, Product> $products
+     */
+    private function checkCreate(array $products, Context $context): void
+    {
+        $this->contract->validate($products);
+        foreach ($products as $product) {
+            $this->contract->assertWritable('product', WriteContract::properties($product), $context);
+            foreach ($product->translations as $translation) {
+                $this->contract->assertWritable('product_translation', WriteContract::properties($translation), $context);
+            }
+            foreach ($product->visibilities as $visibility) {
+                $this->contract->assertWritable('product_visibility', WriteContract::properties($visibility), $context);
+            }
+        }
+    }
+
+    /**
+     * @param array<string, Product> $products
+     */
+    private function checkUpdate(array $products, Context $context): void
+    {
+        $this->contract->validate($products, 'stock');
+        foreach ($products as $product) {
+            $this->contract->assertWritable('product', ['id' => $product->id, 'stock' => $product->stock, 'updatedAt' => $product->updatedAt], $context);
+        }
+    }
+
+    /**
+     * What was written, read back from the entities.
+     *
+     * @param array<string, Product> $products
+     *
+     * @return list<WrittenProduct>
+     */
+    private function written(array $products): array
+    {
+        $written = [];
+        foreach ($products as $product) {
+            $price = reset($product->price);
+            $translations = [];
+            foreach ($product->translations as $translation) {
+                $translations[] = ['languageId' => $translation->languageId, 'name' => (string) $translation->name];
+            }
+            $visibilities = [];
+            foreach ($product->visibilities as $visibility) {
+                $visibilities[] = ['id' => $visibility->id, 'salesChannelId' => $visibility->salesChannelId, 'visibility' => $visibility->visibility];
+            }
+            $written[] = new WrittenProduct(
+                $product->id,
+                $product->productNumber,
+                $product->stock,
+                $product->stock,
+                (string) $product->taxId,
+                $product->active === 1,
+                (string) $price['currencyId'],
+                (float) $price['gross'],
+                (float) $price['net'],
+                $translations,
+                $product->getCategoryIds(),
+                $visibilities
+            );
+        }
+
+        return $written;
     }
 
     private function dialect(): SqlDialect

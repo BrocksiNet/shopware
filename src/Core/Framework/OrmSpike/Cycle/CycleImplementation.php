@@ -13,11 +13,16 @@ use Doctrine\DBAL\Connection;
 use Shopware\Core\Defaults;
 use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Adapter\Database\Dialect\SqlDialectFactory;
+use Shopware\Core\Framework\Context;
+use Shopware\Core\Framework\DataAbstractionLayer\Indexing\EntityIndexerRegistry;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\OrmSpike\Cycle\Entity\Product;
 use Shopware\Core\Framework\OrmSpike\Cycle\Entity\ProductCategory;
 use Shopware\Core\Framework\OrmSpike\Cycle\Entity\ProductTranslation;
 use Shopware\Core\Framework\OrmSpike\Cycle\Entity\ProductVisibility;
+use Shopware\Core\Framework\OrmSpike\Fair\WriteContract;
+use Shopware\Core\Framework\OrmSpike\Fair\WrittenEvents;
+use Shopware\Core\Framework\OrmSpike\Fair\WrittenProduct;
 use Shopware\Core\Framework\OrmSpike\Harness\Implementation;
 use Shopware\Core\Framework\OrmSpike\Harness\Params;
 use Shopware\Core\Framework\OrmSpike\Harness\ResultContract;
@@ -28,6 +33,8 @@ use Shopware\Core\Framework\OrmSpike\Harness\WriteSet;
 /**
  * Cycle ORM 2.19 on the Shopware schema. `--option variant=idiomatic` (default) uses entities, `Select` with `with()` / `load()` and
  * the unit of work; `--option variant=optimized` uses `fetchData()` arrays and the query builder of `cycle/database`.
+ * `--option full=1` adds what the DAL does before and after a write: Symfony validator constraints on the entities (before `run()`),
+ * the write protection check and an `EntityWrittenContainerEvent` for the create and for the stock update (docs/35).
  * Runs on the PDO of the DBAL connection ({@see CycleBootstrap}).
  *
  * @internal
@@ -36,6 +43,8 @@ use Shopware\Core\Framework\OrmSpike\Harness\WriteSet;
 final class CycleImplementation implements Implementation
 {
     private bool $optimized = false;
+
+    private bool $full = false;
 
     private ?string $sqlLog = null;
 
@@ -46,6 +55,8 @@ final class CycleImplementation implements Implementation
     public function __construct(
         private readonly Connection $connection,
         private readonly StatementCounter $counter,
+        private readonly WriteContract $contract,
+        private readonly WrittenEvents $events,
     ) {
     }
 
@@ -57,6 +68,7 @@ final class CycleImplementation implements Implementation
     public function configure(array $options): void
     {
         $this->optimized = ($options['variant'] ?? 'idiomatic') === 'optimized';
+        $this->full = ($options['full'] ?? '0') === '1';
         $this->sqlLog = $options['sqllog'] ?? null;
     }
 
@@ -230,14 +242,30 @@ final class CycleImplementation implements Implementation
             $manager->persist($product);
             $products[$row['id']] = $product;
         }
+
+        if ($this->full) {
+            $context = Context::createDefaultContext();
+            $context->addState(EntityIndexerRegistry::DISABLE_INDEXING);
+            // nothing reached the database yet, a rejection just drops the entity manager
+            $this->checkCreate($products, $context);
+        }
         $manager->run();
+        if ($this->full) {
+            $this->events->created($this->written($products), $params, $context);
+        }
 
         foreach ($set->products as $row) {
             $products[$row['id']]->stock = $row['newStock'];
             $products[$row['id']]->updatedAt = $now;
             $manager->persist($products[$row['id']]);
         }
+        if ($this->full) {
+            $this->checkUpdate($products, $context);
+        }
         $manager->run();
+        if ($this->full) {
+            $this->events->stockUpdated($this->written($products), $params, $context);
+        }
     }
 
     public function s5CriteriaFromJson(Params $params): array
@@ -297,6 +325,74 @@ final class CycleImplementation implements Implementation
         }
 
         return ['total' => $total, 'items' => $items];
+    }
+
+    /**
+     * @param array<string, Product> $products
+     */
+    private function checkCreate(array $products, Context $context): void
+    {
+        $this->contract->validate($products);
+        foreach ($products as $product) {
+            $this->contract->assertWritable('product', WriteContract::properties($product), $context);
+            foreach ($product->translations as $translation) {
+                $this->contract->assertWritable('product_translation', WriteContract::properties($translation), $context);
+            }
+            foreach ($product->visibilities as $visibility) {
+                $this->contract->assertWritable('product_visibility', WriteContract::properties($visibility), $context);
+            }
+        }
+    }
+
+    /**
+     * @param array<string, Product> $products
+     */
+    private function checkUpdate(array $products, Context $context): void
+    {
+        $this->contract->validate($products, 'stock');
+        foreach ($products as $product) {
+            $this->contract->assertWritable('product', ['id' => $product->id, 'stock' => $product->stock, 'updatedAt' => $product->updatedAt], $context);
+        }
+    }
+
+    /**
+     * What was written, read back from the entities.
+     *
+     * @param array<string, Product> $products
+     *
+     * @return list<WrittenProduct>
+     */
+    private function written(array $products): array
+    {
+        $written = [];
+        foreach ($products as $product) {
+            $prices = json_decode((string) $product->price, true, 512, \JSON_THROW_ON_ERROR);
+            $price = reset($prices);
+            $translations = [];
+            foreach ($product->translations as $translation) {
+                $translations[] = ['languageId' => $translation->languageId, 'name' => (string) $translation->name];
+            }
+            $visibilities = [];
+            foreach ($product->visibilities as $visibility) {
+                $visibilities[] = ['id' => $visibility->id, 'salesChannelId' => $visibility->salesChannelId, 'visibility' => $visibility->visibility];
+            }
+            $written[] = new WrittenProduct(
+                $product->id,
+                (string) $product->productNumber,
+                (int) $product->stock,
+                (int) $product->stock,
+                (string) $product->taxId,
+                $product->active === 1,
+                (string) $price['currencyId'],
+                (float) $price['gross'],
+                (float) $price['net'],
+                $translations,
+                array_map(static fn (ProductCategory $c): string => $c->categoryId, $product->categories),
+                $visibilities
+            );
+        }
+
+        return $written;
     }
 
     /**

@@ -7,6 +7,8 @@ use Doctrine\ORM\EntityManagerInterface;
 use Shopware\Core\Framework\OrmSpike\Doctrine\DoctrineImplementation;
 use Shopware\Core\Framework\OrmSpike\Doctrine\EntityManagerFactory;
 use Shopware\Core\Framework\OrmSpike\Doctrine\Probe\ProbeCommand;
+use Shopware\Core\Framework\OrmSpike\Fair\WriteContract;
+use Shopware\Core\Framework\OrmSpike\Fair\WrittenEvents;
 use Shopware\Core\Framework\OrmSpike\Harness\ParamsFactory;
 use Shopware\Core\Framework\OrmSpike\Harness\WriteCleaner;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
@@ -22,7 +24,7 @@ return static function (ContainerConfigurator $containerConfigurator): void {
         ->args([service(Connection::class), '%kernel.cache_dir%']);
 
     $services->set(DoctrineImplementation::class)
-        ->args([service('orm_spike.doctrine.entity_manager')])
+        ->args([service('orm_spike.doctrine.entity_manager'), service(WriteContract::class), service(WrittenEvents::class)])
         ->tag('orm_spike.implementation');
 
     $services->set(ProbeCommand::class)

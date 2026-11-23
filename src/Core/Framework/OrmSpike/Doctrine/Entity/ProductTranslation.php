@@ -4,6 +4,8 @@ namespace Shopware\Core\Framework\OrmSpike\Doctrine\Entity;
 
 use Doctrine\ORM\Mapping as ORM;
 use Shopware\Core\Framework\Log\Package;
+use Shopware\Core\Framework\OrmSpike\Fair\Constraint\HexUuid;
+use Symfony\Component\Validator\Constraints as Assert;
 
 /**
  * @internal
@@ -24,6 +26,8 @@ class ProductTranslation
 
     #[ORM\Id]
     #[ORM\Column(name: 'language_id', type: 'shopware_id')]
+    #[Assert\NotBlank]
+    #[HexUuid]
     public string $languageId;
 
     #[ORM\Id]
@@ -35,6 +39,8 @@ class ProductTranslation
     public string $productVersionId;
 
     #[ORM\Column(name: 'name', type: 'string', nullable: true)]
+    #[Assert\NotBlank(normalizer: 'trim')]
+    #[Assert\Length(max: 255, normalizer: 'trim')]
     public ?string $name = null;
 
     #[ORM\Column(name: 'description', type: 'text', nullable: true)]

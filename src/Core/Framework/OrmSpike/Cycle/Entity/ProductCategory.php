@@ -3,6 +3,8 @@
 namespace Shopware\Core\Framework\OrmSpike\Cycle\Entity;
 
 use Shopware\Core\Framework\Log\Package;
+use Shopware\Core\Framework\OrmSpike\Fair\Constraint\HexUuid;
+use Symfony\Component\Validator\Constraints as Assert;
 
 /**
  * @internal
@@ -14,6 +16,8 @@ class ProductCategory
 
     public string $productVersionId;
 
+    #[Assert\NotBlank]
+    #[HexUuid]
     public string $categoryId;
 
     public string $categoryVersionId;

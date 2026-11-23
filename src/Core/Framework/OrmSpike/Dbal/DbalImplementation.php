@@ -9,7 +9,12 @@ use Shopware\Core\Defaults;
 use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Adapter\Database\Dialect\SqlDialect;
 use Shopware\Core\Framework\Adapter\Database\Dialect\SqlDialectFactory;
+use Shopware\Core\Framework\Context;
+use Shopware\Core\Framework\DataAbstractionLayer\Indexing\EntityIndexerRegistry;
 use Shopware\Core\Framework\Log\Package;
+use Shopware\Core\Framework\OrmSpike\Fair\WriteContract;
+use Shopware\Core\Framework\OrmSpike\Fair\WrittenEvents;
+use Shopware\Core\Framework\OrmSpike\Fair\WrittenProduct;
 use Shopware\Core\Framework\OrmSpike\Harness\Implementation;
 use Shopware\Core\Framework\OrmSpike\Harness\Params;
 use Shopware\Core\Framework\OrmSpike\Harness\ResultContract;
@@ -25,6 +30,9 @@ use Shopware\Core\Framework\OrmSpike\Harness\WriteSet;
  * visible (visibility >= 10 in the sales channel). Visibility and categories of a variant are read from its parent: the data set has no variant
  * with own visibility rows (the DAL decides per row whether the variant has own rows, this code does not).
  *
+ * `--option full=1` adds what the DAL does before and after a write: plain checks with the rules of the DAL field serializers, the write
+ * protection check and an `EntityWrittenContainerEvent` for the create and for the stock update (docs/35).
+ *
  * @internal
  */
 #[Package('framework')]
@@ -32,8 +40,13 @@ final class DbalImplementation implements Implementation
 {
     private ?SqlDialect $dialect = null;
 
-    public function __construct(private readonly Connection $connection)
-    {
+    private bool $full = false;
+
+    public function __construct(
+        private readonly Connection $connection,
+        private readonly WriteContract $contract,
+        private readonly WrittenEvents $events,
+    ) {
     }
 
     public static function key(): string
@@ -43,6 +56,7 @@ final class DbalImplementation implements Implementation
 
     public function configure(array $options): void
     {
+        $this->full = ($options['full'] ?? '0') === '1';
     }
 
     public function s1Listing(Params $params): array
@@ -184,6 +198,24 @@ final class DbalImplementation implements Implementation
         $version = IdBinding::value($params->liveVersionId);
         $idType = IdBinding::type();
 
+        if ($this->full) {
+            $context = Context::createDefaultContext();
+            $context->addState(EntityIndexerRegistry::DISABLE_INDEXING);
+            $written = $this->written($params, $set);
+            // nothing has reached the database yet
+            WriteContract::plain($written);
+            foreach ($written as $p) {
+                $this->contract->assertWritable('product', ['id' => $p->id, 'taxId' => $p->taxId, 'productNumber' => $p->productNumber, 'stock' => $p->stock, 'price' => $p->gross, 'active' => $p->active, 'createdAt' => $now], $context);
+                foreach ($p->translations as $t) {
+                    $this->contract->assertWritable('product_translation', ['languageId' => $t['languageId'], 'name' => $t['name'], 'createdAt' => $now], $context);
+                }
+                $this->contract->assertWritable('product', ['id' => $p->id, 'stock' => $p->newStock, 'updatedAt' => $now], $context);
+                foreach ($p->visibilities as $v) {
+                    $this->contract->assertWritable('product_visibility', ['id' => $v['id'], 'salesChannelId' => $v['salesChannelId'], 'visibility' => $v['visibility'], 'createdAt' => $now], $context);
+                }
+            }
+        }
+
         $this->connection->transactional(function () use ($params, $set, $now, $version, $idType): void {
             $this->insert(
                 'product',
@@ -232,6 +264,25 @@ final class DbalImplementation implements Implementation
                 $types
             );
         });
+
+        if ($this->full) {
+            // one transaction for both writes, so the two events follow the commit
+            $this->events->created($written, $params, $context);
+            $this->events->stockUpdated(array_map(static fn (WrittenProduct $p, array $row): WrittenProduct => new WrittenProduct(
+                $p->id,
+                $p->productNumber,
+                $row['newStock'],
+                $row['newStock'],
+                $p->taxId,
+                $p->active,
+                $p->currencyId,
+                $p->gross,
+                $p->net,
+                $p->translations,
+                $p->categoryIds,
+                $p->visibilities
+            ), $written, $set->products), $params, $context);
+        }
     }
 
     public function s5CriteriaFromJson(Params $params): array
@@ -292,6 +343,29 @@ final class DbalImplementation implements Implementation
             'total' => $result['total'],
             'items' => array_map(static fn (array $i): array => ['id' => $i['id'], 'productNumber' => $i['productNumber'], 'manufacturer' => $i['manufacturer']], $result['items']),
         ];
+    }
+
+    /**
+     * What the transaction writes, as the events need it.
+     *
+     * @return list<WrittenProduct>
+     */
+    private function written(Params $params, WriteSet $set): array
+    {
+        return array_map(static fn (array $p): WrittenProduct => new WrittenProduct(
+            $p['id'],
+            $p['productNumber'],
+            $p['stock'],
+            $p['newStock'],
+            $params->taxId,
+            true,
+            $params->currencyId,
+            $p['gross'],
+            $p['net'],
+            [['languageId' => $params->systemLanguageId, 'name' => $p['nameEn']], ['languageId' => $params->languageId, 'name' => $p['nameDe']]],
+            $p['categoryIds'],
+            [['id' => md5('visibility' . $p['id']), 'salesChannelId' => $params->salesChannelId, 'visibility' => 30]]
+        ), $set->products);
     }
 
     private function dialect(): SqlDialect

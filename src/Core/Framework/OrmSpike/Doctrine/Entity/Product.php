@@ -6,6 +6,8 @@ use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 use Shopware\Core\Framework\Log\Package;
+use Shopware\Core\Framework\OrmSpike\Fair\Constraint\HexUuid;
+use Symfony\Component\Validator\Constraints as Assert;
 
 /**
  * Doctrine mapping of the existing `product` table (composite key id + version_id, parent self reference with parent_version_id).
@@ -20,6 +22,8 @@ class Product
 {
     #[ORM\Id]
     #[ORM\Column(name: 'id', type: 'shopware_id')]
+    #[Assert\NotBlank]
+    #[HexUuid]
     public string $id;
 
     #[ORM\Id]
@@ -27,6 +31,8 @@ class Product
     public string $versionId;
 
     #[ORM\Column(name: 'product_number', type: 'string')]
+    #[Assert\NotBlank(normalizer: 'trim')]
+    #[Assert\Length(max: 255, normalizer: 'trim')]
     public string $productNumber;
 
     /**
@@ -36,15 +42,25 @@ class Product
     public ?int $active = null;
 
     #[ORM\Column(name: 'stock', type: 'integer')]
+    #[Assert\NotNull]
     public int $stock = 0;
 
     /**
      * @var array<string, array<string, mixed>>|null
      */
     #[ORM\Column(name: 'price', type: 'json', nullable: true)]
+    #[Assert\NotBlank]
+    #[Assert\All([new Assert\Collection(fields: [
+        'currencyId' => [new Assert\NotBlank(), new HexUuid()],
+        'gross' => [new Assert\NotBlank(), new Assert\Type('numeric')],
+        'net' => [new Assert\NotBlank(), new Assert\Type('numeric')],
+        'linked' => [new Assert\Type('bool')],
+    ])])]
     public ?array $price = null;
 
     #[ORM\Column(name: 'tax_id', type: 'shopware_id', nullable: true)]
+    #[Assert\NotBlank]
+    #[HexUuid]
     public ?string $taxId = null;
 
     #[ORM\Column(name: 'created_at', type: 'datetime_immutable')]
@@ -84,6 +100,7 @@ class Product
      * @var Collection<int, ProductTranslation>
      */
     #[ORM\OneToMany(targetEntity: ProductTranslation::class, mappedBy: 'product', cascade: ['persist'])]
+    #[Assert\Valid]
     public Collection $translations;
 
     /**
@@ -96,6 +113,7 @@ class Product
      * @var Collection<int, ProductVisibility>
      */
     #[ORM\OneToMany(targetEntity: ProductVisibility::class, mappedBy: 'product', cascade: ['persist'])]
+    #[Assert\Valid]
     public Collection $visibilities;
 
     /**
@@ -126,5 +144,16 @@ class Product
         $this->visibilities = new ArrayCollection();
         $this->categories = new ArrayCollection();
         $this->options = new ArrayCollection();
+    }
+
+    /**
+     * Ids of the referenced categories, only for the write validation (no proxy is initialized).
+     *
+     * @return list<string>
+     */
+    #[Assert\All([new HexUuid()])]
+    public function getCategoryIds(): array
+    {
+        return array_map(static fn (Category $category): string => $category->id, $this->categories->toArray());
     }
 }
