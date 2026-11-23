@@ -62,10 +62,6 @@ final class CycleImplementation implements Implementation
 
     public function s1Listing(Params $params): array
     {
-        if ($this->optimized) {
-            throw new ScenarioNotSupported('todo');
-        }
-
         $de = IdBinding::value($params->languageId);
         $en = IdBinding::value($params->systemLanguageId);
         $select = $this->availableProducts($params)
@@ -81,7 +77,8 @@ final class CycleImplementation implements Implementation
             ->load('parent.translations', ['method' => JoinableLoader::POSTLOAD, 'where' => ['languageId' => ['in' => [$de, $en]]]])
             ->load('parent.manufacturer.translations', ['method' => JoinableLoader::POSTLOAD, 'where' => ['languageId' => ['in' => [$de, $en]]]])
             ->load('parent.cover.media')
-            ->fetchAll();
+            ;
+        $products = $this->products($products);
 
         $items = [];
         foreach ($products as $product) {
@@ -110,7 +107,8 @@ final class CycleImplementation implements Implementation
             ->load('parent.options.option.translations', $in)
             ->load('parent.options.option.group.translations', $in)
             ->load('parent.categories')
-            ->fetchOne();
+            ->limit(1);
+        $product = $this->products($product)[0] ?? null;
         if ($product === null) {
             throw new \RuntimeException('S2 variant not found or not visible: ' . $params->variantId);
         }
@@ -124,8 +122,8 @@ final class CycleImplementation implements Implementation
         $categories = $product->categories !== [] ? $product->categories : ($parent->categories ?? []);
 
         $priceRows = array_map(fn ($p): array => [
-            'quantityStart' => $p->quantityStart,
-            'quantityEnd' => $p->quantityEnd,
+            'quantityStart' => (int) $p->quantityStart,
+            'quantityEnd' => $p->quantityEnd === null ? null : (int) $p->quantityEnd,
             'price' => $this->price($p->price, $params),
         ], $prices);
         usort($priceRows, static fn (array $a, array $b): int => $a['quantityStart'] <=> $b['quantityStart']);
@@ -179,12 +177,12 @@ final class CycleImplementation implements Implementation
             ->load('translations', $in)
             ->load('manufacturer.translations', $in)
             ->load('parent.translations', $in)
-            ->load('parent.manufacturer.translations', $in)
-            ->fetchAll();
+            ->load('parent.manufacturer.translations', $in);
+        $products = $this->products($products);
 
         return [
             'total' => $total,
-            'items' => array_map(fn (Product $p): array => $this->listItem($p, $params, false), $products),
+            'items' => array_map(fn (object $p): array => $this->listItem($p, $params, false), $products),
             'aggregations' => [
                 'minPrice' => ResultContract::price($stats[0]['min_price'] ?? null),
                 'maxPrice' => ResultContract::price($stats[0]['max_price'] ?? null),
@@ -285,8 +283,8 @@ final class CycleImplementation implements Implementation
         $in = ['method' => JoinableLoader::POSTLOAD, 'where' => ['languageId' => ['in' => $this->languages($params)]]];
         $products = $select->limit((int) ($json['limit'] ?? 25))
             ->load('manufacturer.translations', $in)
-            ->load('parent.manufacturer.translations', $in)
-            ->fetchAll();
+            ->load('parent.manufacturer.translations', $in);
+        $products = $this->products($products);
 
         $items = [];
         foreach ($products as $product) {
@@ -299,6 +297,41 @@ final class CycleImplementation implements Implementation
         }
 
         return ['total' => $total, 'items' => $items];
+    }
+
+    /**
+     * Idiomatic: entities from the mapper and the heap. Optimized: `fetchData()` arrays without entity hydration, ids converted
+     * to hex by hand because only the root row is typecast, then wrapped as plain objects so the shared mapping code can read them.
+     *
+     * @param Select<Product> $select
+     *
+     * @return list<object>
+     */
+    private function products(Select $select): array
+    {
+        if (!$this->optimized) {
+            return array_values(iterator_to_array($select->fetchAll(), false));
+        }
+
+        return array_map(fn (array $row): object => $this->toObject($row), iterator_to_array($select->fetchData(false), false));
+    }
+
+    /**
+     * @param array<array-key, mixed> $row
+     */
+    private function toObject(array $row): object
+    {
+        $object = new \stdClass();
+        foreach ($row as $key => $value) {
+            if (\is_array($value)) {
+                $value = array_is_list($value) ? array_map(fn ($v) => \is_array($v) ? $this->toObject($v) : $v, $value) : $this->toObject($value);
+            } elseif (\is_string($value) && ($key === 'id' || str_ends_with((string) $key, 'Id'))) {
+                $value = IdBinding::toHex($value);
+            }
+            $object->{$key} = $value;
+        }
+
+        return $object;
     }
 
     /**
@@ -352,7 +385,7 @@ final class CycleImplementation implements Implementation
     /**
      * @return array<string, mixed>
      */
-    private function listItem(Product $product, Params $params, bool $withCover): array
+    private function listItem(object $product, Params $params, bool $withCover): array
     {
         $parent = $product->parent;
         $manufacturer = $product->manufacturer ?? $parent?->manufacturer;
@@ -374,7 +407,7 @@ final class CycleImplementation implements Implementation
     /**
      * Name of the first owner that has one in the requested language, then the same in the system language.
      *
-     * @param array<Product|null> $owners
+     * @param array<object|null> $owners
      */
     private function translated(array $owners, Params $params, string $field = 'name'): ?string
     {
