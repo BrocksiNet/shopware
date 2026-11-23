@@ -1,0 +1,32 @@
+<?php declare(strict_types=1);
+
+namespace Shopware\Core\Framework\OrmSpike\DalV2\Profile;
+
+use Shopware\Core\Framework\Context;
+use Shopware\Core\Framework\DataAbstractionLayer\EntityDefinition;
+use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
+use Shopware\Core\Framework\DataAbstractionLayer\Search\EntitySearcherInterface;
+use Shopware\Core\Framework\DataAbstractionLayer\Search\IdSearchResult;
+use Shopware\Core\Framework\Log\Package;
+
+/**
+ * @internal
+ */
+#[Package('framework')]
+final class TimedSearcher implements EntitySearcherInterface
+{
+    public function __construct(private readonly EntitySearcherInterface $inner)
+    {
+    }
+
+    public function search(EntityDefinition $definition, Criteria $criteria, Context $context): IdSearchResult
+    {
+        Probe::enter('search.php');
+
+        try {
+            return $this->inner->search($definition, $criteria, $context);
+        } finally {
+            Probe::leave();
+        }
+    }
+}
