@@ -28,6 +28,7 @@ use Shopware\Core\Framework\OrmSpike\DalV2\Profile\TimedDispatcher;
 use Shopware\Core\Framework\OrmSpike\DalV2\Profile\TimedHydrator;
 use Shopware\Core\Framework\OrmSpike\DalV2\Profile\TimedReader;
 use Shopware\Core\Framework\OrmSpike\DalV2\Profile\TimedSearcher;
+use Shopware\Core\Framework\OrmSpike\DalV2\Read\StatsFusionAggregator;
 use Shopware\Core\Framework\OrmSpike\DalV2\Read\WindowCountSearcher;
 use Shopware\Core\Framework\OrmSpike\DalV2\Write\SwitchableWriteGateway;
 use Shopware\Core\Framework\OrmSpike\Harness\Implementation;
@@ -191,6 +192,9 @@ final class DalV2Implementation implements Implementation
             $searcher = new WindowCountSearcher($this->connection, $this->queryHelper, $this->criteriaQueryBuilder);
         }
         $aggregator = $this->aggregator;
+        if (($this->options['agg'] ?? '') === 'stats') {
+            $aggregator = new StatsFusionAggregator($aggregator);
+        }
         $dispatcher = $this->dispatcher;
 
         if ($this->profile()) {
