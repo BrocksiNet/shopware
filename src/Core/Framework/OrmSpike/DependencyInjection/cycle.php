@@ -2,14 +2,16 @@
 
 namespace Shopware\Core\Framework\OrmSpike\DependencyInjection;
 
+use Doctrine\DBAL\Connection;
+use Shopware\Core\Framework\OrmSpike\Cycle\CycleImplementation;
+use Shopware\Core\Framework\OrmSpike\Harness\StatementCounter;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
 
-// Wave 8 ORM spike, services of the cycle implementation (owner: its handoff). Register the implementation class like this:
-//
-//   $containerConfigurator->services()->set(\Shopware\Core\Framework\OrmSpike\Cycle\Implementation::class)
-//       ->args([...])
-//       ->tag('orm_spike.implementation');
-//
-// The class implements Shopware\Core\Framework\OrmSpike\Harness\Implementation, key() returns 'cycle'.
+use function Symfony\Component\DependencyInjection\Loader\Configurator\service;
+
+// Wave 8 ORM spike, Cycle ORM implementation (owner: handoff C).
 return static function (ContainerConfigurator $containerConfigurator): void {
+    $containerConfigurator->services()->set(CycleImplementation::class)
+        ->args([service(Connection::class), service(StatementCounter::class)])
+        ->tag('orm_spike.implementation');
 };
