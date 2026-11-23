@@ -2,11 +2,13 @@
 
 namespace Shopware\Core\Framework\OrmSpike\Doctrine;
 
+use Doctrine\Common\EventManager;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Types\Type;
 use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\ORMSetup;
+use Doctrine\Persistence\Mapping\Driver\MappingDriver;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\OrmSpike\Doctrine\Query\DialectFunction;
 use Shopware\Core\Framework\OrmSpike\Doctrine\Type\ShopwareIdType;
@@ -23,19 +25,25 @@ use Symfony\Component\Cache\Adapter\FilesystemAdapter;
 #[Package('framework')]
 final class EntityManagerFactory
 {
-    public static function create(Connection $connection, string $cacheDir): EntityManagerInterface
+    /**
+     * @param string $namespace cache namespace, a second manager with other mapping (the probes) needs its own
+     */
+    public static function create(Connection $connection, string $cacheDir, string $namespace = 'orm_spike_doctrine', ?MappingDriver $driver = null, ?EventManager $events = null): EntityManagerInterface
     {
         if (!Type::hasType(ShopwareIdType::NAME)) {
             Type::addType(ShopwareIdType::NAME, ShopwareIdType::class);
         }
 
-        $cache = new ChainAdapter([new ArrayAdapter(), new FilesystemAdapter('orm_spike_doctrine', 0, $cacheDir . '/orm_spike_doctrine')]);
+        $cache = new ChainAdapter([new ArrayAdapter(), new FilesystemAdapter($namespace, 0, $cacheDir . '/' . $namespace)]);
         $config = ORMSetup::createAttributeMetadataConfig([__DIR__ . '/Entity'], false, null, $cache);
+        if ($driver !== null) {
+            $config->setMetadataDriverImpl($driver);
+        }
         $config->enableNativeLazyObjects(true);
         $config->addCustomStringFunction('SW_CI', static fn (string $name): DialectFunction => new DialectFunction($name, 'ci'));
         $config->addCustomNumericFunction('SW_PRICE', static fn (string $name): DialectFunction => new DialectFunction($name, 'price'));
         $config->addCustomNumericFunction('SW_TOTAL', static fn (string $name): DialectFunction => new DialectFunction($name, 'total'));
 
-        return new EntityManager($connection, $config);
+        return new EntityManager($connection, $config, $events);
     }
 }

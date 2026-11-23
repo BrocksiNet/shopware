@@ -6,6 +6,9 @@ use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
 use Shopware\Core\Framework\OrmSpike\Doctrine\DoctrineImplementation;
 use Shopware\Core\Framework\OrmSpike\Doctrine\EntityManagerFactory;
+use Shopware\Core\Framework\OrmSpike\Doctrine\Probe\ProbeCommand;
+use Shopware\Core\Framework\OrmSpike\Harness\ParamsFactory;
+use Shopware\Core\Framework\OrmSpike\Harness\WriteCleaner;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
 
 use function Symfony\Component\DependencyInjection\Loader\Configurator\service;
@@ -21,4 +24,15 @@ return static function (ContainerConfigurator $containerConfigurator): void {
     $services->set(DoctrineImplementation::class)
         ->args([service('orm_spike.doctrine.entity_manager')])
         ->tag('orm_spike.implementation');
+
+    $services->set(ProbeCommand::class)
+        ->args([
+            service(Connection::class),
+            service('orm_spike.doctrine.entity_manager'),
+            service(DoctrineImplementation::class),
+            service(ParamsFactory::class),
+            service(WriteCleaner::class),
+            '%kernel.cache_dir%',
+        ])
+        ->tag('console.command');
 };
