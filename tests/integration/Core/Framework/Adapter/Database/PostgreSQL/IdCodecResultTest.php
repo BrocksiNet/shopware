@@ -3,9 +3,9 @@
 namespace Shopware\Tests\Integration\Core\Framework\Adapter\Database\PostgreSQL;
 
 use Doctrine\DBAL\Connection;
+use Doctrine\DBAL\DriverManager;
 use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use PHPUnit\Framework\TestCase;
-use Shopware\Core\Framework\Adapter\Database\PostgreSQL\IdCodecResult;
 use Shopware\Core\Framework\Test\TestCaseBase\KernelTestBehaviour;
 
 /**
@@ -25,7 +25,13 @@ class IdCodecResultTest extends TestCase
         if (!$this->connection->getDatabasePlatform() instanceof PostgreSQLPlatform) {
             static::markTestSkipped('The id codec only runs on PostgreSQL');
         }
-        IdCodecResult::resetCache();
+    }
+
+    protected function tearDown(): void
+    {
+        if (isset($this->connection) && $this->connection->getDatabasePlatform() instanceof PostgreSQLPlatform) {
+            $this->connection->executeStatement('DROP VIEW IF EXISTS pg_temp.id_codec_probe');
+        }
     }
 
     public function testUuidLookingTextStaysTextOnEveryFetchMethod(): void
@@ -75,5 +81,39 @@ class IdCodecResultTest extends TestCase
         $value = $this->connection->fetchOne('SELECT CAST(? AS uuid)', [self::UUID_TEXT]);
 
         static::assertSame(hex2bin(str_replace('-', '', self::UUID_TEXT)), $value);
+    }
+
+    public function testSameSqlFollowsATypeChangeByDdl(): void
+    {
+        $sql = 'SELECT v FROM id_codec_probe';
+
+        $this->connection->executeStatement('CREATE TEMPORARY VIEW id_codec_probe AS SELECT CAST(\'' . self::UUID_TEXT . '\' AS uuid) AS v');
+        static::assertSame(16, \strlen($this->connection->fetchOne($sql)));
+
+        $this->connection->executeStatement('DROP VIEW pg_temp.id_codec_probe');
+        $this->connection->executeStatement('CREATE TEMPORARY VIEW id_codec_probe AS SELECT CAST(\'' . self::UUID_TEXT . '\' AS text) AS v');
+        static::assertSame(self::UUID_TEXT, $this->connection->fetchOne($sql));
+
+        $this->connection->executeStatement('DROP VIEW pg_temp.id_codec_probe');
+        $this->connection->executeStatement('CREATE TEMPORARY VIEW id_codec_probe AS SELECT CAST(\'' . self::UUID_TEXT . '\' AS uuid) AS v');
+        static::assertSame(16, \strlen($this->connection->fetchOne($sql)));
+    }
+
+    public function testSameSqlOnAnotherConnectionUsesItsOwnTypes(): void
+    {
+        $sql = 'SELECT v FROM id_codec_probe';
+        // @phpstan-ignore argument.type (the params of a working connection open a second one, the platform can not narrow them)
+        $other = DriverManager::getConnection($this->connection->getParams(), $this->connection->getConfiguration());
+
+        try {
+            $this->connection->executeStatement('CREATE TEMPORARY VIEW id_codec_probe AS SELECT CAST(\'' . self::UUID_TEXT . '\' AS uuid) AS v');
+            $other->executeStatement('CREATE TEMPORARY VIEW id_codec_probe AS SELECT CAST(\'' . self::UUID_TEXT . '\' AS text) AS v');
+
+            static::assertSame(16, \strlen($this->connection->fetchOne($sql)));
+            static::assertSame(self::UUID_TEXT, $other->fetchOne($sql));
+            static::assertSame(16, \strlen($this->connection->fetchOne($sql)));
+        } finally {
+            $other->close();
+        }
     }
 }

@@ -13,7 +13,8 @@ use Shopware\Core\Framework\Log\Package;
  *
  * The decision is made by the column type, not by the value: a `text` column holding a uuid-looking string stays text.
  * Only a value that looks like a uuid triggers the type lookup, so columns that never hold one cost nothing.
- * The lookup (`PDOStatement::getColumnMeta()`, which queries the catalog) runs once per SQL string and column and is cached for the process.
+ * The lookup (`PDOStatement::getColumnMeta()`, which queries the catalog and costs about one round trip) runs once per SQL string and column
+ * and is cached per connection until a statement may have changed the types ({@see IdCodecColumnTypes}).
  *
  * @internal
  */
@@ -21,13 +22,6 @@ use Shopware\Core\Framework\Log\Package;
 class IdCodecResult extends AbstractResultMiddleware
 {
     private const UUID_OID = 2950;
-
-    private const CACHE_LIMIT = 10000;
-
-    /**
-     * @var array<string, array<int, bool>>
-     */
-    private static array $uuidColumns = [];
 
     private ?\PDOStatement $statement = null;
 
@@ -39,6 +33,7 @@ class IdCodecResult extends AbstractResultMiddleware
     public function __construct(
         private readonly Result $result,
         private readonly string $sql,
+        private readonly IdCodecColumnTypes $columnTypes,
     ) {
         parent::__construct($result);
     }
@@ -84,14 +79,6 @@ class IdCodecResult extends AbstractResultMiddleware
         }
 
         return $values;
-    }
-
-    /**
-     * @internal for tests
-     */
-    public static function resetCache(): void
-    {
-        self::$uuidColumns = [];
     }
 
     /**
@@ -143,7 +130,7 @@ class IdCodecResult extends AbstractResultMiddleware
 
     private function isUuidColumn(int $index): bool
     {
-        $known = self::$uuidColumns[$this->sql][$index] ?? null;
+        $known = $this->columnTypes->get($this->sql, $index);
         if ($known !== null) {
             return $known;
         }
@@ -151,10 +138,7 @@ class IdCodecResult extends AbstractResultMiddleware
         $meta = $this->statement()->getColumnMeta($index);
         $isUuid = \is_array($meta) && ($meta['pgsql:oid'] ?? null) === self::UUID_OID;
 
-        if (\count(self::$uuidColumns) >= self::CACHE_LIMIT) {
-            self::$uuidColumns = [];
-        }
-        self::$uuidColumns[$this->sql][$index] = $isUuid;
+        $this->columnTypes->set($this->sql, $index, $isUuid);
 
         return $isUuid;
     }

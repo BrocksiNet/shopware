@@ -17,6 +17,7 @@ class IdCodecStatement extends AbstractStatementMiddleware
     public function __construct(
         Statement $statement,
         private readonly string $sql,
+        private readonly IdCodecColumnTypes $columnTypes,
     ) {
         parent::__construct($statement);
     }
@@ -52,6 +53,9 @@ class IdCodecStatement extends AbstractStatementMiddleware
 
     public function execute(): Result
     {
-        return new IdCodecResult(parent::execute(), $this->sql);
+        $result = parent::execute();
+        $this->columnTypes->observe($this->sql);
+
+        return new IdCodecResult($result, $this->sql, $this->columnTypes);
     }
 }
