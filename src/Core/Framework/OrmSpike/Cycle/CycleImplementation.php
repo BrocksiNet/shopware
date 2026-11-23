@@ -389,7 +389,6 @@ final class CycleImplementation implements Implementation
     {
         $parent = $product->parent;
         $manufacturer = $product->manufacturer ?? $parent?->manufacturer;
-        $cover = $product->cover ?? $parent?->cover;
         $item = [
             'id' => $product->id,
             'productNumber' => $product->productNumber,
@@ -398,6 +397,8 @@ final class CycleImplementation implements Implementation
             'price' => $this->price($product->price ?? $parent?->price, $params),
         ];
         if ($withCover) {
+            // reading the relation only when it was loaded: on an entity an unloaded relation is a lazy proxy that runs one query per product
+            $cover = $product->cover ?? $parent?->cover;
             $item['cover'] = $cover?->media?->path;
         }
 
