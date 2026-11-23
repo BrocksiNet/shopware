@@ -19,7 +19,12 @@ use Shopware\Core\Framework\DataAbstractionLayer\Search\RequestCriteriaBuilder;
 use Shopware\Core\Framework\DataAbstractionLayer\Telemetry\DalSearchInstrumentor;
 use Shopware\Core\Framework\DataAbstractionLayer\VersionManager;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\EntityWriteGatewayInterface;
+use Shopware\Core\Framework\OrmSpike\DalV2\Attr\SpikeNote;
+use Shopware\Core\Framework\OrmSpike\DalV2\Attr\SpikePluginNote;
 use Shopware\Core\Framework\OrmSpike\DalV2\DalV2Implementation;
+use Shopware\Core\Framework\OrmSpike\DalV2\Probe\DalV2ProbeCommand;
+use Shopware\Core\Framework\OrmSpike\DalV2\Typed\FieldPathChecker;
+use Shopware\Core\Framework\OrmSpike\Harness\ParamsFactory;
 use Shopware\Core\Framework\OrmSpike\DalV2\Write\SwitchableWriteGateway;
 use Shopware\Core\System\SalesChannel\Context\CachedSalesChannelContextFactory;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
@@ -67,4 +72,21 @@ return static function (ContainerConfigurator $containerConfigurator): void {
             service(RowLoader::class),
             service(SqlDialect::class),
         ]);
+
+    // X1 and X3: attribute entities, registered by the tag only (no definition class)
+    $services->set(SpikeNote::class)->tag('shopware.entity');
+    $services->set(SpikePluginNote::class)->tag('shopware.entity');
+
+    $services->set(DalV2ProbeCommand::class)
+        ->args([
+            service(Connection::class),
+            service('product.repository'),
+            service('spike_note.repository'),
+            service('spike_plugin_note.repository'),
+            service(ParamsFactory::class),
+            service(FieldPathChecker::class),
+        ])
+        ->tag('console.command');
+
+    $services->set(FieldPathChecker::class)->args([service(DefinitionInstanceRegistry::class)]);
 };
