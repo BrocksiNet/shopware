@@ -119,6 +119,15 @@ class WriteGatewayV2BatchSemanticsTest extends TestCase
         static::assertSame(['a' => 5, 'b' => 6, 'c' => 7], $this->column('stock'));
     }
 
+    public function testUpdatesOfAUniqueColumnAreSentOneByOne(): void
+    {
+        // `code` is declared inline (`UNIQUE`), which SQLite backs with an internal `sqlite_autoindex_*` index
+        $this->gateway(true)->execute($this->updates(['a' => ['code' => 11], 'b' => ['code' => 12], 'c' => ['code' => 13]]), $this->writeContext());
+
+        static::assertCount(3, $this->updates);
+        static::assertSame(['a' => 11, 'b' => 12, 'c' => 13], $this->column('code'));
+    }
+
     public function testUniqueSwapThatSucceedsOneByOneSucceedsWithBatching(): void
     {
         foreach ([false, true] as $batch) {

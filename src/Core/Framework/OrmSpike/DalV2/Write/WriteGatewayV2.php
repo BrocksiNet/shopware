@@ -5,6 +5,7 @@ namespace Shopware\Core\Framework\OrmSpike\DalV2\Write;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Exception;
 use Doctrine\DBAL\ParameterType;
+use Doctrine\DBAL\Platforms\SQLitePlatform;
 use Doctrine\DBAL\Schema\Index\IndexType;
 use Doctrine\DBAL\Schema\Name\OptionallyQualifiedName;
 use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
@@ -703,6 +704,16 @@ class WriteGatewayV2 implements EntityWriteGatewayInterface
             $primaryKey = $schemaManager->introspectTablePrimaryKeyConstraint(OptionallyQualifiedName::quoted($table));
             foreach ($primaryKey?->getColumnNames() ?? [] as $column) {
                 $columns[strtolower($column->getIdentifier()->getValue())] = true;
+            }
+            if ($this->connection->getDatabasePlatform() instanceof SQLitePlatform) {
+                // DBAL skips the internal `sqlite_autoindex_*` indexes, which back inline UNIQUE constraints such as `product_number`
+                $autoIndexColumns = $this->connection->fetchFirstColumn(
+                    'SELECT c.name FROM pragma_index_list(?) i JOIN pragma_index_info(i.name) c WHERE i."unique" = 1',
+                    [$table],
+                );
+                foreach ($autoIndexColumns as $column) {
+                    $columns[strtolower((string) $column)] = true;
+                }
             }
             $this->uniqueColumns[$table] = $columns;
         }
