@@ -687,6 +687,8 @@ class WriteGatewayV2 implements EntityWriteGatewayInterface
      * MySQL, MariaDB, SQLite and for non-deferrable PostgreSQL constraints, so the two can differ: with a=1 and b=2, "b to 3, a to 2"
      * succeeds one by one, but fails as one statement when a is changed first, and "a to 2, b to 3" fails one by one but can succeed as one statement.
      * Updates of a column in any unique index (the primary key included) are therefore never batched.
+     * The DAL repeats the key columns (`version_id`, `product_id`, ...) in every update payload with the value of the WHERE key;
+     * such a column does not change and does not count.
      */
     private function touchesUniqueIndex(string $table, UpdateCommand $command): bool
     {
@@ -718,7 +720,11 @@ class WriteGatewayV2 implements EntityWriteGatewayInterface
             $this->uniqueColumns[$table] = $columns;
         }
 
-        foreach (array_keys($command->getPayload()) as $column) {
+        $primaryKey = $command->getPrimaryKey();
+        foreach ($command->getPayload() as $column => $value) {
+            if (\array_key_exists($column, $primaryKey) && $primaryKey[$column] === $value) {
+                continue;
+            }
             if (isset($this->uniqueColumns[$table][strtolower($column)])) {
                 return true;
             }

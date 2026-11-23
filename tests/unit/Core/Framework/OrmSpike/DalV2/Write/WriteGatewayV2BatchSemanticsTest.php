@@ -119,6 +119,22 @@ class WriteGatewayV2BatchSemanticsTest extends TestCase
         static::assertSame(['a' => 5, 'b' => 6, 'c' => 7], $this->column('stock'));
     }
 
+    public function testKeyColumnsRepeatedWithTheirOwnValueAreStillBatched(): void
+    {
+        // the DAL repeats the primary key in every update payload, e.g. `version_id` for product
+        $this->gateway(true)->execute($this->updates(['a' => ['id' => 'a', 'stock' => 5], 'b' => ['id' => 'b', 'stock' => 6], 'c' => ['id' => 'c', 'stock' => 7]]), $this->writeContext());
+
+        static::assertCount(1, $this->updates);
+        static::assertSame(['a' => 5, 'b' => 6, 'c' => 7], $this->column('stock'));
+    }
+
+    public function testChangingAKeyColumnIsSentOneByOne(): void
+    {
+        $this->gateway(true)->execute($this->updates(['a' => ['id' => 'x'], 'b' => ['id' => 'y']]), $this->writeContext());
+
+        static::assertCount(2, $this->updates);
+    }
+
     public function testUpdatesOfAUniqueColumnAreSentOneByOne(): void
     {
         // `code` is declared inline (`UNIQUE`), which SQLite backs with an internal `sqlite_autoindex_*` index
@@ -232,7 +248,7 @@ class WriteGatewayV2BatchSemanticsTest extends TestCase
     }
 
     /**
-     * @param array<string, array<string, int>> $payloads
+     * @param array<string, array<string, int|string>> $payloads
      *
      * @return list<UpdateCommand>
      */
