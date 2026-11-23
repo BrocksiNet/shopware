@@ -5,7 +5,6 @@ namespace Shopware\Core\Framework\OrmSpike\DalV2\Write;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Exception;
 use Doctrine\DBAL\ParameterType;
-use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\Adapter\Database\Dialect\SqlDialect;
 use Shopware\Core\Framework\Adapter\Database\Dialect\SqlDialectFactory;
@@ -526,12 +525,6 @@ class WriteGatewayV2 implements EntityWriteGatewayInterface
     }
 
     /**
-     * Lever W1b: one `UPDATE ... SET c = CASE WHEN <pk> THEN ? ... END WHERE <pk> OR <pk>` per run of update commands with the
-     * same payload columns, instead of one UPDATE per row. Columns with the same value in every row are set directly.
-     *
-     * @param list<UpdateCommand> $commands
-     */
-    /**
      * @param list<UpdateCommand> $commands
      */
     private function updateSingly(string $table, array $commands): void
@@ -543,6 +536,15 @@ class WriteGatewayV2 implements EntityWriteGatewayInterface
         }
     }
 
+    /**
+     * Lever W1b: one `UPDATE ... SET c = CASE WHEN <pk> THEN ? ... END WHERE <pk> OR <pk>` per run of update commands with the
+     * same payload columns, instead of one UPDATE per row. Columns with the same value in every row are set directly.
+     *
+     * Column references inside the CASE are qualified with the table name: the PostgreSQL translator reads a bare double quoted
+     * token after WHEN or ELSE as a MySQL string literal (`ELSE 'stock'`), which made the CASE a text expression there.
+     *
+     * @param list<UpdateCommand> $commands
+     */
     private function executeBatchedUpdate(string $table, array $commands): void
     {
         foreach (array_chunk($commands, 100) as $chunk) {
@@ -558,6 +560,7 @@ class WriteGatewayV2 implements EntityWriteGatewayInterface
             }
 
             $first = $chunk[0];
+            $escapedTable = EntityDefinitionQueryHelper::escape($table);
             $columns = array_keys($first->getPayload());
             $pkColumns = array_keys($first->getPrimaryKey());
             $whenSql = [];
@@ -565,7 +568,7 @@ class WriteGatewayV2 implements EntityWriteGatewayInterface
             foreach ($chunk as $command) {
                 $cond = [];
                 foreach ($pkColumns as $pk) {
-                    $cond[] = EntityDefinitionQueryHelper::escape($pk) . ' = ?';
+                    $cond[] = $escapedTable . '.' . EntityDefinitionQueryHelper::escape($pk) . ' = ?';
                     $whenParams[] = $command->getPrimaryKey()[$pk];
                 }
                 $whenSql[] = implode(' AND ', $cond);
@@ -583,16 +586,6 @@ class WriteGatewayV2 implements EntityWriteGatewayInterface
 
                     continue;
                 }
-                if ($this->connection->getDatabasePlatform() instanceof PostgreSQLPlatform) {
-                    foreach ($values as $value) {
-                        if (!\is_int($value)) {
-                            // PostgreSQL types an untyped CASE result as text, only integer columns can be batched this way
-                            $this->updateSingly($table, $chunk);
-
-                            continue 3;
-                        }
-                    }
-                }
                 $case = [];
                 foreach ($values as $i => $value) {
                     $case[] = 'WHEN ' . $whenSql[$i] . ' THEN ?';
@@ -602,10 +595,10 @@ class WriteGatewayV2 implements EntityWriteGatewayInterface
                     $setParams[] = $value;
                     $setTypes[\count($setParams) - 1] = \is_int($value) ? ParameterType::INTEGER : ParameterType::STRING;
                 }
-                $set[] = $quoted . ' = CASE ' . implode(' ', $case) . ' ELSE ' . $quoted . ' END';
+                $set[] = $quoted . ' = CASE ' . implode(' ', $case) . ' ELSE ' . $escapedTable . '.' . $quoted . ' END';
             }
 
-            $sql = 'UPDATE ' . EntityDefinitionQueryHelper::escape($table) . ' SET ' . implode(', ', $set)
+            $sql = 'UPDATE ' . $escapedTable . ' SET ' . implode(', ', $set)
                 . ' WHERE (' . implode(') OR (', $whenSql) . ')';
             $params = array_merge($setParams, $whenParams);
             $types = $setTypes;
