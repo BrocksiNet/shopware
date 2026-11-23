@@ -47,7 +47,9 @@ class WindowCountSearcher implements EntitySearcherInterface
     public function __construct(
         private readonly Connection $connection,
         private readonly EntityDefinitionQueryHelper $queryHelper,
-        private readonly CriteriaQueryBuilder $criteriaQueryBuilder
+        private readonly CriteriaQueryBuilder $criteriaQueryBuilder,
+        private readonly bool $window = true,
+        private readonly bool $flat = false,
     ) {
     }
 
@@ -59,7 +61,8 @@ class WindowCountSearcher implements EntitySearcherInterface
 
         $table = $definition->getEntityName();
 
-        $query = new QueryBuilder($this->connection);
+        // lever R1a (`shape=join`): the id statement joins the translation tables directly
+        $query = $this->flat ? new FlatTranslationQueryBuilder($this->connection) : new QueryBuilder($this->connection);
 
         $fields = [];
         foreach ($definition->getFields() as $field) {
@@ -130,7 +133,8 @@ class WindowCountSearcher implements EntitySearcherInterface
             $query->setTitle($criteria->getTitle() . '::search-ids');
         }
 
-        $windowTotal = $criteria->getTotalCountMode() === Criteria::TOTAL_COUNT_MODE_EXACT
+        $windowTotal = $this->window
+            && $criteria->getTotalCountMode() === Criteria::TOTAL_COUNT_MODE_EXACT
             && $criteria->getLimit() !== null
             && !$query->hasState(Criteria::SCORE_FIELD);
         if ($windowTotal) {

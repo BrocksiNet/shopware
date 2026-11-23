@@ -21,6 +21,8 @@ use Shopware\Core\Framework\DataAbstractionLayer\Telemetry\DalSearchInstrumentor
 use Shopware\Core\Framework\DataAbstractionLayer\VersionManager;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\OrmSpike\Dal\DalImplementation;
+use Shopware\Core\Framework\OrmSpike\DalV2\Capture\SqlLog;
+use Shopware\Core\Framework\OrmSpike\DalV2\Capture\SqlLogConnection;
 use Shopware\Core\Framework\OrmSpike\DalV2\Profile\Probe;
 use Shopware\Core\Framework\OrmSpike\DalV2\Profile\ProbeConnection;
 use Shopware\Core\Framework\OrmSpike\DalV2\Profile\TimedAggregator;
@@ -30,6 +32,7 @@ use Shopware\Core\Framework\OrmSpike\DalV2\Profile\TimedReader;
 use Shopware\Core\Framework\OrmSpike\DalV2\Profile\TimedSearcher;
 use Shopware\Core\Framework\OrmSpike\DalV2\Projection\ProjectionScenarios;
 use Shopware\Core\Framework\OrmSpike\DalV2\Projection\Projector;
+use Shopware\Core\Framework\OrmSpike\DalV2\Read\ShapeEntityReader;
 use Shopware\Core\Framework\OrmSpike\DalV2\Read\StatsFusionAggregator;
 use Shopware\Core\Framework\OrmSpike\DalV2\Read\WindowCountSearcher;
 use Shopware\Core\Framework\OrmSpike\DalV2\Write\SwitchableWriteGateway;
@@ -97,12 +100,14 @@ final class DalV2Implementation implements Implementation
     public function configure(array $options): void
     {
         $this->options = $options;
+        SqlLog::$file = $options['sqllog'] ?? null;
         $this->inner = null;
         $this->scenarios = null;
     }
 
     public function s1Listing(Params $params): array
     {
+        SqlLog::marker('S1');
         $start = $this->begin();
         $result = $this->proj() ? $this->scenarios()->s1Listing($params) : $this->inner()->s1Listing($params);
         $this->end($start);
@@ -112,6 +117,7 @@ final class DalV2Implementation implements Implementation
 
     public function s2Detail(Params $params): array
     {
+        SqlLog::marker('S2');
         $start = $this->begin();
         $result = $this->proj() ? $this->scenarios()->s2Detail($params) : $this->inner()->s2Detail($params);
         $this->end($start);
@@ -121,6 +127,7 @@ final class DalV2Implementation implements Implementation
 
     public function s3Search(Params $params): array
     {
+        SqlLog::marker('S3');
         $start = $this->begin();
         $result = $this->proj() ? $this->scenarios()->s3Search($params) : $this->inner()->s3Search($params);
         $this->end($start);
@@ -144,6 +151,7 @@ final class DalV2Implementation implements Implementation
 
     public function s5CriteriaFromJson(Params $params): array
     {
+        SqlLog::marker('S5');
         $start = $this->begin();
         $result = $this->proj() ? $this->scenarios()->s5CriteriaFromJson($params) : $this->inner()->s5CriteriaFromJson($params);
         $this->end($start);
@@ -196,19 +204,39 @@ final class DalV2Implementation implements Implementation
             return $this->inner;
         }
 
-        $reader = new EntityReader(
-            $this->connection,
-            $this->profile() ? new TimedHydrator($this->container) : $this->container->get(EntityHydrator::class),
-            $this->queryHelper,
-            $this->parser,
-            $this->criteriaQueryBuilder,
-            $this->logger,
-            $this->criteriaFieldsResolver,
-            $this->dialect,
-        );
+        $shape = (string) ($this->options['shape'] ?? '');
+        $flat = str_contains($shape, 'join');
+        $batch = str_contains($shape, 'batch');
+        $hydrator = $this->profile() ? new TimedHydrator($this->container) : $this->container->get(EntityHydrator::class);
+        if ($flat || $batch) {
+            $reader = new ShapeEntityReader(
+                $this->connection,
+                $hydrator,
+                $this->queryHelper,
+                $this->parser,
+                $this->criteriaQueryBuilder,
+                $this->logger,
+                $this->criteriaFieldsResolver,
+                $this->dialect,
+                $flat,
+                $batch,
+            );
+        } else {
+            $reader = new EntityReader(
+                $this->connection,
+                $hydrator,
+                $this->queryHelper,
+                $this->parser,
+                $this->criteriaQueryBuilder,
+                $this->logger,
+                $this->criteriaFieldsResolver,
+                $this->dialect,
+            );
+        }
         $searcher = $this->searcher;
-        if (($this->options['count'] ?? '') === 'window') {
-            $searcher = new WindowCountSearcher($this->connection, $this->queryHelper, $this->criteriaQueryBuilder);
+        $window = ($this->options['count'] ?? '') === 'window';
+        if ($window || $flat) {
+            $searcher = new WindowCountSearcher($this->connection, $this->queryHelper, $this->criteriaQueryBuilder, $window, $flat);
         }
         $aggregator = $this->aggregator;
         if (($this->options['agg'] ?? '') === 'stats') {
@@ -216,12 +244,16 @@ final class DalV2Implementation implements Implementation
         }
         $dispatcher = $this->dispatcher;
 
+        if (SqlLog::$file !== null) {
+            $this->wrapConnection(SqlLogConnection::class);
+        }
+
         if ($this->profile()) {
             $reader = new TimedReader($reader);
             $searcher = new TimedSearcher($searcher);
             $aggregator = new TimedAggregator($aggregator);
             $dispatcher = new TimedDispatcher($dispatcher);
-            $this->wrapConnection();
+            $this->wrapConnection(ProbeConnection::class);
             register_shutdown_function($this->dump(...));
         }
 
@@ -255,15 +287,18 @@ final class DalV2Implementation implements Implementation
         );
     }
 
-    private function wrapConnection(): void
+    /**
+     * @param class-string<ProbeConnection|SqlLogConnection> $wrapper
+     */
+    private function wrapConnection(string $wrapper): void
     {
         $native = $this->connection->getNativeConnection(); // opens the connection
         unset($native);
 
         $property = new \ReflectionProperty(Connection::class, '_conn');
         $current = $property->getValue($this->connection);
-        if (!$current instanceof ProbeConnection) {
-            $property->setValue($this->connection, new ProbeConnection($current));
+        if (!$current instanceof $wrapper) {
+            $property->setValue($this->connection, new $wrapper($current));
         }
     }
 
