@@ -3,7 +3,6 @@
 namespace Shopware\Core\Content\Newsletter\SalesChannel;
 
 use Psr\Clock\ClockInterface;
-use Shopware\Core\Content\Newsletter\Domain\NewsletterRecipientEntityFactory;
 use Shopware\Core\Content\Newsletter\Domain\NewsletterRecipientStorage;
 use Shopware\Core\Content\Newsletter\Domain\Request\ConfirmRequest;
 use Shopware\Core\Content\Newsletter\Event\NewsletterConfirmEvent;
@@ -99,7 +98,7 @@ class NewsletterConfirmRoute extends AbstractNewsletterConfirmRoute
 
         $this->storage->confirm($recipient->id, $this->clock->now(), $context->getContext());
 
-        $event = new NewsletterConfirmEvent($context->getContext(), NewsletterRecipientEntityFactory::create($recipient), $context->getSalesChannelId());
+        $event = new NewsletterConfirmEvent($context->getContext(), $this->storage->toEventEntity($recipient), $context->getSalesChannelId());
         $this->eventDispatcher->dispatch($event);
 
         return new SuccessResponse();

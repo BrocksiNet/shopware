@@ -15,9 +15,12 @@ use Shopware\Core\Defaults;
 use Shopware\Core\Framework\Api\Context\SystemSource;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
+use Shopware\Core\Framework\DataAbstractionLayer\Event\EntityLoadedEvent;
 use Shopware\Core\Framework\Log\Package;
+use Shopware\Core\Framework\Struct\ArrayStruct;
 use Shopware\Core\Framework\Test\TestCaseBase\IntegrationTestBehaviour;
 use Shopware\Core\Framework\Uuid\Uuid;
+use Shopware\Core\Test\Integration\EventDispatcher\EventHookDispatcher;
 use Shopware\Core\Test\TestDefaults;
 use Symfony\Component\Clock\NativeClock;
 
@@ -163,6 +166,57 @@ class NewsletterRecipientStorageTest extends TestCase
         static::assertNull($storage->findByEmail('nobody@example.com', TestDefaults::SALES_CHANNEL, Context::createDefaultContext()));
         static::assertNull($storage->findByHash('does-not-exist', Context::createDefaultContext()));
         static::assertNull($storage->findCustomerEmail(Uuid::randomHex(), Context::createDefaultContext()));
+    }
+
+    /**
+     * @param class-string<NewsletterRecipientStorage> $adapter
+     */
+    #[DataProvider('adapters')]
+    public function testExplicitNullClearsAProvidedField(string $adapter): void
+    {
+        $storage = $this->storage($adapter);
+        $first = $this->write('clear@example.com');
+        $storage->upsert($first, Context::createDefaultContext());
+
+        $second = new NewsletterRecipientWrite(
+            id: $first->id,
+            email: 'clear@example.com',
+            status: NewsletterStatus::NotSet,
+            hash: Uuid::randomHex(),
+            languageId: Defaults::LANGUAGE_SYSTEM,
+            salesChannelId: TestDefaults::SALES_CHANNEL,
+            firstName: null,
+            lastName: 'Kept',
+            provided: ['firstName', 'lastName'],
+        );
+        $storage->upsert($second, Context::createDefaultContext());
+
+        $found = $storage->findByEmail('clear@example.com', TestDefaults::SALES_CHANNEL, Context::createDefaultContext());
+        static::assertNotNull($found);
+        static::assertNull($found->firstName);
+        static::assertSame('Kept', $found->lastName);
+    }
+
+    public function testDalEventEntityKeepsExtensionsAddedOnLoad(): void
+    {
+        EventHookDispatcher::fromContainer(static::getContainer())->on(
+            'newsletter_recipient.loaded',
+            static function (EntityLoadedEvent $event): void {
+                foreach ($event->getEntities() as $entity) {
+                    $entity->addExtension('probe', new ArrayStruct(['loaded' => true]));
+                }
+            }
+        );
+
+        $storage = $this->storage(DalNewsletterRecipientStorage::class);
+        $storage->upsert($this->write('extension@example.com'), Context::createDefaultContext());
+        $found = $storage->findByEmail('extension@example.com', TestDefaults::SALES_CHANNEL, Context::createDefaultContext());
+        static::assertNotNull($found);
+
+        $entity = $storage->toEventEntity($found);
+
+        static::assertTrue($entity->hasExtension('probe'));
+        static::assertSame($found->id, $entity->getId());
     }
 
     public function testAdaptersReturnEqualReadModels(): void

@@ -14,6 +14,11 @@ use Shopware\Core\Framework\Validation\DataBag\RequestDataBag;
 #[Package('after-sales')]
 final readonly class SubscribeRequest
 {
+    public const OPTIONAL_FIELDS = ['title', 'firstName', 'lastName', 'zipCode', 'city', 'street', 'salutationId', 'customFields'];
+
+    /**
+     * @param list<string> $present optional fields sent in the payload, also when sent as `null`
+     */
     public function __construct(
         public string $email,
         public string $option,
@@ -26,6 +31,7 @@ final readonly class SubscribeRequest
         public ?string $street = null,
         public ?string $salutationId = null,
         public ?RequestDataBag $customFields = null,
+        public array $present = [],
     ) {
     }
 
@@ -45,6 +51,7 @@ final readonly class SubscribeRequest
             street: self::string($bag, 'street'),
             salutationId: self::string($bag, 'salutationId'),
             customFields: $custom instanceof RequestDataBag ? $custom : null,
+            present: array_values(array_filter(self::OPTIONAL_FIELDS, $bag->has(...))),
         );
     }
 
