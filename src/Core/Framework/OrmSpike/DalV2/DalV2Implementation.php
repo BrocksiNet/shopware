@@ -9,6 +9,7 @@ use Shopware\Core\Framework\Adapter\Database\Dialect\SqlDialect;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\CriteriaFieldsResolver;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\CriteriaQueryBuilder;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\EntityDefinitionQueryHelper;
+use Shopware\Core\Framework\DataAbstractionLayer\Dbal\EntityHydrator;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\EntityReader;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Event\EntityLoadedEventFactory;
@@ -27,6 +28,7 @@ use Shopware\Core\Framework\OrmSpike\DalV2\Profile\TimedDispatcher;
 use Shopware\Core\Framework\OrmSpike\DalV2\Profile\TimedHydrator;
 use Shopware\Core\Framework\OrmSpike\DalV2\Profile\TimedReader;
 use Shopware\Core\Framework\OrmSpike\DalV2\Profile\TimedSearcher;
+use Shopware\Core\Framework\OrmSpike\DalV2\Read\WindowCountSearcher;
 use Shopware\Core\Framework\OrmSpike\Harness\Implementation;
 use Shopware\Core\Framework\OrmSpike\Harness\Params;
 use Shopware\Core\Framework\OrmSpike\Harness\WriteSet;
@@ -168,7 +170,7 @@ final class DalV2Implementation implements Implementation
 
         $reader = new EntityReader(
             $this->connection,
-            $this->profile() ? new TimedHydrator($this->container) : $this->container->get(\Shopware\Core\Framework\DataAbstractionLayer\Dbal\EntityHydrator::class),
+            $this->profile() ? new TimedHydrator($this->container) : $this->container->get(EntityHydrator::class),
             $this->queryHelper,
             $this->parser,
             $this->criteriaQueryBuilder,
@@ -177,6 +179,9 @@ final class DalV2Implementation implements Implementation
             $this->dialect,
         );
         $searcher = $this->searcher;
+        if (($this->options['count'] ?? '') === 'window') {
+            $searcher = new WindowCountSearcher($this->connection, $this->queryHelper, $this->criteriaQueryBuilder);
+        }
         $aggregator = $this->aggregator;
         $dispatcher = $this->dispatcher;
 
