@@ -43,11 +43,18 @@ class StatsFusionAggregator implements EntityAggregatorInterface
             }
         }
 
+        // Criteria keys aggregations by name, so the internal name must not match any name the caller used.
+        $taken = array_flip(array_map(static fn (Aggregation $a): string => $a->getName(), $criteria->getAggregations()));
+
         /** @var array<string, array{min: MinAggregation, max: MaxAggregation}> $pairs */
         $pairs = [];
+        $counter = 0;
         foreach ($mins as $field => $minAggregations) {
             if (isset($maxs[$field])) {
-                $pairs['__stats_' . $field] = ['min' => $minAggregations[0], 'max' => $maxs[$field][0]];
+                do {
+                    $name = '__dalv2_fused_stats_' . $counter++;
+                } while (isset($taken[$name]));
+                $pairs[$name] = ['min' => $minAggregations[0], 'max' => $maxs[$field][0]];
             }
         }
 
