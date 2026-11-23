@@ -11,5 +11,6 @@ use Shopware\Core\Framework\Log\Package;
 class Media
 {
     public string $id;
+
     public ?string $path = null;
 }

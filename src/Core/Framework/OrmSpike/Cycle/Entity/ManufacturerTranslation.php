@@ -11,8 +11,12 @@ use Shopware\Core\Framework\Log\Package;
 class ManufacturerTranslation
 {
     public string $manufacturerId;
+
     public string $manufacturerVersionId;
+
     public string $languageId;
+
     public ?string $name = null;
+
     public ?string $createdAt = null;
 }

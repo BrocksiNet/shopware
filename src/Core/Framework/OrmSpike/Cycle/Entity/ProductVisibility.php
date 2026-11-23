@@ -11,9 +11,14 @@ use Shopware\Core\Framework\Log\Package;
 class ProductVisibility
 {
     public string $id;
+
     public string $productId;
+
     public string $productVersionId;
+
     public string $salesChannelId;
+
     public int $visibility;
+
     public ?string $createdAt = null;
 }

@@ -77,7 +77,7 @@ final class CycleImplementation implements Implementation
             ->load('parent.translations', ['method' => JoinableLoader::POSTLOAD, 'where' => ['languageId' => ['in' => [$de, $en]]]])
             ->load('parent.manufacturer.translations', ['method' => JoinableLoader::POSTLOAD, 'where' => ['languageId' => ['in' => [$de, $en]]]])
             ->load('parent.cover.media')
-            ;
+        ;
         $products = $this->products($products);
 
         $items = [];

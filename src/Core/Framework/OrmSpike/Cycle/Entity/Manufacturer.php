@@ -11,8 +11,12 @@ use Shopware\Core\Framework\Log\Package;
 class Manufacturer
 {
     public string $id;
+
     public string $versionId;
+
     public ?string $createdAt = null;
+
     public array $translations = [];
+
     public array $translationsAlt = [];
 }

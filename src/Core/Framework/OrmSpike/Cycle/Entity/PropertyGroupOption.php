@@ -11,8 +11,12 @@ use Shopware\Core\Framework\Log\Package;
 class PropertyGroupOption
 {
     public string $id;
+
     public string $groupId;
+
     public array $translations = [];
+
     public array $translationsAlt = [];
+
     public ?PropertyGroup $group = null;
 }

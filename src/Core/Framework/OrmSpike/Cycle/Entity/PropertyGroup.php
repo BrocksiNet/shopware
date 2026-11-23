@@ -11,6 +11,8 @@ use Shopware\Core\Framework\Log\Package;
 class PropertyGroup
 {
     public string $id;
+
     public array $translations = [];
+
     public array $translationsAlt = [];
 }

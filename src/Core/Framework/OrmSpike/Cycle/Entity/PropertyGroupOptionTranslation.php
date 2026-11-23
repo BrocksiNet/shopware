@@ -11,6 +11,8 @@ use Shopware\Core\Framework\Log\Package;
 class PropertyGroupOptionTranslation
 {
     public string $optionId;
+
     public string $languageId;
+
     public ?string $name = null;
 }

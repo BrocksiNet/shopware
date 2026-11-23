@@ -11,7 +11,10 @@ use Shopware\Core\Framework\Log\Package;
 class ProductCategory
 {
     public string $productId;
+
     public string $productVersionId;
+
     public string $categoryId;
+
     public string $categoryVersionId;
 }

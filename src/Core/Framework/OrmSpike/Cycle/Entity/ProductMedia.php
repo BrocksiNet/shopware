@@ -11,11 +11,18 @@ use Shopware\Core\Framework\Log\Package;
 class ProductMedia
 {
     public string $id;
+
     public string $versionId;
+
     public string $productId;
+
     public string $productVersionId;
+
     public string $mediaId;
+
     public int $position;
+
     public ?string $createdAt = null;
+
     public ?Media $media = null;
 }

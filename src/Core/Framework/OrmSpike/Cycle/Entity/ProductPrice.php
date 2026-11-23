@@ -11,11 +11,18 @@ use Shopware\Core\Framework\Log\Package;
 class ProductPrice
 {
     public string $id;
+
     public string $versionId;
+
     public string $productId;
+
     public string $productVersionId;
+
     public string $ruleId;
+
     public string $price;
+
     public int $quantityStart;
+
     public ?int $quantityEnd = null;
 }

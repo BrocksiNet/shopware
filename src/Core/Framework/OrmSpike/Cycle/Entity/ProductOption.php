@@ -11,7 +11,10 @@ use Shopware\Core\Framework\Log\Package;
 class ProductOption
 {
     public string $productId;
+
     public string $productVersionId;
+
     public string $optionId;
+
     public ?PropertyGroupOption $option = null;
 }
