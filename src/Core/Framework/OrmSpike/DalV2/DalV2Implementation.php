@@ -29,6 +29,7 @@ use Shopware\Core\Framework\OrmSpike\DalV2\Profile\TimedHydrator;
 use Shopware\Core\Framework\OrmSpike\DalV2\Profile\TimedReader;
 use Shopware\Core\Framework\OrmSpike\DalV2\Profile\TimedSearcher;
 use Shopware\Core\Framework\OrmSpike\DalV2\Read\WindowCountSearcher;
+use Shopware\Core\Framework\OrmSpike\DalV2\Write\SwitchableWriteGateway;
 use Shopware\Core\Framework\OrmSpike\Harness\Implementation;
 use Shopware\Core\Framework\OrmSpike\Harness\Params;
 use Shopware\Core\Framework\OrmSpike\Harness\WriteSet;
@@ -121,8 +122,15 @@ final class DalV2Implementation implements Implementation
 
     public function s4Write(Params $params, WriteSet $set): void
     {
+        $write = $this->options['write'] ?? '';
+        SwitchableWriteGateway::$mode = $write === '' ? null : ['key' => str_contains($write, 'key'), 'upd' => str_contains($write, 'upd')];
         $start = $this->begin();
-        $this->inner()->s4Write($params, $set);
+
+        try {
+            $this->inner()->s4Write($params, $set);
+        } finally {
+            SwitchableWriteGateway::$mode = null;
+        }
         $this->end($start);
     }
 

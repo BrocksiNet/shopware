@@ -1,0 +1,1027 @@
+<?php declare(strict_types=1);
+
+namespace Shopware\Core\Framework\OrmSpike\DalV2\Write;
+
+use Doctrine\DBAL\Connection;
+use Doctrine\DBAL\Exception;
+use Doctrine\DBAL\ParameterType;
+use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
+use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
+use Shopware\Core\Framework\Adapter\Database\Dialect\SqlDialect;
+use Shopware\Core\Framework\Adapter\Database\Dialect\SqlDialectFactory;
+use Shopware\Core\Framework\DataAbstractionLayer\DataAbstractionLayerException;
+use Shopware\Core\Framework\DataAbstractionLayer\Dbal\EntityDefinitionQueryHelper;
+use Shopware\Core\Framework\DataAbstractionLayer\Dbal\ExceptionHandlerRegistry;
+use Shopware\Core\Framework\DataAbstractionLayer\Dbal\QueryBuilder;
+use Shopware\Core\Framework\DataAbstractionLayer\Dbal\RowLoader;
+use Shopware\Core\Framework\DataAbstractionLayer\DefinitionInstanceRegistry;
+use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\MultiInsertQueryQueue;
+use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\RetryableQuery;
+use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\RetryableWriteTransaction;
+use Shopware\Core\Framework\DataAbstractionLayer\EntityDefinition;
+use Shopware\Core\Framework\DataAbstractionLayer\EntityTranslationDefinition;
+use Shopware\Core\Framework\DataAbstractionLayer\Event\EntityDeleteEvent;
+use Shopware\Core\Framework\DataAbstractionLayer\Event\EntityWriteEvent;
+use Shopware\Core\Framework\DataAbstractionLayer\Field\FkField;
+use Shopware\Core\Framework\DataAbstractionLayer\Field\IdField;
+use Shopware\Core\Framework\DataAbstractionLayer\Field\ManyToOneAssociationField;
+use Shopware\Core\Framework\DataAbstractionLayer\Field\StorageAware;
+use Shopware\Core\Framework\DataAbstractionLayer\Field\VersionField;
+use Shopware\Core\Framework\DataAbstractionLayer\MappingEntityDefinition;
+use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\ChangeSet;
+use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\ChangeSetAware;
+use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\DeleteCommand;
+use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\InsertCommand;
+use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\JsonUpdateCommand;
+use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\UpdateCommand;
+use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\WriteCommand;
+use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\WriteCommandQueue;
+use Shopware\Core\Framework\DataAbstractionLayer\Write\DataStack\KeyValuePair;
+use Shopware\Core\Framework\DataAbstractionLayer\Write\EntityExistence;
+use Shopware\Core\Framework\DataAbstractionLayer\Write\EntityWriteGatewayInterface;
+use Shopware\Core\Framework\DataAbstractionLayer\Write\PrimaryKeyBag;
+use Shopware\Core\Framework\DataAbstractionLayer\Write\Validation\PostWriteValidationEvent;
+use Shopware\Core\Framework\DataAbstractionLayer\Write\Validation\PreWriteValidationEvent;
+use Shopware\Core\Framework\DataAbstractionLayer\Write\Validation\WriteCommandExceptionEvent;
+use Shopware\Core\Framework\DataAbstractionLayer\Write\WriteContext;
+use Shopware\Core\Framework\DataAbstractionLayer\Write\WriteParameterBag;
+use Shopware\Core\Framework\Deprecation\BCChange\ParameterNameChange;
+use Shopware\Core\Framework\Log\Package;
+use Shopware\Core\Framework\Uuid\Uuid;
+use Shopware\Core\Framework\Validation\WriteConstraintViolationException;
+use Symfony\Component\Validator\ConstraintViolation;
+use Symfony\Component\Validator\ConstraintViolationList;
+use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
+
+/**
+ * @internal
+ */
+#[Package('framework')]
+/**
+ * Copy of the trunk EntityWriteGateway (lever W1), see docs/33.
+ *
+ * @internal
+ */
+class WriteGatewayV2 implements EntityWriteGatewayInterface
+{
+    private ?PrimaryKeyBag $primaryKeyBag = null;
+
+    private ?SqlDialect $dialect;
+
+    public function __construct(
+        private readonly int $batchSize,
+        private readonly Connection $connection,
+        private readonly EventDispatcherInterface $eventDispatcher,
+        private readonly ExceptionHandlerRegistry $exceptionHandlerRegistry,
+        private readonly DefinitionInstanceRegistry $definitionInstanceRegistry,
+        private readonly RowLoader $rowLoader,
+        ?SqlDialect $dialect = null,
+        private readonly bool $fixExistenceKey = false,
+        private readonly bool $batchUpdates = false,
+    ) {
+        $this->dialect = $dialect;
+    }
+
+    #[ParameterNameChange(version: 'v6.8.0', parameterName: 'parameters', newName: 'parameterBag', description: 'Matches the parameter name of the interface.')]
+    public function prefetchExistences(WriteParameterBag $parameters): void
+    {
+        $this->primaryKeyBag = $parameters->getPrimaryKeyBag();
+        $primaryKeyBag = $this->primaryKeyBag;
+
+        if ($primaryKeyBag->isPrefetchingCompleted()) {
+            return;
+        }
+
+        foreach ($primaryKeyBag->getPrimaryKeys() as $entity => $pks) {
+            $this->prefetch($this->definitionInstanceRegistry->getByEntityName($entity), $pks, $parameters);
+        }
+
+        $primaryKeyBag->setPrefetchingCompleted(true);
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function getExistence(EntityDefinition $definition, array $primaryKey, array $data, WriteCommandQueue $commandQueue): EntityExistence
+    {
+        $state = $this->getCurrentState($definition, $primaryKey, $commandQueue);
+
+        $exists = $state !== [];
+
+        $isChild = $this->isChild($definition, $data, $state, $primaryKey, $commandQueue);
+
+        $wasChild = $this->wasChild($definition, $state);
+
+        $decodedPrimaryKey = [];
+        foreach ($primaryKey as $fieldStorageName => $fieldValue) {
+            $field = $definition->getFields()->getByStorageName($fieldStorageName);
+            $decodedPrimaryKey[$fieldStorageName] = $field ? $field->getSerializer()->decode($field, $fieldValue) : $fieldValue;
+        }
+
+        return new EntityExistence($definition->getEntityName(), $decodedPrimaryKey, $exists, $isChild, $wasChild, $state);
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function execute(array $commands, WriteContext $context): void
+    {
+        $beforeWriteEvent = EntityWriteEvent::create($context, $commands);
+
+        try {
+            $this->eventDispatcher->dispatch($beforeWriteEvent);
+            $firstAttempt = true;
+
+            RetryableWriteTransaction::retryable($this->connection, function () use ($commands, $context, &$firstAttempt): void {
+                if (!$firstAttempt) {
+                    $context->resetExceptions();
+                }
+
+                $firstAttempt = false;
+                $this->executeCommands($commands, $context);
+            });
+
+            // An outer transaction must not replay callbacks if they or its commit fail.
+            RetryableWriteTransaction::preventRetries($this->connection);
+            $beforeWriteEvent->success();
+        } catch (\Throwable $e) {
+            $callbacksCompleted = false;
+            try {
+                try {
+                    $event = new WriteCommandExceptionEvent($e, $commands, $context->getContext());
+                    $this->eventDispatcher->dispatch($event);
+                } finally {
+                    $beforeWriteEvent->error();
+                }
+                $callbacksCompleted = true;
+            } finally {
+                if (!$callbacksCompleted) {
+                    RetryableWriteTransaction::preventRetries($this->connection);
+                }
+                // Keep the write failure primary; PHP chains a pending callback failure when rethrowing here.
+                throw $e;
+            }
+        }
+    }
+
+    /**
+     * @param list<WriteCommand> $commands
+     */
+    private function executeCommands(array $commands, WriteContext $context): void
+    {
+        $entityDeleteEvent = EntityDeleteEvent::create($context, $commands);
+        if ($entityDeleteEvent->filled()) {
+            $this->eventDispatcher->dispatch($entityDeleteEvent);
+        }
+
+        // throws exception on violation and then aborts/rollbacks this transaction
+        $event = new PreWriteValidationEvent($context, $commands);
+        $this->eventDispatcher->dispatch($event);
+        $commands = $event->getCommands();
+
+        $this->generateChangeSets($commands);
+
+        $this->validateCommands($commands, $context);
+
+        $previous = null;
+        $mappings = new MultiInsertQueryQueue($this->connection, $this->batchSize, false, true);
+        $inserts = new MultiInsertQueryQueue($this->connection, $this->batchSize);
+
+        /** @var array<string, array{table: string, commands: list<UpdateCommand>}> $pendingUpdates */
+        $pendingUpdates = [];
+        $flushUpdates = function () use (&$pendingUpdates): void {
+            foreach ($pendingUpdates as $group) {
+                $this->executeBatchedUpdate($group['table'], $group['commands']);
+            }
+            $pendingUpdates = [];
+        };
+
+        $executeInserts = static function () use ($mappings, $inserts, $flushUpdates): void {
+            $flushUpdates();
+            $mappings->execute();
+            $inserts->execute();
+        };
+
+        try {
+            foreach ($commands as $command) {
+                if (!$command->isValid()) {
+                    continue;
+                }
+                $command->setFailed(false);
+                $current = $command->getEntityName();
+
+                if ($current !== $previous) {
+                    $executeInserts();
+                }
+                $previous = $current;
+
+                try {
+                    $definition = $this->definitionInstanceRegistry->getByEntityName($command->getEntityName());
+                    $table = $definition->getEntityName();
+
+                    if ($command instanceof DeleteCommand) {
+                        $executeInserts();
+
+                        RetryableQuery::retryable($this->connection, function () use ($command, $table): void {
+                            $this->connection->delete(EntityDefinitionQueryHelper::escape($table), $command->getPrimaryKey());
+                        });
+
+                        continue;
+                    }
+
+                    if ($command instanceof JsonUpdateCommand) {
+                        $executeInserts();
+                        $this->executeJsonUpdate($command);
+
+                        continue;
+                    }
+
+                    if ($definition instanceof MappingEntityDefinition && $command instanceof InsertCommand) {
+                        $flushUpdates();
+                        $mappings->addInsert($definition->getEntityName(), $command->getPayload());
+
+                        continue;
+                    }
+
+                    if ($command instanceof UpdateCommand && $this->batchUpdates) {
+                        $mappings->execute();
+                        $inserts->execute();
+                        $payload = $command->getPayload();
+                        ksort($payload);
+                        $signature = $table . '|' . implode(',', array_keys($payload)) . '|' . implode(',', array_keys($command->getPrimaryKey()));
+                        $pendingUpdates[$signature] ??= ['table' => $table, 'commands' => []];
+                        $pendingUpdates[$signature]['commands'][] = $command;
+
+                        continue;
+                    }
+
+                    if ($command instanceof UpdateCommand) {
+                        $executeInserts();
+
+                        RetryableQuery::retryable($this->connection, function () use ($command, $table): void {
+                            $this->connection->update(
+                                EntityDefinitionQueryHelper::escape($table),
+                                $this->escapeColumnKeys($command->getPayload()),
+                                $command->getPrimaryKey()
+                            );
+                        });
+
+                        continue;
+                    }
+
+                    if ($command instanceof InsertCommand) {
+                        $flushUpdates();
+                        $inserts->addInsert($definition->getEntityName(), $command->getPayload());
+
+                        continue;
+                    }
+
+                    throw DataAbstractionLayerException::unsupportedCommandType($command);
+                } catch (\Exception $e) {
+                    $command->setFailed(true);
+
+                    $innerException = $this->exceptionHandlerRegistry->matchException($e);
+
+                    if ($innerException !== null) {
+                        $e = $innerException;
+                    }
+                    $context->getExceptions()->add($e);
+
+                    throw $e;
+                }
+            }
+
+            $flushUpdates();
+            $mappings->execute();
+            $inserts->execute();
+            if ($entityDeleteEvent->filled()) {
+                RetryableWriteTransaction::preventRetries($this->connection);
+            }
+            $entityDeleteEvent->success();
+        } catch (Exception $e) {
+            $innerException = $this->exceptionHandlerRegistry->matchException($e);
+            if ($innerException !== null) {
+                $e = $innerException;
+            }
+            $context->getExceptions()->add($e);
+
+            $callbacksCompleted = false;
+            try {
+                $entityDeleteEvent->error();
+                $callbacksCompleted = true;
+            } finally {
+                if (!$callbacksCompleted) {
+                    RetryableWriteTransaction::preventRetries($this->connection);
+                }
+                throw $e;
+            }
+        }
+
+        // throws exception on violation and then aborts/rollbacks this transaction
+        $event = new PostWriteValidationEvent($context, $commands);
+        $this->eventDispatcher->dispatch($event);
+        $context->getExceptions()->tryToThrow();
+    }
+
+    /**
+     * @param list<array<string, string>> $pks
+     */
+    private function prefetch(EntityDefinition $definition, array $pks, WriteParameterBag $parameters): void
+    {
+        $pkFields = [];
+        $versionField = null;
+        foreach ($definition->getPrimaryKeys() as $field) {
+            if ($field instanceof VersionField) {
+                $versionField = $field;
+
+                continue;
+            }
+            if ($field instanceof StorageAware) {
+                $pkFields[$field->getStorageName()] = $field;
+            }
+        }
+
+        $query = $this->connection->createQueryBuilder();
+        $query->from(EntityDefinitionQueryHelper::escape($definition->getEntityName()));
+        $query->addSelect('1 as `exists`');
+
+        if ($definition->isChildrenAware()) {
+            $query->addSelect('parent_id');
+        } elseif ($definition->isInheritanceAware()) {
+            $parent = $this->getParentField($definition);
+
+            if ($parent !== null) {
+                $query->addSelect(
+                    EntityDefinitionQueryHelper::escape($parent->getStorageName())
+                    . ' as `parent`'
+                );
+            }
+        }
+
+        foreach ($pkFields as $storageName => $_) {
+            $query->addSelect(EntityDefinitionQueryHelper::escape($storageName));
+        }
+        if ($versionField) {
+            $query->addSelect(EntityDefinitionQueryHelper::escape($versionField->getStorageName()));
+        }
+
+        foreach (array_chunk($pks, 500, true) as $chunk) {
+            $query->resetWhere();
+
+            $params = [];
+            $tupleCount = 0;
+
+            foreach ($chunk as $pk) {
+                $newIds = [];
+                foreach ($pkFields as $field) {
+                    $id = $pk[$field->getPropertyName()] ?? null;
+                    if ($id === null) {
+                        continue 2;
+                    }
+                    $newIds[] = $field->getSerializer()->encode(
+                        $field,
+                        EntityExistence::createForEntity($definition->getEntityName(), [$field->getPropertyName() => $id]),
+                        new KeyValuePair($field->getPropertyName(), $id, true),
+                        $parameters,
+                    )->current();
+                }
+
+                foreach ($newIds as $newId) {
+                    $params[] = $newId;
+                }
+
+                ++$tupleCount;
+            }
+
+            if ($tupleCount <= 0) {
+                continue;
+            }
+
+            $placeholders = $this->getPlaceholders(\count($pkFields), $tupleCount);
+            $columns = implode(',', array_map($this->dialect()->quoteIdentifier(...), array_keys($pkFields)));
+            if (\count($pkFields) > 1) {
+                $columns = '(' . $columns . ')';
+            }
+
+            if ($params !== []) {
+                $query->andWhere($columns . ' IN (' . $placeholders . ')');
+            }
+            if ($versionField) {
+                $query->andWhere('version_id = ?');
+                $params[] = IdBinding::value($parameters->getContext()->getContext()->getVersionId());
+            }
+
+            $query->setParameters($params);
+
+            $result = $query->executeQuery()->fetchAllAssociative();
+
+            $primaryKeyBag = $parameters->getPrimaryKeyBag();
+
+            foreach ($result as $state) {
+                $values = [];
+                foreach ($pkFields as $storageKey => $field) {
+                    $values[$field->getPropertyName()] = $field->getSerializer()->decode($field, $state[$storageKey]);
+                }
+                if ($versionField) {
+                    $values[$versionField->getPropertyName()] = $parameters->getContext()->getContext()->getVersionId();
+                }
+
+                $primaryKeyBag->addExistenceState($definition, $values, $state);
+            }
+
+            foreach ($chunk as $pk) {
+                if (!$primaryKeyBag->hasExistence($definition, $pk)) {
+                    $primaryKeyBag->addExistenceState($definition, $pk, []);
+                }
+            }
+        }
+    }
+
+    /**
+     * @param array<mixed> $array
+     */
+    private function isAssociative(array $array): bool
+    {
+        foreach ($array as $key => $_value) {
+            if (!\is_int($key)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function executeJsonUpdate(JsonUpdateCommand $command): void
+    {
+        /*
+         * mysql json functions are tricky.
+         *
+         * TL;DR: cast objects and arrays to json
+         *
+         * This works:
+         *
+         * SELECT JSON_SET('{"a": "b"}', '$.a', 7)
+         * SELECT JSON_SET('{"a": "b"}', '$.a', "str")
+         *
+         * This does NOT work:
+         *
+         * SELECT JSON_SET('{"a": "b"}', '$.a', '{"foo": "bar"}')
+         *
+         * Instead, you have to do this, because mysql cannot differentiate between a string and a json string:
+         *
+         * SELECT JSON_SET('{"a": "b"}', '$.a', CAST('{"foo": "bar"}' AS json))
+         * SELECT JSON_SET('{"a": "b"}', '$.a', CAST('["foo", "bar"]' AS json))
+         *
+         * Yet this does NOT work:
+         *
+         * SELECT JSON_SET('{"a": "b"}', '$.a', CAST("str" AS json))
+         *
+         */
+
+        $values = [];
+        $types = [];
+
+        $query = new QueryBuilder($this->connection);
+        $query->update($this->dialect()->quoteIdentifier($command->getEntityName()));
+
+        $storageName = $command->getStorageName();
+        $jsonSql = EntityDefinitionQueryHelper::escape($storageName);
+
+        foreach ($command->getPayload() as $attribute => $value) {
+            // add the value of each attribute value pair, the path is part of the statement
+            if (\is_array($value) || \is_object($value)) {
+                $types[] = ParameterType::STRING;
+                $values[] = json_encode($value, \JSON_THROW_ON_ERROR | \JSON_PRESERVE_ZERO_FRACTION | \JSON_UNESCAPED_UNICODE);
+                $valueSql = $this->dialect()->jsonBind('?', \is_object($value) || $this->isAssociative($value) ? SqlDialect::JSON_BIND_OBJECT : SqlDialect::JSON_BIND_ARRAY);
+            } elseif (\is_bool($value)) {
+                $valueSql = $this->dialect()->jsonBind($value ? 'true' : 'false', SqlDialect::JSON_BIND_BOOL);
+            } elseif (\is_float($value)) {
+                $types[] = ParameterType::STRING;
+                $values[] = $value;
+                $valueSql = $this->dialect()->jsonBind('?', SqlDialect::JSON_BIND_FLOAT);
+            } elseif (\is_int($value)) {
+                $types[] = ParameterType::INTEGER;
+                $values[] = $value;
+                $valueSql = $this->dialect()->jsonBind('?', SqlDialect::JSON_BIND_INT);
+            } else {
+                $types[] = ParameterType::STRING;
+                $values[] = $value;
+                $valueSql = $this->dialect()->jsonBind('?', SqlDialect::JSON_BIND_STRING);
+            }
+
+            $jsonSql = $this->dialect()->jsonSet($jsonSql, '$."' . str_replace(['\\', '"'], ['\\\\', '\\"'], (string) $attribute) . '"', $valueSql);
+        }
+
+        $query->set($storageName, $jsonSql);
+
+        $identifier = $command->getPrimaryKey();
+        foreach ($identifier as $key => $_value) {
+            $query->andWhere(EntityDefinitionQueryHelper::escape($key) . ' = ?');
+        }
+        $query->setParameters([...$values, ...array_values($identifier)], $types);
+
+        RetryableQuery::retryable($this->connection, static function () use ($query): void {
+            $query->executeStatement();
+        });
+    }
+
+    /**
+     * Lever W1b: one `UPDATE ... SET c = CASE WHEN <pk> THEN ? ... END WHERE <pk> OR <pk>` per run of update commands with the
+     * same payload columns, instead of one UPDATE per row. Columns with the same value in every row are set directly.
+     *
+     * @param list<UpdateCommand> $commands
+     */
+    /**
+     * @param list<UpdateCommand> $commands
+     */
+    private function updateSingly(string $table, array $commands): void
+    {
+        foreach ($commands as $single) {
+            RetryableQuery::retryable($this->connection, function () use ($single, $table): void {
+                $this->connection->update(EntityDefinitionQueryHelper::escape($table), $this->escapeColumnKeys($single->getPayload()), $single->getPrimaryKey());
+            });
+        }
+    }
+
+    private function executeBatchedUpdate(string $table, array $commands): void
+    {
+        foreach (array_chunk($commands, 100) as $chunk) {
+            $seen = [];
+            foreach ($chunk as $command) {
+                $key = implode('|', $command->getPrimaryKey());
+                if (isset($seen[$key])) {
+                    $this->updateSingly($table, $chunk);
+
+                    continue 2;
+                }
+                $seen[$key] = true;
+            }
+
+            $first = $chunk[0];
+            $columns = array_keys($first->getPayload());
+            $pkColumns = array_keys($first->getPrimaryKey());
+            $whenSql = [];
+            $whenParams = [];
+            foreach ($chunk as $command) {
+                $cond = [];
+                foreach ($pkColumns as $pk) {
+                    $cond[] = EntityDefinitionQueryHelper::escape($pk) . ' = ?';
+                    $whenParams[] = $command->getPrimaryKey()[$pk];
+                }
+                $whenSql[] = implode(' AND ', $cond);
+            }
+
+            $set = [];
+            $setParams = [];
+            $setTypes = [];
+            foreach ($columns as $column) {
+                $quoted = EntityDefinitionQueryHelper::escape($column);
+                $values = array_map(static fn (UpdateCommand $c) => $c->getPayload()[$column], $chunk);
+                if (\count(array_unique(array_map(static fn ($v) => serialize($v), $values))) === 1) {
+                    $set[] = $quoted . ' = ?';
+                    $setParams[] = $values[0];
+
+                    continue;
+                }
+                if ($this->connection->getDatabasePlatform() instanceof PostgreSQLPlatform) {
+                    foreach ($values as $value) {
+                        if (!\is_int($value)) {
+                            // PostgreSQL types an untyped CASE result as text, only integer columns can be batched this way
+                            $this->updateSingly($table, $chunk);
+
+                            continue 3;
+                        }
+                    }
+                }
+                $case = [];
+                foreach ($values as $i => $value) {
+                    $case[] = 'WHEN ' . $whenSql[$i] . ' THEN ?';
+                    foreach ($pkColumns as $pk) {
+                        $setParams[] = $chunk[$i]->getPrimaryKey()[$pk];
+                    }
+                    $setParams[] = $value;
+                    $setTypes[\count($setParams) - 1] = \is_int($value) ? ParameterType::INTEGER : ParameterType::STRING;
+                }
+                $set[] = $quoted . ' = CASE ' . implode(' ', $case) . ' ELSE ' . $quoted . ' END';
+            }
+
+            $sql = 'UPDATE ' . EntityDefinitionQueryHelper::escape($table) . ' SET ' . implode(', ', $set)
+                . ' WHERE (' . implode(') OR (', $whenSql) . ')';
+            $params = array_merge($setParams, $whenParams);
+            $types = $setTypes;
+
+            RetryableQuery::retryable($this->connection, function () use ($sql, $params, $types): void {
+                $this->connection->executeStatement($sql, $params, $types + array_fill(0, \count($params), ParameterType::STRING));
+            });
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     *
+     * @return array<string, mixed>
+     */
+    private function escapeColumnKeys(array $payload): array
+    {
+        $escaped = [];
+        foreach ($payload as $key => $value) {
+            $escaped[EntityDefinitionQueryHelper::escape($key)] = $value;
+        }
+
+        return $escaped;
+    }
+
+    /**
+     * @param list<WriteCommand> $commands
+     */
+    private function generateChangeSets(array $commands): void
+    {
+        $primaryKeys = [];
+
+        foreach ($commands as $command) {
+            if (!$command instanceof ChangeSetAware || !$command instanceof WriteCommand) {
+                continue;
+            }
+
+            if (!$command->requiresChangeSet()) {
+                continue;
+            }
+
+            $entity = $command->getEntityName();
+
+            $primaryKeys[$entity][] = $command->getPrimaryKey();
+        }
+
+        if ($primaryKeys === []) {
+            return;
+        }
+
+        $states = [];
+        foreach ($primaryKeys as $entity => $ids) {
+            $states[$entity] = $this->normalizeIdColumns(
+                $this->definitionInstanceRegistry->getByEntityName($entity),
+                $this->rowLoader->load($entity, $ids)
+            );
+        }
+
+        foreach ($commands as $command) {
+            if (!$command instanceof ChangeSetAware || !$command instanceof WriteCommand) {
+                continue;
+            }
+
+            if (!$command->requiresChangeSet()) {
+                continue;
+            }
+
+            $entity = $command->getEntityName();
+
+            $command->setChangeSet(
+                $this->calculateChangeSet($command, $states[$entity])
+            );
+        }
+    }
+
+    /**
+     * The loaded rows are compared with the primary keys and payloads of the commands, which hold ids in the binding format of the connection.
+     * On PostgreSQL a `SELECT *` returns uuid text, so the id columns are converted to the same format.
+     *
+     * @param list<array<string, mixed>> $rows
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function normalizeIdColumns(EntityDefinition $definition, array $rows): array
+    {
+        if (!IdBinding::isHexBinding()) {
+            return $rows;
+        }
+
+        $idColumns = [];
+        foreach ($definition->getFields() as $field) {
+            if ($field instanceof StorageAware && ($field instanceof IdField || $field instanceof FkField)) {
+                $idColumns[$field->getStorageName()] = true;
+            }
+        }
+
+        foreach ($rows as &$row) {
+            foreach ($row as $column => $value) {
+                if (isset($idColumns[$column]) && \is_string($value)) {
+                    $row[$column] = IdBinding::toHex($value);
+                }
+            }
+        }
+        unset($row);
+
+        return $rows;
+    }
+
+    /**
+     * @param list<array<string, mixed>> $states
+     */
+    private function calculateChangeSet(WriteCommand $command, array $states): ChangeSet
+    {
+        foreach ($states as $state) {
+            // check if current loop matches the command primary key
+            $primaryKey = array_intersect($command->getPrimaryKey(), $state);
+
+            if (array_diff_assoc($command->getPrimaryKey(), $primaryKey) === []) {
+                return new ChangeSet($state, $command->getPayload(), $command instanceof DeleteCommand);
+            }
+        }
+
+        return new ChangeSet([], [], $command instanceof DeleteCommand);
+    }
+
+    private function getPlaceholders(int $columnCount, int $tupleCount): string
+    {
+        if ($columnCount > 1) {
+            // multi column pk. Example: (product_id, language_id) IN ((p1, l1), (p2, l2), (px,lx),...)
+            $tupleStr = '(?' . str_repeat(',?', $columnCount - 1) . ')';
+        } else {
+            // single column pk. Example: category_id IN (c1, c2, c3,...)
+            $tupleStr = '?';
+        }
+
+        return $tupleStr . str_repeat(',' . $tupleStr, $tupleCount - 1);
+    }
+
+    private function getParentField(EntityDefinition $definition): ?FkField
+    {
+        if (!$definition->isInheritanceAware()) {
+            return null;
+        }
+
+        $parent = $definition->getFields()->get('parent');
+
+        if (!$parent) {
+            throw DataAbstractionLayerException::parentFieldNotFound($definition);
+        }
+
+        if (!$parent instanceof ManyToOneAssociationField) {
+            throw DataAbstractionLayerException::invalidParentAssociation($definition, $parent);
+        }
+
+        $fk = $definition->getFields()->getByStorageName($parent->getStorageName());
+
+        if (!$fk) {
+            throw DataAbstractionLayerException::cannotFindParentStorageField($definition);
+        }
+        if (!$fk instanceof FkField) {
+            throw DataAbstractionLayerException::parentFieldForeignKeyConstraintMissing($definition, $fk);
+        }
+
+        return $fk;
+    }
+
+    /**
+     * @param array<string, string> $primaryKey
+     *
+     * @return array<string, mixed>
+     */
+    private function getCurrentState(EntityDefinition $definition, array $primaryKey, WriteCommandQueue $commandQueue): array
+    {
+        $commands = $commandQueue->getCommandsForEntity($definition, $primaryKey);
+
+        $useDatabase = true;
+
+        $state = [];
+
+        foreach ($commands as $command) {
+            if ($command instanceof DeleteCommand) {
+                $state = [];
+                $useDatabase = false;
+
+                continue;
+            }
+
+            if (!$command instanceof InsertCommand && !$command instanceof UpdateCommand) {
+                continue;
+            }
+
+            $state = array_replace_recursive($state, $command->getPayload());
+
+            if ($command instanceof InsertCommand) {
+                $useDatabase = false;
+            }
+        }
+
+        if (!$useDatabase) {
+            return $state;
+        }
+
+        $decodedPrimaryKey = [];
+        foreach ($primaryKey as $fieldName => $fieldValue) {
+            $field = $definition->getField($fieldName);
+            if ($field === null && $this->fixExistenceKey) {
+                $field = $definition->getFields()->getByStorageName($fieldName);
+            }
+            $decodedPrimaryKey[$fieldName] = $field ? $field->getSerializer()->decode($field, $fieldValue) : $fieldValue;
+        }
+
+        $currentState = $this->primaryKeyBag?->getExistenceState($definition, $decodedPrimaryKey);
+        if ($currentState === null) {
+            $currentState = $this->fetchFromDatabase($definition, $primaryKey);
+        }
+
+        $parent = $this->getParentField($definition);
+
+        if ($parent && \array_key_exists('parent', $currentState)) {
+            $currentState[$parent->getStorageName()] = $currentState['parent'];
+            unset($currentState['parent']);
+        }
+
+        return array_replace_recursive($currentState, $state);
+    }
+
+    /**
+     * @param array<string, string> $primaryKey
+     *
+     * @return array<string, mixed>
+     */
+    private function fetchFromDatabase(EntityDefinition $definition, array $primaryKey): array
+    {
+        $query = $this->connection->createQueryBuilder();
+        $query->from(EntityDefinitionQueryHelper::escape($definition->getEntityName()));
+
+        foreach ($definition->getPrimaryKeys() as $field) {
+            if (!$field instanceof StorageAware) {
+                continue;
+            }
+            if (!\array_key_exists($field->getStorageName(), $primaryKey)) {
+                if (!\array_key_exists($field->getPropertyName(), $primaryKey)) {
+                    throw DataAbstractionLayerException::primaryKeyNotProvided($definition, $field);
+                }
+
+                $primaryKey[$field->getStorageName()] = $primaryKey[$field->getPropertyName()];
+                unset($primaryKey[$field->getPropertyName()]);
+            }
+
+            $param = 'param_' . Uuid::randomHex();
+            $query->andWhere(EntityDefinitionQueryHelper::escape($field->getStorageName()) . ' = :' . $param);
+            $query->setParameter($param, $primaryKey[$field->getStorageName()]);
+        }
+
+        $query->addSelect('1 as `exists`');
+
+        if ($definition->isChildrenAware()) {
+            $query->addSelect('parent_id');
+        } elseif ($definition->isInheritanceAware()) {
+            $parent = $this->getParentField($definition);
+
+            if ($parent !== null) {
+                $query->addSelect(
+                    EntityDefinitionQueryHelper::escape($parent->getStorageName())
+                    . ' as `parent`'
+                );
+            }
+        }
+
+        $exists = $query->executeQuery()->fetchAssociative();
+        if (!$exists) {
+            $exists = [];
+        }
+
+        return $exists;
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     * @param array<string, mixed> $state
+     * @param array<string, string> $primaryKey
+     */
+    private function isChild(EntityDefinition $definition, array $data, array $state, array $primaryKey, WriteCommandQueue $commandQueue): bool
+    {
+        if ($definition instanceof EntityTranslationDefinition) {
+            return $this->isTranslationChild($definition, $primaryKey, $commandQueue);
+        }
+
+        if (!$definition->isInheritanceAware()) {
+            return false;
+        }
+
+        $fk = $this->getParentField($definition);
+
+        \assert($fk instanceof FkField);
+
+        // foreign key provided, !== null has parent otherwise not
+        if (\array_key_exists($fk->getPropertyName(), $data)) {
+            return isset($data[$fk->getPropertyName()]);
+        }
+
+        $association = $definition->getFields()->get('parent');
+        if ($association && isset($data[$association->getPropertyName()])) {
+            return true;
+        }
+
+        return isset($state[$fk->getStorageName()]);
+    }
+
+    /**
+     * @param array<string, mixed> $state
+     */
+    private function wasChild(EntityDefinition $definition, array $state): bool
+    {
+        if (!$definition->isInheritanceAware()) {
+            return false;
+        }
+
+        $fk = $this->getParentField($definition);
+
+        return $fk !== null && isset($state[$fk->getStorageName()]);
+    }
+
+    /**
+     * @param array<string, string> $primaryKey
+     */
+    private function isTranslationChild(EntityTranslationDefinition $definition, array $primaryKey, WriteCommandQueue $commandQueue): bool
+    {
+        $parent = $definition->getParentDefinition();
+
+        if (!$parent->isInheritanceAware()) {
+            return false;
+        }
+
+        $fkField = $definition->getFields()->getByStorageName($parent->getEntityName() . '_id');
+        if (!$fkField instanceof FkField) {
+            return false;
+        }
+        $parentPrimaryKey = [
+            'id' => $primaryKey[$fkField->getStorageName()],
+        ];
+
+        if ($parent->isVersionAware()) {
+            $parentPrimaryKey['versionId'] = $primaryKey[$parent->getEntityName() . '_version_id'];
+        }
+
+        return $this->getExistence($parent, $parentPrimaryKey, [], $commandQueue)->isChild();
+    }
+
+    /**
+     * @param list<WriteCommand> $commands
+     */
+    private function validateCommands(array $commands, WriteContext $context): void
+    {
+        foreach ($commands as $command) {
+            if (!$command instanceof UpdateCommand) {
+                continue;
+            }
+
+            $immutableFieldsChanges = $command->getImmutableFieldsChanges();
+            if ($immutableFieldsChanges === []) {
+                continue;
+            }
+
+            $changeset = $command->getChangeSet();
+            if (!$changeset instanceof ChangeSet) {
+                continue;
+            }
+
+            foreach ($immutableFieldsChanges as $immutableField) {
+                // if there was no value before, we can set it now
+                if ($changeset->getBefore($immutableField) === null) {
+                    continue;
+                }
+
+                // if the value did not change, we can ignore it
+                if (!$changeset->hasChanged($immutableField)) {
+                    continue;
+                }
+
+                $this->addImmutableViolation($immutableField, $changeset->getBefore($immutableField), $changeset->getAfter($immutableField), $command->getEntityName(), $context);
+            }
+        }
+
+        $context->getExceptions()->tryToThrow();
+    }
+
+    private function addImmutableViolation(string $fieldName, mixed $initialValue, mixed $invalidValue, string $entityName, WriteContext $context): void
+    {
+        $message = \sprintf('The field "%s" of "%s" is immutable and cannot be updated.', $fieldName, $entityName);
+
+        $violationList = new ConstraintViolationList();
+        $violationList->add(
+            new ConstraintViolation(
+                $message,
+                $message,
+                [
+                    'field' => $fieldName,
+                    'entity' => $entityName,
+                ],
+                $initialValue,
+                $fieldName,
+                $invalidValue
+            )
+        );
+
+        $context->getExceptions()->add(
+            new WriteConstraintViolationException($violationList)
+        );
+    }
+
+    /**
+     * Resolved on first use, the platform detection needs a database connection.
+     */
+    private function dialect(): SqlDialect
+    {
+        return $this->dialect ??= SqlDialectFactory::forConnection($this->connection);
+    }
+}
