@@ -32,14 +32,40 @@ class IdCodecMiddleware implements Middleware
             public function connect(#[\SensitiveParameter] array $params): Connection
             {
                 return new class(parent::connect($params)) extends AbstractConnectionMiddleware {
+                    private readonly IdCodecColumnTypes $columnTypes;
+
+                    public function __construct(Connection $connection)
+                    {
+                        parent::__construct($connection);
+                        $this->columnTypes = new IdCodecColumnTypes();
+                    }
+
                     public function prepare(string $sql): Statement
                     {
-                        return new IdCodecStatement(parent::prepare($sql), $sql);
+                        return new IdCodecStatement(parent::prepare($sql), $sql, $this->columnTypes);
                     }
 
                     public function query(string $sql): Result
                     {
-                        return new IdCodecResult(parent::query($sql), $sql);
+                        $result = parent::query($sql);
+                        $this->columnTypes->observe($sql);
+
+                        return new IdCodecResult($result, $sql, $this->columnTypes);
+                    }
+
+                    public function exec(string $sql): int|string
+                    {
+                        $affected = parent::exec($sql);
+                        $this->columnTypes->observe($sql);
+
+                        return $affected;
+                    }
+
+                    public function rollBack(): void
+                    {
+                        parent::rollBack();
+                        // a rolled back transaction can undo DDL
+                        IdCodecColumnTypes::invalidateAll();
                     }
                 };
             }
