@@ -14,9 +14,10 @@ use Shopware\Core\Framework\Log\Package;
 /**
  * Ids are native `uuid` columns on PostgreSQL, while the PHP side works with the 16 byte binary form it uses for MySQL `BINARY(16)`.
  * This middleware converts in both directions at the driver boundary, so no call site has to change:
- * bound 16 byte binary values become uuid strings, canonical uuid strings in results become 16 bytes.
+ * bound 16 byte binary values become uuid strings, values of `uuid` result columns become 16 bytes.
  *
- * Both directions are value based, the driver middleware API exposes no column types.
+ * Parameters are converted by their bound type and value (the driver API exposes no parameter column types).
+ * Results are converted by the column type only ({@see IdCodecResult}), so a uuid-looking text value stays text.
  *
  * @internal
  */
@@ -33,12 +34,12 @@ class IdCodecMiddleware implements Middleware
                 return new class(parent::connect($params)) extends AbstractConnectionMiddleware {
                     public function prepare(string $sql): Statement
                     {
-                        return new IdCodecStatement(parent::prepare($sql));
+                        return new IdCodecStatement(parent::prepare($sql), $sql);
                     }
 
                     public function query(string $sql): Result
                     {
-                        return new IdCodecResult(parent::query($sql));
+                        return new IdCodecResult(parent::query($sql), $sql);
                     }
                 };
             }
@@ -67,16 +68,28 @@ class IdCodecMiddleware implements Middleware
     }
 
     /**
-     * `SHOPWARE_PG_ID_CODEC=strict` converts only values bound as BINARY or LARGE_OBJECT, `guess` (default) also converts untyped 16 byte strings that are not valid UTF-8 or contain a NUL byte.
+     * `SHOPWARE_PG_ID_CODEC=strict` converts only parameters bound as BINARY or LARGE_OBJECT, `guess` (default) also converts untyped 16 byte strings that are not valid UTF-8 or contain a NUL byte.
+     * The mode only affects parameters; results are always converted by column type.
      */
     public static function isStrict(): bool
     {
         return ($_SERVER['SHOPWARE_PG_ID_CODEC'] ?? $_ENV['SHOPWARE_PG_ID_CODEC'] ?? getenv('SHOPWARE_PG_ID_CODEC')) === 'strict';
     }
 
+    /**
+     * Cheap pre-check before the column type lookup in {@see IdCodecResult}.
+     */
+    public static function looksLikeUuid(mixed $value): bool
+    {
+        return \is_string($value) && \strlen($value) === 36 && preg_match(self::UUID_PATTERN, $value) === 1;
+    }
+
+    /**
+     * Only call this for values of a `uuid` column, the type decides, not the shape of the value.
+     */
     public static function decode(mixed $value): mixed
     {
-        if (!\is_string($value) || \strlen($value) !== 36 || preg_match(self::UUID_PATTERN, $value) !== 1) {
+        if (!self::looksLikeUuid($value)) {
             return $value;
         }
 

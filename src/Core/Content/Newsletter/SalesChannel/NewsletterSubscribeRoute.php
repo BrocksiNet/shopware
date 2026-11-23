@@ -5,7 +5,6 @@ namespace Shopware\Core\Content\Newsletter\SalesChannel;
 use Shopware\Core\Checkout\Customer\Service\EmailIdnConverter;
 use Shopware\Core\Content\Newsletter\Aggregate\NewsletterRecipient\NewsletterRecipientDefinition;
 use Shopware\Core\Content\Newsletter\Aggregate\NewsletterRecipient\NewsletterRecipientEntity;
-use Shopware\Core\Content\Newsletter\Domain\NewsletterRecipientEntityFactory;
 use Shopware\Core\Content\Newsletter\Domain\NewsletterRecipientStorage;
 use Shopware\Core\Content\Newsletter\Domain\NewsletterRecipientWrite;
 use Shopware\Core\Content\Newsletter\Domain\NewsletterStatus;
@@ -168,10 +167,12 @@ class NewsletterSubscribeRoute extends AbstractNewsletterSubscribeRoute
         }
 
         $customFields = null;
+        $provided = $request->present;
         if ($request->customFields !== null) {
             $customFields = $this->customFieldMapper->map(NewsletterRecipientDefinition::ENTITY_NAME, $request->customFields);
             if ($customFields === []) {
                 $customFields = null;
+                $provided = array_values(array_diff($provided, ['customFields']));
             }
         }
 
@@ -190,13 +191,14 @@ class NewsletterSubscribeRoute extends AbstractNewsletterSubscribeRoute
             street: $request->street,
             salutationId: $request->salutationId,
             customFields: $customFields,
+            provided: $provided,
         );
 
         $this->storage->upsert($write, $context->getContext());
 
         $stored = $this->storage->findByEmail($request->email, $context->getSalesChannelId(), $context->getContext())
             ?? throw NewsletterException::recipientNotFound('email', $request->email);
-        $recipient = NewsletterRecipientEntityFactory::create($stored);
+        $recipient = $this->storage->toEventEntity($stored);
 
         if (!$this->isNewsletterDoi($context, $recipient->getEmail())) {
             $event = new NewsletterConfirmEvent($context->getContext(), $recipient, $context->getSalesChannelId());

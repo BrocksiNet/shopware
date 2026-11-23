@@ -6,6 +6,7 @@ use Shopware\Core\Checkout\Customer\CustomerCollection;
 use Shopware\Core\Content\Newsletter\Aggregate\NewsletterRecipient\NewsletterRecipientCollection;
 use Shopware\Core\Content\Newsletter\Aggregate\NewsletterRecipient\NewsletterRecipientEntity;
 use Shopware\Core\Content\Newsletter\Domain\NewsletterRecipient;
+use Shopware\Core\Content\Newsletter\Domain\NewsletterRecipientEntityFactory;
 use Shopware\Core\Content\Newsletter\Domain\NewsletterRecipientStorage;
 use Shopware\Core\Content\Newsletter\Domain\NewsletterRecipientWrite;
 use Shopware\Core\Content\Newsletter\Domain\NewsletterSalutation;
@@ -25,6 +26,13 @@ use Shopware\Core\Framework\Log\Package;
 final class DalNewsletterRecipientStorage implements NewsletterRecipientStorage
 {
     /**
+     * The entity each returned DTO was built from, for {@see toEventEntity()}; entries go away with the DTO.
+     *
+     * @var \WeakMap<NewsletterRecipient, NewsletterRecipientEntity>
+     */
+    private readonly \WeakMap $entities;
+
+    /**
      * @param EntityRepository<NewsletterRecipientCollection> $newsletterRecipientRepository
      * @param EntityRepository<CustomerCollection> $customerRepository
      *
@@ -34,6 +42,7 @@ final class DalNewsletterRecipientStorage implements NewsletterRecipientStorage
         private readonly EntityRepository $newsletterRecipientRepository,
         private readonly EntityRepository $customerRepository,
     ) {
+        $this->entities = new \WeakMap();
     }
 
     public function findByEmail(string $email, string $salesChannelId, Context $context): ?NewsletterRecipient
@@ -74,7 +83,7 @@ final class DalNewsletterRecipientStorage implements NewsletterRecipientStorage
             'customFields' => $write->customFields,
         ];
 
-        $this->newsletterRecipientRepository->upsert([$data + array_filter($optional, static fn ($v) => $v !== null)], $context);
+        $this->newsletterRecipientRepository->upsert([$data + array_filter($optional, $write->isProvided(...), \ARRAY_FILTER_USE_KEY)], $context);
     }
 
     public function confirm(string $id, \DateTimeImmutable $confirmedAt, Context $context): void
@@ -99,6 +108,11 @@ final class DalNewsletterRecipientStorage implements NewsletterRecipientStorage
         return $this->customerRepository->search(new Criteria([$customerId]), $context)->getEntities()->first()?->getEmail();
     }
 
+    public function toEventEntity(NewsletterRecipient $recipient): NewsletterRecipientEntity
+    {
+        return $this->entities[$recipient] ?? NewsletterRecipientEntityFactory::create($recipient);
+    }
+
     private function first(Criteria $criteria, Context $context): ?NewsletterRecipient
     {
         $criteria->addAssociation('salutation');
@@ -106,7 +120,14 @@ final class DalNewsletterRecipientStorage implements NewsletterRecipientStorage
 
         $entity = $this->newsletterRecipientRepository->search($criteria, $context)->getEntities()->first();
 
-        return $entity === null ? null : self::toDto($entity);
+        if ($entity === null) {
+            return null;
+        }
+
+        $recipient = self::toDto($entity);
+        $this->entities[$recipient] = $entity;
+
+        return $recipient;
     }
 
     private static function toDto(NewsletterRecipientEntity $entity): NewsletterRecipient

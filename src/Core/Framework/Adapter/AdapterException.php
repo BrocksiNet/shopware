@@ -50,6 +50,7 @@ class AdapterException extends HttpException
     final public const CIRCULAR_REFERENCE_ESI = 'FRAMEWORK__CIRCULAR_REFERENCE_ESI';
     final public const CACHE_CLEARER_LOCKED = 'FRAMEWORK__CACHE_CLEARER_LOCKED';
     final public const INVALID_CACHE_POLICY_CONFIGURATION = 'FRAMEWORK__INVALID_CACHE_POLICY_CONFIGURATION';
+    final public const ID_CODEC_COLUMN_TYPE_UNAVAILABLE = 'FRAMEWORK__ID_CODEC_COLUMN_TYPE_UNAVAILABLE';
 
     #[ReturnTypeNarrowing(version: 'v6.8.0', newType: 'self')]
     public static function missingConflictTarget(string $table, string $reason): self
@@ -382,6 +383,16 @@ class AdapterException extends HttpException
             self::POSTGRESQL_UNMAPPED_COLUMN_TYPE,
             'Unmapped MySQL type {{ dataType }} for {{ table }}.{{ column }}',
             ['dataType' => $dataType, 'table' => $table, 'column' => $column]
+        );
+    }
+
+    public static function idCodecColumnTypeUnavailable(string $reason): self
+    {
+        return new self(
+            Response::HTTP_INTERNAL_SERVER_ERROR,
+            self::ID_CODEC_COLUMN_TYPE_UNAVAILABLE,
+            'The PostgreSQL id codec can not read the result column type: {{ reason }}',
+            ['reason' => $reason]
         );
     }
 }

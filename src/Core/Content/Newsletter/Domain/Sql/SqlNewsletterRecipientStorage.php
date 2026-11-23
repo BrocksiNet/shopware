@@ -4,7 +4,9 @@ namespace Shopware\Core\Content\Newsletter\Domain\Sql;
 
 use Doctrine\DBAL\Connection;
 use Psr\Clock\ClockInterface;
+use Shopware\Core\Content\Newsletter\Aggregate\NewsletterRecipient\NewsletterRecipientEntity;
 use Shopware\Core\Content\Newsletter\Domain\NewsletterRecipient;
+use Shopware\Core\Content\Newsletter\Domain\NewsletterRecipientEntityFactory;
 use Shopware\Core\Content\Newsletter\Domain\NewsletterRecipientStorage;
 use Shopware\Core\Content\Newsletter\Domain\NewsletterRecipientWrite;
 use Shopware\Core\Content\Newsletter\Domain\NewsletterSalutation;
@@ -58,17 +60,21 @@ final class SqlNewsletterRecipientStorage implements NewsletterRecipientStorage
         ];
 
         $optional = [
-            'title' => $write->title,
-            'first_name' => $write->firstName,
-            'last_name' => $write->lastName,
-            'zip_code' => $write->zipCode,
-            'city' => $write->city,
-            'street' => $write->street,
-            'salutation_id' => $write->salutationId === null ? null : IdBinding::value($write->salutationId),
-            'custom_fields' => $write->customFields === null ? null : json_encode($write->customFields, \JSON_THROW_ON_ERROR),
+            'title' => ['title', $write->title],
+            'first_name' => ['firstName', $write->firstName],
+            'last_name' => ['lastName', $write->lastName],
+            'zip_code' => ['zipCode', $write->zipCode],
+            'city' => ['city', $write->city],
+            'street' => ['street', $write->street],
+            'salutation_id' => ['salutationId', $write->salutationId === null ? null : IdBinding::value($write->salutationId)],
+            'custom_fields' => ['customFields', $write->customFields === null ? null : json_encode($write->customFields, \JSON_THROW_ON_ERROR)],
         ];
 
-        $values += array_filter($optional, static fn ($v) => $v !== null);
+        foreach ($optional as $column => [$field, $value]) {
+            if ($write->isProvided($field)) {
+                $values[$column] = $value;
+            }
+        }
 
         $now = $this->now();
         $columns = array_keys($values);
@@ -112,6 +118,14 @@ final class SqlNewsletterRecipientStorage implements NewsletterRecipientStorage
         $email = $this->connection->fetchOne('SELECT `email` FROM `customer` WHERE `id` = :id', ['id' => IdBinding::value($customerId)]);
 
         return \is_string($email) ? $email : null;
+    }
+
+    /**
+     * The SQL adapter reads no entity, so the event entity is rebuilt and carries no entity extensions (research adapter, see the class comment).
+     */
+    public function toEventEntity(NewsletterRecipient $recipient): NewsletterRecipientEntity
+    {
+        return NewsletterRecipientEntityFactory::create($recipient);
     }
 
     private static function select(): string

@@ -2,7 +2,6 @@
 
 namespace Shopware\Core\Content\Newsletter\SalesChannel;
 
-use Shopware\Core\Content\Newsletter\Domain\NewsletterRecipientEntityFactory;
 use Shopware\Core\Content\Newsletter\Domain\NewsletterRecipientStorage;
 use Shopware\Core\Content\Newsletter\Domain\NewsletterStatus;
 use Shopware\Core\Content\Newsletter\Domain\Request\UnsubscribeRequest;
@@ -104,7 +103,7 @@ class NewsletterUnsubscribeRoute extends AbstractNewsletterUnsubscribeRoute
 
         $this->storage->optOut($recipient->id, $context->getContext());
 
-        $event = new NewsletterUnsubscribeEvent($context->getContext(), NewsletterRecipientEntityFactory::create($recipient), $context->getSalesChannelId());
+        $event = new NewsletterUnsubscribeEvent($context->getContext(), $this->storage->toEventEntity($recipient), $context->getSalesChannelId());
         $this->eventDispatcher->dispatch($event);
 
         return new SuccessResponse();
