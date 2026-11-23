@@ -3,11 +3,16 @@
 namespace Shopware\Core\Framework\OrmSpike\DalV2\Probe;
 
 use Doctrine\DBAL\Connection;
+use Shopware\Core\Content\Product\ProductCollection;
 use Shopware\Core\Defaults;
 use Shopware\Core\Framework\Context;
+use Shopware\Core\Framework\DataAbstractionLayer\Entity;
+use Shopware\Core\Framework\DataAbstractionLayer\EntityCollection;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
+use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsFilter;
 use Shopware\Core\Framework\Log\Package;
+use Shopware\Core\Framework\OrmSpike\DalV2\Typed\FieldPathChecker;
 use Shopware\Core\Framework\OrmSpike\Harness\Fixtures;
 use Shopware\Core\Framework\OrmSpike\Harness\ParamsFactory;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -26,9 +31,9 @@ use Symfony\Component\Console\Output\OutputInterface;
 final class DalV2ProbeCommand extends Command
 {
     /**
-     * @param EntityRepository<\Shopware\Core\Content\Product\ProductCollection> $productRepository
-     * @param EntityRepository<\Shopware\Core\Framework\DataAbstractionLayer\EntityCollection<\Shopware\Core\Framework\DataAbstractionLayer\Entity>> $noteRepository
-     * @param EntityRepository<\Shopware\Core\Framework\DataAbstractionLayer\EntityCollection<\Shopware\Core\Framework\DataAbstractionLayer\Entity>> $pluginNoteRepository
+     * @param EntityRepository<ProductCollection> $productRepository
+     * @param EntityRepository<EntityCollection<Entity>> $noteRepository
+     * @param EntityRepository<EntityCollection<Entity>> $pluginNoteRepository
      */
     public function __construct(
         private readonly Connection $connection,
@@ -36,7 +41,7 @@ final class DalV2ProbeCommand extends Command
         private readonly EntityRepository $noteRepository,
         private readonly EntityRepository $pluginNoteRepository,
         private readonly ParamsFactory $paramsFactory,
-        private readonly \Shopware\Core\Framework\OrmSpike\DalV2\Typed\FieldPathChecker $pathChecker,
+        private readonly FieldPathChecker $pathChecker,
     ) {
         parent::__construct();
     }
@@ -144,8 +149,8 @@ final class DalV2ProbeCommand extends Command
             $projected = $row?->get('title') === 'plugin' && $row->get('product')?->get('productNumber') === $entity?->get('product')?->getProductNumber();
 
             $filtered = new Criteria();
-            $filtered->addFilter(new \Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsFilter('product.id', $productId));
-            $filtered->addFilter(new \Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsFilter('id', $id));
+            $filtered->addFilter(new EqualsFilter('product.id', $productId));
+            $filtered->addFilter(new EqualsFilter('id', $id));
             $found = $this->pluginNoteRepository->searchIds($filtered, $context)->getTotal() === 1;
 
             return [$join && $projected && $found, 'association product, filter on product.id, partial loading with product.productNumber: join ' . ($join ? 'ok' : 'failed') . ', projection ' . ($projected ? 'ok' : 'failed') . ', filter ' . ($found ? 'ok' : 'failed')];

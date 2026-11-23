@@ -24,8 +24,8 @@ use Shopware\Core\Framework\OrmSpike\DalV2\Attr\SpikePluginNote;
 use Shopware\Core\Framework\OrmSpike\DalV2\DalV2Implementation;
 use Shopware\Core\Framework\OrmSpike\DalV2\Probe\DalV2ProbeCommand;
 use Shopware\Core\Framework\OrmSpike\DalV2\Typed\FieldPathChecker;
-use Shopware\Core\Framework\OrmSpike\Harness\ParamsFactory;
 use Shopware\Core\Framework\OrmSpike\DalV2\Write\SwitchableWriteGateway;
+use Shopware\Core\Framework\OrmSpike\Harness\ParamsFactory;
 use Shopware\Core\System\SalesChannel\Context\CachedSalesChannelContextFactory;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
 
