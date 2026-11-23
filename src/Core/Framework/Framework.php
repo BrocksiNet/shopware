@@ -109,6 +109,12 @@ class Framework extends Bundle
 
         $phpLoader->load('mcp.php');
 
+        // wave 8 ORM spike (research branch poc/orm-spike): one services file per implementation in OrmSpike/DependencyInjection/
+        $spikeLoader = new PhpFileLoader($container, new FileLocator(__DIR__ . '/OrmSpike/DependencyInjection/'));
+        foreach (glob(__DIR__ . '/OrmSpike/DependencyInjection/*.php') ?: [] as $spikeFile) {
+            $spikeLoader->load(basename($spikeFile));
+        }
+
         if ($container->getParameter('kernel.environment') === 'test') {
             $phpLoader->load('services_test.php');
             $phpLoader->load('store_test.php');
