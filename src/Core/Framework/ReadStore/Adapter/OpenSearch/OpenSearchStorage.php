@@ -107,6 +107,8 @@ class OpenSearchStorage implements Storage, FilterAware, AggregationAware, Searc
             return;
         }
 
+        $this->client->indices()->refresh(['index' => $new]);
+
         $actions = [];
         if ($old !== null) {
             $actions[] = ['remove' => ['index' => $old, 'alias' => $this->alias()]];
