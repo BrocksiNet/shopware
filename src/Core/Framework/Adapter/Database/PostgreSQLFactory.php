@@ -4,6 +4,7 @@ namespace Shopware\Core\Framework\Adapter\Database;
 
 use Doctrine\DBAL\Configuration;
 use Doctrine\DBAL\Connection;
+use Doctrine\DBAL\Connections\PrimaryReadReplicaConnection;
 use Doctrine\DBAL\Driver\Middleware;
 use Doctrine\DBAL\DriverManager;
 use Doctrine\DBAL\Tools\DsnParser;
@@ -18,7 +19,7 @@ use Shopware\Core\Framework\Log\Package;
 
 /**
  * PostgreSQL counterpart of MySQLFactory.
- * Read replicas and the DATABASE_SSL_* variables are not supported yet, use the sslmode/sslrootcert DSN parameters instead.
+ * Supports read replicas (DATABASE_REPLICA_<n>_URL) and maps the DATABASE_SSL_* variables to the libpq ssl parameters.
  *
  * @phpstan-import-type Params from DriverManager
  *
@@ -44,7 +45,7 @@ class PostgreSQLFactory
         $config = (new Configuration())
             ->setMiddlewares([...$planCache, new SessionMiddleware(), ...$probe('driver'), new SqlTranslationMiddleware(), ...$probe('translated'), new IdCodecMiddleware(), ...$probe('codec'), new ExceptionConverterMiddleware(), ...$middlewares]);
 
-        return DriverManager::getConnection(self::getConnectionParameters(), $config);
+        return DriverManager::getConnection(self::addReplicaParameters(self::getConnectionParameters()), $config);
     }
 
     /**
@@ -52,6 +53,7 @@ class PostgreSQLFactory
      */
     public static function createMigrationConnection(Connection $connection): Connection
     {
+        // Migrations must read their own writes and schema changes, so they never use a replica
         $parameters = self::getConnectionParameters();
         $parameters['driverOptions'][\PDO::ATTR_PERSISTENT] = false;
         $parameters['persistent'] = false;
@@ -66,12 +68,7 @@ class PostgreSQLFactory
     {
         $url = (string) EnvironmentHelper::getVariable('DATABASE_URL', getenv('DATABASE_URL'));
 
-        $dsnParser = new DsnParser([
-            'pgsql' => 'pdo_pgsql',
-            'postgres' => 'pdo_pgsql',
-            'postgresql' => 'pdo_pgsql',
-        ]);
-        $dsnParameters = $dsnParser->parse($url);
+        $dsnParameters = self::parseDsn($url);
 
         $parameters = array_merge([
             'charset' => 'utf8',
@@ -88,6 +85,89 @@ class PostgreSQLFactory
             $parameters['driverOptions'][\PDO::ATTR_PERSISTENT] = true;
         }
 
+        return self::addSslParameters($parameters);
+    }
+
+    /**
+     * pdo_pgsql has no PDO attributes for TLS, libpq takes sslmode, sslrootcert, sslcert and sslkey in the DSN.
+     * The DATABASE_SSL_* variables of MySQLFactory map onto them; values in DATABASE_URL win.
+     * A CA means verify-full (certificate and host name), DATABASE_SSL_DONT_VERIFY_SERVER_CERT means require (encrypted, not verified).
+     *
+     * @param Params&array{charset: string, driverOptions: array<mixed>, ...} $parameters
+     *
+     * @return Params&array{charset: string, driverOptions: array<mixed>, ...}
+     */
+    private static function addSslParameters(array $parameters): array
+    {
+        $ssl = array_filter([
+            'sslrootcert' => (string) EnvironmentHelper::getVariable('DATABASE_SSL_CA', ''),
+            'sslcert' => (string) EnvironmentHelper::getVariable('DATABASE_SSL_CERT', ''),
+            'sslkey' => (string) EnvironmentHelper::getVariable('DATABASE_SSL_KEY', ''),
+        ], static fn (string $value): bool => $value !== '');
+
+        if (EnvironmentHelper::getVariable('DATABASE_SSL_DONT_VERIFY_SERVER_CERT')) {
+            $ssl['sslmode'] = 'require';
+        } elseif (isset($ssl['sslrootcert'])) {
+            $ssl['sslmode'] = 'verify-full';
+        }
+
+        foreach ($ssl as $key => $value) {
+            $parameters[$key] ??= $value;
+        }
+
         return $parameters;
+    }
+
+    /**
+     * Same contract as MySQLFactory: DATABASE_REPLICA_0_URL, DATABASE_REPLICA_1_URL, ... turn the connection into a
+     * PrimaryReadReplicaConnection that keeps its replica, so ReplicaConnectionResetter can switch back between requests.
+     * Replicas share the driver options and the SSL parameters of the primary; a plan cache lives per backend, so it works on both.
+     *
+     * @param Params&array{charset: string, driverOptions: array<mixed>, ...} $parameters
+     *
+     * @return Params
+     */
+    private static function addReplicaParameters(array $parameters): array
+    {
+        if ((string) EnvironmentHelper::getVariable('DATABASE_REPLICA_0_URL', '') === '') {
+            return $parameters;
+        }
+
+        $parameters['wrapperClass'] ??= PrimaryReadReplicaConnection::class;
+        $parameters['keepReplica'] = \array_key_exists('keepReplica', $parameters)
+            ? filter_var($parameters['keepReplica'], \FILTER_VALIDATE_BOOL)
+            : true;
+
+        $primary = $parameters;
+        unset($primary['wrapperClass'], $primary['primary'], $primary['replica'], $primary['keepReplica']);
+        $parameters['primary'] = $primary;
+        $parameters['replica'] = [];
+
+        for ($i = 0; $replicaUrl = (string) EnvironmentHelper::getVariable('DATABASE_REPLICA_' . $i . '_URL', ''); ++$i) {
+            $replica = self::parseDsn($replicaUrl);
+            unset($replica['primary'], $replica['replica'], $replica['keepReplica'], $replica['wrapperClass']);
+
+            $parameters['replica'][$i] = self::addSslParameters(array_merge([
+                'charset' => $primary['charset'],
+                'driver' => 'pdo_pgsql',
+            ], $replica, [
+                'driverOptions' => $primary['driverOptions'] + ($replica['driverOptions'] ?? []),
+            ]));
+        }
+
+        // DBAL's OverrideParams shape for primary and replica lists no sslmode/sslrootcert/sslcert/sslkey, the pdo_pgsql driver reads them anyway
+        return $parameters; // @phpstan-ignore return.type
+    }
+
+    /**
+     * @return Params
+     */
+    private static function parseDsn(string $url): array
+    {
+        return (new DsnParser([
+            'pgsql' => 'pdo_pgsql',
+            'postgres' => 'pdo_pgsql',
+            'postgresql' => 'pdo_pgsql',
+        ]))->parse($url);
     }
 }
