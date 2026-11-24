@@ -54,6 +54,13 @@ CREATE OR REPLACE FUNCTION mysql_compat_group_concat_step(text, text) RETURNS te
     RETURN mysql_compat_group_concat_step($1, $2, ',');
 CREATE OR REPLACE AGGREGATE group_concat(text) (SFUNC = mysql_compat_group_concat_step, STYPE = text);
 CREATE OR REPLACE AGGREGATE group_concat(text, text) (SFUNC = mysql_compat_group_concat_step, STYPE = text);
+-- GROUP_CONCAT(DISTINCT JSON_OBJECT(...)) (SqlHelper::objectArray, OpenSearch product indexing) aggregates jsonb values.
+CREATE OR REPLACE FUNCTION mysql_compat_group_concat_step(text, jsonb, text) RETURNS text LANGUAGE sql IMMUTABLE PARALLEL SAFE
+    RETURN mysql_compat_group_concat_step($1, $2::text, $3);
+CREATE OR REPLACE FUNCTION mysql_compat_group_concat_step(text, jsonb) RETURNS text LANGUAGE sql IMMUTABLE PARALLEL SAFE
+    RETURN mysql_compat_group_concat_step($1, $2::text, ',');
+CREATE OR REPLACE AGGREGATE group_concat(jsonb) (SFUNC = mysql_compat_group_concat_step, STYPE = text);
+CREATE OR REPLACE AGGREGATE group_concat(jsonb, text) (SFUNC = mysql_compat_group_concat_step, STYPE = text);
 
 -- MIN() / MAX() on ids -------------------------------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION mysql_compat_uuid_smaller(uuid, uuid) RETURNS uuid LANGUAGE sql IMMUTABLE PARALLEL SAFE
