@@ -4,6 +4,7 @@ namespace Shopware\Core\System\SystemConfig;
 
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
+use Shopware\Core\Framework\Adapter\Database\Dialect\SqlDialectFactory;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\ConfigJsonField;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Plugin;
@@ -42,7 +43,8 @@ class SystemConfigLoader extends AbstractSystemConfigLoader
             $query->setParameter('salesChannelId', IdBinding::value($salesChannelId));
         }
 
-        $query->addOrderBy('sales_channel_id', 'ASC');
+        // the global values (NULL) come first and the sales channel values override them; PostgreSQL sorts NULL last by default
+        $query->addOrderBy('sales_channel_id', SqlDialectFactory::forConnection($this->connection)->sortDirectionWithMySqlNulls('ASC'));
 
         $result = $query->executeQuery();
 

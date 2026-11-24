@@ -8,6 +8,7 @@ use Psr\Clock\ClockInterface;
 use Shopware\Core\Defaults;
 use Shopware\Core\Framework\Adapter\Cache\CacheTagCollector;
 use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
+use Shopware\Core\Framework\Adapter\Database\Dialect\SqlDialectFactory;
 use Shopware\Core\Framework\Bundle;
 use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\MultiInsertQueryQueue;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\ConfigJsonField;
@@ -164,7 +165,8 @@ class SystemConfigService implements ResetInterface
         $salesChannelId = $salesChannelId ? IdBinding::value($salesChannelId) : null;
 
         $queryBuilder->andWhere('configuration_key LIKE :prefix')
-            ->addOrderBy('sales_channel_id', 'ASC')
+            // the global values (NULL) come first and the sales channel values override them; PostgreSQL sorts NULL last by default
+            ->addOrderBy('sales_channel_id', SqlDialectFactory::forConnection($this->connection)->sortDirectionWithMySqlNulls('ASC'))
             ->setParameter('prefix', $escapedDomain . '%')
             ->setParameter('salesChannelId', $salesChannelId);
 
