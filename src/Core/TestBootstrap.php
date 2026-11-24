@@ -8,7 +8,8 @@ use PHPUnit\TextUI\Configuration\SourceFilter;
 require __DIR__ . '/TestBootstrapper.php';
 
 // PostgreSQL aborts a transaction after a caught failing statement, MySQL does not: run each statement of the test transaction in a savepoint
-if (preg_match('/^(?:pgsql|postgres(?:ql)?):/', (string) ($_SERVER['DATABASE_URL'] ?? getenv('DATABASE_URL'))) === 1) {
+// An explicit SHOPWARE_PG_STATEMENT_SAVEPOINTS=0 keeps them off, to find code that continues after a failed statement
+if (preg_match('/^(?:pgsql|postgres(?:ql)?):/', (string) ($_SERVER['DATABASE_URL'] ?? getenv('DATABASE_URL'))) === 1 && getenv('SHOPWARE_PG_STATEMENT_SAVEPOINTS') !== '0') {
     putenv('SHOPWARE_PG_STATEMENT_SAVEPOINTS=1');
 }
 

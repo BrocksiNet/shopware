@@ -489,6 +489,11 @@ class TestBootstrapper
 
     private function install(): void
     {
+        // The kernel boot already opened a connection to the test database. On PostgreSQL `--drop-database`
+        // runs `DROP DATABASE ... WITH (FORCE)`, which terminates that connection, and its next use after the
+        // install fails. Close it so it reconnects lazily to the new database.
+        $this->getKernelContainer()->get(Connection::class)->close();
+
         $application = new Application($this->getKernel());
 
         $returnCode = $application->doRun(
