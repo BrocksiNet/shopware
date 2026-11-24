@@ -125,6 +125,19 @@ class MySQLToPostgreSQLTranslatorTest extends TestCase
         static::assertContains($long, $caseMap);
     }
 
+    public function testQuotedLowerCaseAliasIsNotRenamedToAKeyword(): void
+    {
+        // shape of DBAL's PostgreSQLSchemaManager::selectIndexColumns(), which reads the key "where"
+        $translator = new MySQLToPostgreSQLTranslator();
+
+        [, $caseMap] = $translator->translate('SELECT c.relname, pg_get_expr(i.indpred, i.indrelid) AS "where" FROM pg_index i JOIN information_schema.tables t ON t.table_name = c.relname WHERE c.relname = ?');
+        static::assertArrayNotHasKey('where', $caseMap);
+
+        [, $caseMap] = $translator->translate('SELECT TABLE_NAME FROM information_schema.tables WHERE x IN (SELECT 1 AS "where")');
+        static::assertArrayNotHasKey('where', $caseMap);
+        static::assertSame('TABLE_NAME', $caseMap['table_name'] ?? null);
+    }
+
     #[DataProvider('translateProvider')]
     public function testTranslate(string $sql, string $expected): void
     {

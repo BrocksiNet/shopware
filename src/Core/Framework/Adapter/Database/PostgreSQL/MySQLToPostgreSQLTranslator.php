@@ -426,7 +426,7 @@ class MySQLToPostgreSQLTranslator
             ++$i;
         }
 
-        return [$out, $caseMap];
+        return [$out, array_filter($caseMap, static fn (string $spelling, string $lower): bool => $spelling !== $lower, \ARRAY_FILTER_USE_BOTH)];
     }
 
     /**
@@ -566,6 +566,9 @@ class MySQLToPostgreSQLTranslator
             $short = substr($name, 0, self::MAX_IDENTIFIER_LENGTH - 17) . '~' . substr(Hasher::hash($name, 'md5'), 0, 16);
             $caseMap[$short] = $name;
             $name = $short;
+        } elseif ($name === strtolower($name)) {
+            // a quoted lower case name keeps its spelling, a keyword like WHERE elsewhere in the statement must not rename it
+            $caseMap[$name] = $name;
         }
 
         return '"' . str_replace('"', '""', $name) . '"';
