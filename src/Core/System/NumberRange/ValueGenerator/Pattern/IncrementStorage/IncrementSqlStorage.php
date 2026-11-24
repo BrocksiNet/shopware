@@ -3,6 +3,7 @@
 namespace Shopware\Core\System\NumberRange\ValueGenerator\Pattern\IncrementStorage;
 
 use Doctrine\DBAL\Connection;
+use Doctrine\DBAL\Connections\PrimaryReadReplicaConnection;
 use Doctrine\DBAL\ParameterType;
 use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use Doctrine\DBAL\Platforms\SQLitePlatform;
@@ -38,7 +39,12 @@ class IncrementSqlStorage extends AbstractIncrementStorage
 
         $platform = $this->connection->getDatabasePlatform();
         if ($platform instanceof PostgreSQLPlatform || $platform instanceof SQLitePlatform) {
-            // PostgreSQL and SQLite have no user variables, the new value is read with RETURNING in the same statement
+            // PostgreSQL and SQLite have no user variables, the new value is read with RETURNING in the same statement;
+            // that write runs through fetchOne, which a read replica connection would send to the read-only replica
+            if ($this->connection instanceof PrimaryReadReplicaConnection) {
+                $this->connection->ensureConnectedToPrimary();
+            }
+
             return (int) $this->connection->fetchOne(
                 'INSERT INTO number_range_state (id, last_value, number_range_id, created_at) VALUES (:stateId, :value, :id, :createdAt)
                 ON CONFLICT (number_range_id) DO UPDATE
