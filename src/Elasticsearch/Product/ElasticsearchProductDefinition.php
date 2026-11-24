@@ -446,7 +446,7 @@ FROM product p
 
 WHERE p.id IN (:ids) AND p.version_id = :liveVersionId AND (p.child_count = 0 OR p.parent_id IS NOT NULL OR JSON_EXTRACT(`p`.`variant_listing_config`, "$.displayParent") = 1)
 
-GROUP BY p.id';
+GROUP BY p.id, p.version_id, pp.id, pp.version_id';
 
         $baseMapping = [
             // @deprecated tag:v6.8.0 - the `product.states` column is removed in v6.8 (see Migration1763125892),
@@ -499,7 +499,11 @@ FROM product p
 
 WHERE p.id IN (:ids) AND p.version_id = :liveVersionId
 
-GROUP BY p.id';
+GROUP BY p.id, p.version_id,
+    product_main.product_id, product_main.product_version_id, product_main.language_id,
+    product_parent.product_id, product_parent.product_version_id, product_parent.language_id,
+    manufacturer.product_manufacturer_id, manufacturer.product_manufacturer_version_id, manufacturer.language_id,
+    delivery_time_translation.delivery_time_id, delivery_time_translation.language_id';
 
         $translationMapping = [
             '#categories#' => SqlHelper::objectArray([
