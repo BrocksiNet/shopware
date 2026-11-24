@@ -36,6 +36,16 @@ class IdCodecMiddlewareTest extends TestCase
         static::assertSame(self::UTF8_ID, IdCodecMiddleware::encode(self::UTF8_ID, false));
     }
 
+    public function testGuessModeConvertsUntypedIdsThatHappenToBeValidUtf8(): void
+    {
+        // seen on the 150,000 product seed: a parent id of ASCII, control bytes and one two byte character is valid UTF-8
+        $bytes = hex2bin('623d3b233f5c386b0b365e1a114ad686');
+
+        static::assertIsString($bytes);
+        static::assertTrue(mb_check_encoding($bytes, 'UTF-8'));
+        static::assertSame(bin2hex($bytes), IdCodecMiddleware::encode($bytes, false));
+    }
+
     public function testStrictModeConvertsOnlyTypedValues(): void
     {
         $_SERVER['SHOPWARE_PG_ID_CODEC'] = 'strict';

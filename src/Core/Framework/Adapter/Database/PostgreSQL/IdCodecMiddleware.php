@@ -74,7 +74,8 @@ class IdCodecMiddleware implements Middleware
 
     /**
      * A value bound as binary with 16 bytes is an id.
-     * A value bound as string is only treated as id when it is not valid UTF-8 or contains a NUL byte, a 16 character text stays untouched.
+     * A value bound as string is only treated as id when it is not valid UTF-8 or contains a control byte (NUL included), a 16 character text stays untouched.
+     * About one random id in 65,000 is valid UTF-8 (all bytes below 0x80), the control byte rule catches nearly all of them, text with control bytes is not an id candidate in practice.
      * PostgreSQL text can not hold a NUL byte, so such a value can only be an id (e.g. the all-zero id).
      */
     public static function encode(mixed $value, bool $boundAsBinary): mixed
@@ -86,7 +87,7 @@ class IdCodecMiddleware implements Middleware
         if (!$boundAsBinary && self::isStrict()) {
             return $value;
         }
-        if (!$boundAsBinary && !str_contains($value, "\0") && mb_check_encoding($value, 'UTF-8')) {
+        if (!$boundAsBinary && mb_check_encoding($value, 'UTF-8') && preg_match('/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/', $value) !== 1) {
             return $value;
         }
 
