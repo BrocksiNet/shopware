@@ -1,17 +1,22 @@
 <?php declare(strict_types=1);
 
 use Shopware\Core\Content\Product\ProductDefinition;
+use Shopware\Core\Content\Product\SalesChannel\Listing\ProductListingRoute;
+use Shopware\Core\Content\Product\SalesChannel\Search\ProductSearchRoute;
 use Shopware\Core\Content\Product\SearchKeyword\ProductSearchBuilderInterface;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
+use Shopware\Core\Framework\DataAbstractionLayer\Search\CriteriaArrayConverter;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\RequestCriteriaBuilder;
 use Shopware\Core\Framework\OrmSpike\Harness\ImplementationRegistry;
 use Shopware\Core\Framework\OrmSpike\Harness\ParamsFactory;
 use Shopware\Core\Framework\OrmSpike\Harness\StatementCounter;
+use Shopware\Core\Framework\ReadStore\Bench\CorpusCommand;
 use Shopware\Core\Framework\ReadStore\Bench\DalOpenSearchImplementation;
 use Shopware\Core\Framework\ReadStore\Bench\LagCommand;
 use Shopware\Core\Framework\ReadStore\Bench\LoadCommand;
 use Shopware\Core\Framework\ReadStore\Bench\LoadWorkerCommand;
 use Shopware\Core\Framework\ReadStore\Bench\RebuildCommand;
+use Shopware\Core\Framework\ReadStore\Bridge\CriteriaBridge;
 use Shopware\Core\System\SalesChannel\Context\CachedSalesChannelContextFactory;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
 
@@ -45,6 +50,25 @@ return static function (ContainerConfigurator $containerConfigurator): void {
 
     $services->set(LoadWorkerCommand::class)
         ->args([service(ImplementationRegistry::class), service(ParamsFactory::class), service(StatementCounter::class)])
+        ->tag('console.command');
+
+    // Wave 9 handoff K: Q4, the criteria corpus of the product routes
+    $services->set(CorpusCommand::class)
+        ->args([
+            service(ImplementationRegistry::class),
+            service(ParamsFactory::class),
+            service(CachedSalesChannelContextFactory::class),
+            service(ProductListingRoute::class),
+            service(ProductSearchRoute::class),
+            service('sales_channel.product.repository'),
+            service('product.repository'),
+            service(RequestCriteriaBuilder::class),
+            service(ProductDefinition::class),
+            service(CriteriaArrayConverter::class),
+            service(CriteriaBridge::class),
+            service('event_dispatcher'),
+            service('Doctrine\\DBAL\\Connection'),
+        ])
         ->tag('console.command');
 
     $services->set(LoadCommand::class)
