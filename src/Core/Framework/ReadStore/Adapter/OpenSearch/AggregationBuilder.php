@@ -34,9 +34,9 @@ final class AggregationBuilder
 {
     public const CARDINALITY_THRESHOLD = 40000;
 
-    private const ENGINE = 'opensearch';
+    public const MAX_BUCKETS = 60000;
 
-    private const MAX_BUCKETS = 60000;
+    private const ENGINE = 'opensearch';
 
     public function __construct(
         private readonly FieldResolver $resolver,
@@ -100,6 +100,9 @@ final class AggregationBuilder
             if ($field->type === FieldType::ANY || $field->type === FieldType::OBJECT) {
                 throw NotSupportedByEngine::field($aggregation->field, 'count of a field of unknown type');
             }
+            if ($aggregation->field === 'id') {
+                return ['m' => ['value_count' => ['field' => 'rs.f.id']]];
+            }
 
             return ['m' => ['cardinality' => $this->value($paths) + ['precision_threshold' => self::CARDINALITY_THRESHOLD]]];
         }
@@ -108,8 +111,17 @@ final class AggregationBuilder
             throw NotSupportedByEngine::feature(self::ENGINE, $aggregation::class);
         }
 
-        if ($field->isList() || ($field->type !== FieldType::INT && $field->type !== FieldType::FLOAT)) {
+        $allowBool = $aggregation instanceof Min || $aggregation instanceof Max;
+        if ($field->isList() || ($field->type !== FieldType::INT && $field->type !== FieldType::FLOAT && !($allowBool && $field->type === FieldType::BOOL))) {
             throw NotSupportedByEngine::field($aggregation->field, 'metrics are only supported on numbers');
+        }
+
+        if ($field->type === FieldType::BOOL) {
+            return ['m' => ['stats' => ['script' => [
+                'lang' => 'painless',
+                'source' => 'if (doc.containsKey(params.p) && doc[params.p].size() > 0) { return doc[params.p].value ? 1 : 0; } return null;',
+                'params' => ['p' => $paths[0]],
+            ]]]];
         }
 
         return ['m' => ['stats' => $this->value($paths)]];
@@ -170,7 +182,7 @@ final class AggregationBuilder
 
         if ($aggregation instanceof Count) {
             $value = (int) ($response['m']['value'] ?? 0);
-            if ($value >= self::CARDINALITY_THRESHOLD) {
+            if ($aggregation->field !== 'id' && $value >= self::CARDINALITY_THRESHOLD) {
                 throw NotSupportedByEngine::field($aggregation->field, 'the distinct count may be inexact above ' . self::CARDINALITY_THRESHOLD);
             }
 
@@ -179,7 +191,7 @@ final class AggregationBuilder
 
         $stats = $response['m'] ?? [];
         $empty = (int) ($stats['count'] ?? 0) === 0;
-        $number = fn (mixed $value): int|float|null => $empty || $value === null ? null : ($field->type === FieldType::INT ? (int) round((float) $value) : (float) $value);
+        $number = fn (mixed $value): int|float|null => $empty || $value === null ? null : ($field->type === FieldType::INT || $field->type === FieldType::BOOL ? (int) round((float) $value) : (float) $value);
 
         return match (true) {
             $aggregation instanceof Min => new MetricResult($name, $number($stats['min'] ?? null)),
@@ -226,7 +238,7 @@ final class AggregationBuilder
         }
 
         if ($terms->limit !== null) {
-            usort($buckets, fn (array $a, array $b): int => [$b['count'], 0] <=> [$a['count'], $this->compare($a['key'], $b['key'], $field->type)]);
+            usort($buckets, fn (array $a, array $b): int => [$b['count'], $this->compare($a['key'], $b['key'], $field->type)] <=> [$a['count'], 0]);
             $buckets = \array_slice($buckets, 0, $terms->limit);
         }
         usort($buckets, fn (array $a, array $b): int => $this->compare($a['key'], $b['key'], $field->type));

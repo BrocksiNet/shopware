@@ -280,7 +280,11 @@ class OpenSearchStorage implements Storage, FilterAware, AggregationAware, Searc
 
         $query = $this->baseQuery($criteria, $context);
         if ($search !== null) {
-            $query = ['script_score' => ['query' => $query, 'script' => $this->scoreScript($search)]];
+            $query = ['script_score' => ['query' => $query, 'script' => $this->scoreScript($search, $context)]];
+        }
+
+        if ($collapse && $search !== null && $limit !== 0 && !$this->isScorePrimarySort($criteria->sortings)) {
+            return $this->runScoredCollapse($criteria, $context, $query, $size);
         }
 
         $needsTotal = $criteria->total === Total::EXACT || $limit === null;
@@ -379,11 +383,11 @@ class OpenSearchStorage implements Storage, FilterAware, AggregationAware, Searc
     }
 
     /**
-     * Score of the reference evaluator: summed over the keywords of all languages.
+     * Score of the reference evaluator, see {@see QueryEvaluator::score()}.
      *
      * @return array<string, mixed>
      */
-    private function scoreScript(SearchTerm $search): array
+    private function scoreScript(SearchTerm $search, StoreContext $context): array
     {
         $words = [];
         $scores = [];
@@ -392,19 +396,180 @@ class OpenSearchStorage implements Storage, FilterAware, AggregationAware, Searc
             $scores[] = (float) $scored['score'];
         }
 
+        $filterKeywords = null;
+        if (!$search->andLogic) {
+            $filterKeywords = $search->anyKeywords();
+        } elseif (\count($search->tokenKeywords) === 1) {
+            $filterKeywords = $search->tokenKeywords[0];
+        }
+        $allowed = $filterKeywords === null ? null : array_values(array_unique(array_map(QueryEvaluator::fold(...), $filterKeywords)));
+
         return [
             'lang' => 'painless',
             'source' => 'double s = 0.0; def keywords = params[\'_source\'].rs.k; if (keywords == null) { return 0.0; } '
-                . 'for (def e : keywords) { String k = e.k; double r = e.r; '
+                . 'for (def e : keywords) { '
+                . 'if (params.lang != null && !params.lang.equals(e.l)) { continue; } '
+                . 'String k = e.k; '
+                . 'if (params.allowed != null && !params.allowed.contains(k)) { continue; } '
+                . 'double r = e.r; '
                 . 'for (int i = 0; i < params.words.length; i++) { if (params.words[i].equals(k)) { s += params.scores[i] * r; } } '
                 . 'if (params.original.length() > 0 && k.contains(params.original)) { s += params.originalScore * r; } } return s;',
             'params' => [
+                'lang' => $allowed === null ? null : $context->languageId,
+                'allowed' => $allowed,
                 'words' => $words,
                 'scores' => $scores,
                 'original' => QueryEvaluator::fold($search->original),
                 'originalScore' => $search->originalScore,
             ],
         ];
+    }
+
+    /**
+     * @param list<Sorting> $sortings
+     */
+    private function isScorePrimarySort(array $sortings): bool
+    {
+        if ($sortings === []) {
+            return false;
+        }
+        if ($sortings[0]->field !== Sorting::SCORE || $sortings[0]->direction !== Sorting::DESC) {
+            return false;
+        }
+
+        return \count($sortings) === 1 || (\count($sortings) === 2 && $sortings[1]->field === 'id' && $sortings[1]->direction === Sorting::ASC);
+    }
+
+    /**
+     * Exact scored collapse (`EntitySearcher::buildScoreRankedQuery()`): picks the highest-scoring document per group (ties by lowest id)
+     * via `terms` + `top_hits(size: 1)`, orders the group representatives by `$criteria->sortings` in PHP, and hydrates only the requested page via `mget()`.
+     *
+     * @param array<string, mixed> $query
+     */
+    private function runScoredCollapse(StoreCriteria $criteria, StoreContext $context, array $query, int $size): StoreResult
+    {
+        \assert($criteria->groupField !== null);
+        $group = $this->resolver->resolve($criteria->groupField, $context);
+        if ($group->type !== FieldType::ID || !\in_array($criteria->groupField, $this->schema->collapseFields(), true)) {
+            throw NotSupportedByEngine::field($criteria->groupField, 'only the configured collapse fields can group');
+        }
+
+        $sortSpecs = [];
+        $docvalueFields = [];
+        foreach ($criteria->sortings as $sorting) {
+            if ($sorting->field === Sorting::SCORE) {
+                $sortSpecs[] = ['score' => true, 'direction' => $sorting->direction, 'type' => FieldType::FLOAT, 'paths' => []];
+                continue;
+            }
+            $field = $this->resolver->resolve($sorting->field, $context);
+            if ($field->isList()) {
+                throw NotSupportedByEngine::field($sorting->field, 'cannot sort by a list field');
+            }
+            $isString = $field->type === FieldType::STRING || $field->type === FieldType::TEXT;
+            $paths = array_map(static fn (string $p): string => ($isString ? 'rs.s.' : 'rs.f.') . $p, $field->dottedPaths());
+            foreach ($paths as $p) {
+                $docvalueFields[$p] = true;
+            }
+            $sortSpecs[] = ['score' => false, 'direction' => $sorting->direction, 'type' => $field->type, 'paths' => $paths];
+        }
+
+        $postFilters = $this->queries->all($criteria->postFilters, $context);
+        $inScope = $postFilters === [] ? ['match_all' => new \stdClass()] : ['bool' => ['filter' => $postFilters]];
+
+        $body = [
+            'size' => 0,
+            'track_total_hits' => false,
+            'query' => $query,
+            'aggs' => [
+                'scoped' => [
+                    'filter' => $inScope,
+                    'aggs' => [
+                        'groups' => [
+                            'terms' => ['field' => 'rs.g.' . $criteria->groupField, 'size' => AggregationBuilder::MAX_BUCKETS],
+                            'aggs' => [
+                                'rep' => [
+                                    'top_hits' => [
+                                        'size' => 1,
+                                        '_source' => false,
+                                        'docvalue_fields' => array_keys($docvalueFields),
+                                        'sort' => [['_score' => ['order' => 'desc']], ['rs.f.id' => ['order' => 'asc']]],
+                                    ],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ];
+
+        $response = $this->request($body);
+        $groupsAgg = $response['aggregations']['scoped']['groups'] ?? [];
+        if ((int) ($groupsAgg['sum_other_doc_count'] ?? 0) > 0) {
+            throw NotSupportedByEngine::feature(self::ENGINE, 'scored collapse with more than ' . AggregationBuilder::MAX_BUCKETS . ' groups');
+        }
+
+        $reps = [];
+        foreach ($groupsAgg['buckets'] ?? [] as $bucket) {
+            $hit = $bucket['rep']['hits']['hits'][0] ?? null;
+            if ($hit === null) {
+                continue;
+            }
+            $fields = $hit['fields'] ?? [];
+            $values = [];
+            foreach ($sortSpecs as $spec) {
+                if ($spec['score']) {
+                    $values[] = (float) ($hit['_score'] ?? 0.0);
+                    continue;
+                }
+                $val = null;
+                foreach ($spec['paths'] as $p) {
+                    if (isset($fields[$p][0])) {
+                        $val = $fields[$p][0];
+                        break;
+                    }
+                }
+                $values[] = $val;
+            }
+            $reps[] = ['id' => (string) $hit['_id'], 'score' => (float) ($hit['_score'] ?? 0.0), 'values' => $values];
+        }
+
+        usort($reps, static function (array $a, array $b) use ($sortSpecs): int {
+            foreach ($sortSpecs as $i => $spec) {
+                $av = $a['values'][$i];
+                $bv = $b['values'][$i];
+                if ($av === null && $bv === null) {
+                    continue;
+                }
+                if ($av === null || $bv === null) {
+                    $cmp = $av === null ? -1 : 1;
+
+                    return $spec['direction'] === Sorting::ASC ? $cmp : -$cmp;
+                }
+                $cmp = \is_string($av) && \is_string($bv) ? strcmp($av, $bv) : ((float) $av <=> (float) $bv);
+                if ($cmp !== 0) {
+                    return $spec['direction'] === Sorting::ASC ? $cmp : -$cmp;
+                }
+            }
+
+            return strcmp($a['id'], $b['id']);
+        });
+
+        $count = \count($reps);
+        $slice = \array_slice($reps, $criteria->offset, $size);
+        $ids = array_map(static fn (array $r): string => $r['id'], $slice);
+        $docsById = $ids === [] ? [] : $this->mget($ids);
+        $documents = [];
+        $scores = [];
+        foreach ($slice as $rep) {
+            if (isset($docsById[$rep['id']])) {
+                $documents[] = $docsById[$rep['id']];
+                $scores[$rep['id']] = $rep['score'];
+            }
+        }
+
+        $aggregations = $criteria->aggregations === [] ? [] : $this->aggregate($criteria, $context);
+
+        return new StoreResult($documents, $criteria->total === Total::EXACT ? $count : null, $aggregations, $scores);
     }
 
     /**
@@ -422,11 +587,30 @@ class OpenSearchStorage implements Storage, FilterAware, AggregationAware, Searc
             throw NotSupportedByEngine::field($criteria->groupField, 'only the configured collapse fields can group');
         }
 
-        if (\count($criteria->sortings) !== 1) {
+        $postFilters = $this->queries->all($criteria->postFilters, $context);
+        $inScope = $postFilters === [] ? ['match_all' => new \stdClass()] : ['bool' => ['filter' => $postFilters]];
+
+        if ($criteria->limit === 0) {
+            if ($needsTotal) {
+                $body['aggs'] = [
+                    'groups' => [
+                        'filter' => $inScope,
+                        'aggs' => ['n' => ['cardinality' => ['field' => 'rs.g.' . $criteria->groupField, 'precision_threshold' => AggregationBuilder::CARDINALITY_THRESHOLD]]],
+                    ],
+                ];
+            }
+
+            return ['missing' => false];
+        }
+
+        // 1 primary sorting (plus optional trailing `id ASC` tie-break, as ProductListingLoader adds) is exact with native collapse
+        $sortings = $criteria->sortings;
+        $hasIdTiebreak = \count($sortings) === 2 && $sortings[1]->field === 'id' && $sortings[1]->direction === Sorting::ASC;
+        if (\count($sortings) !== 1 && !$hasIdTiebreak) {
             throw NotSupportedByEngine::feature(self::ENGINE, 'collapse without or with several sortings, the group order of the reference is an aggregate per sort field');
         }
 
-        $sorting = $criteria->sortings[0];
+        $sorting = $sortings[0];
         $missingPaths = [];
         if ($sorting->field !== Sorting::SCORE) {
             $sortField = $this->resolver->resolve($sorting->field, $context);
@@ -439,9 +623,6 @@ class OpenSearchStorage implements Storage, FilterAware, AggregationAware, Searc
         }
 
         $body['collapse'] = ['field' => 'rs.g.' . $criteria->groupField];
-
-        $postFilters = $this->queries->all($criteria->postFilters, $context);
-        $inScope = $postFilters === [] ? ['match_all' => new \stdClass()] : ['bool' => ['filter' => $postFilters]];
 
         $aggs = [];
         if ($needsTotal) {

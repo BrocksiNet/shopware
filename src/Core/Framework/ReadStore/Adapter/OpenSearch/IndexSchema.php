@@ -91,7 +91,7 @@ final class IndexSchema
             foreach ($languageKeywords as $keyword => $ranking) {
                 $folded = QueryEvaluator::fold((string) $keyword);
                 $f['kw'][(string) $languageId][] = $folded;
-                $keywords[] = ['k' => $folded, 'r' => (float) (\is_numeric($ranking) ? $ranking : 0.0)];
+                $keywords[] = ['l' => (string) $languageId, 'k' => $folded, 'r' => (float) (\is_numeric($ranking) ? $ranking : 0.0)];
             }
         }
 
