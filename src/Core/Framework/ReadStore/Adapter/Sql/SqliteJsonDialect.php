@@ -65,7 +65,12 @@ final class SqliteJsonDialect implements JsonDialect
 
     public function createDocumentTable(string $table): array
     {
-        return ['CREATE TABLE ' . $this->quote($table) . ' (id TEXT NOT NULL PRIMARY KEY, doc TEXT NOT NULL CHECK (json_valid(doc)))'];
+        return [
+            'CREATE TABLE ' . $this->quote($table) . ' (id TEXT NOT NULL PRIMARY KEY, active INTEGER NULL, manufacturer_id TEXT NULL, display_group TEXT NULL, doc TEXT NOT NULL CHECK (json_valid(doc)))',
+            'CREATE INDEX ' . $this->quote($table . '_active') . ' ON ' . $this->quote($table) . ' (active)',
+            'CREATE INDEX ' . $this->quote($table . '_manufacturer') . ' ON ' . $this->quote($table) . ' (manufacturer_id)',
+            'CREATE INDEX ' . $this->quote($table . '_display_group') . ' ON ' . $this->quote($table) . ' (display_group)',
+        ];
     }
 
     public function createKeywordTable(string $table): array
@@ -79,7 +84,9 @@ final class SqliteJsonDialect implements JsonDialect
 
     public function upsertDocument(string $table): string
     {
-        return 'INSERT INTO ' . $this->quote($table) . ' (id, doc) VALUES (:id, :doc) ON CONFLICT (id) DO UPDATE SET doc = excluded.doc';
+        return 'INSERT INTO ' . $this->quote($table) . ' (id, active, manufacturer_id, display_group, doc)'
+            . ' VALUES (:id, :active, :manufacturer_id, :display_group, :doc)'
+            . ' ON CONFLICT (id) DO UPDATE SET active = excluded.active, manufacturer_id = excluded.manufacturer_id, display_group = excluded.display_group, doc = excluded.doc';
     }
 
     public function upsertMeta(string $table): string
@@ -139,6 +146,11 @@ final class SqliteJsonDialect implements JsonDialect
     public function arrayContains(string $doc, array $path, string $value, Binder $binder): string
     {
         return 'CASE WHEN ' . $this->type($doc, $path, $binder) . ' = \'array\' THEN EXISTS (SELECT 1 FROM json_each(' . $doc . ', ' . $binder->bind($this->jsonPath($path)) . ') AS je WHERE je.type = \'text\' AND je.value = ' . $binder->bind($value) . ') END';
+    }
+
+    public function indexedArrayContains(string $doc, array $path, string $value, Binder $binder): ?string
+    {
+        return null;
     }
 
     public function unnest(string $doc, array $path, Binder $binder): array

@@ -17,6 +17,11 @@ final class MariaDbJsonDialect extends MySqlJsonDialect
         return 'mariadb';
     }
 
+    public function indexedArrayContains(string $doc, array $path, string $value, Binder $binder): ?string
+    {
+        return null;
+    }
+
     protected function documentType(): string
     {
         return 'LONGTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_bin';
@@ -25,5 +30,10 @@ final class MariaDbJsonDialect extends MySqlJsonDialect
     protected function documentConstraint(): string
     {
         return ' CHECK (JSON_VALID(doc))';
+    }
+
+    protected function multiValuedIndexes(string $table): string
+    {
+        return '';
     }
 }

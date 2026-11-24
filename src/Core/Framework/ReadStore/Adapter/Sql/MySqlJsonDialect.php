@@ -48,18 +48,24 @@ class MySqlJsonDialect implements JsonDialect
     {
         return ['CREATE TABLE ' . $this->quote($table) . ' (
             seq BIGINT NOT NULL AUTO_INCREMENT,
-            id VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+            id VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+            active TINYINT(1) NULL,
+            manufacturer_id VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NULL,
+            display_group VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NULL,
             doc ' . $this->documentType() . ' NOT NULL' . $this->documentConstraint() . ',
             PRIMARY KEY (id),
-            UNIQUE KEY ' . $this->quote($table . '_seq') . ' (seq)
+            UNIQUE KEY ' . $this->quote($table . '_seq') . ' (seq),
+            KEY ' . $this->quote($table . '_active') . ' (active),
+            KEY ' . $this->quote($table . '_manufacturer') . ' (manufacturer_id),
+            KEY ' . $this->quote($table . '_display_group') . ' (display_group)' . $this->multiValuedIndexes($table) . '
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'];
     }
 
     public function createKeywordTable(string $table): array
     {
         return ['CREATE TABLE ' . $this->quote($table) . ' (
-            product_id VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
-            language_id VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+            product_id VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+            language_id VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
             keyword_fold VARCHAR(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
             ranking DOUBLE NOT NULL,
             KEY ' . $this->quote($table . '_product') . ' (product_id),
@@ -69,7 +75,8 @@ class MySqlJsonDialect implements JsonDialect
 
     public function upsertDocument(string $table): string
     {
-        return 'INSERT INTO ' . $this->quote($table) . ' (id, doc) VALUES (:id, :doc) ON DUPLICATE KEY UPDATE doc = VALUES(doc)';
+        return 'INSERT INTO ' . $this->quote($table) . ' (id, active, manufacturer_id, display_group, doc) VALUES (:id, :active, :manufacturer_id, :display_group, :doc)'
+            . ' ON DUPLICATE KEY UPDATE active = VALUES(active), manufacturer_id = VALUES(manufacturer_id), display_group = VALUES(display_group), doc = VALUES(doc)';
     }
 
     public function upsertMeta(string $table): string
@@ -134,6 +141,15 @@ class MySqlJsonDialect implements JsonDialect
         return 'CASE WHEN JSON_TYPE(' . $this->extract($doc, $path, $binder) . ') = \'ARRAY\' THEN JSON_CONTAINS(' . $this->extract($doc, $path, $binder) . ', JSON_QUOTE(' . $binder->bind($value) . ')) END';
     }
 
+    public function indexedArrayContains(string $doc, array $path, string $value, Binder $binder): ?string
+    {
+        if (\count($path) !== 1 || !\in_array($path[0], ['categoryTree', 'propertyIds', 'optionIds'], true)) {
+            return null;
+        }
+
+        return '(' . $binder->bind($value) . ' MEMBER OF (' . $doc . '->\'$.' . $path[0] . '\'))';
+    }
+
     public function unnest(string $doc, array $path, Binder $binder): array
     {
         if (\count($path) !== 1 || !preg_match('/^\w+\z/', $path[0])) {
@@ -196,6 +212,14 @@ class MySqlJsonDialect implements JsonDialect
     protected function documentConstraint(): string
     {
         return '';
+    }
+
+    protected function multiValuedIndexes(string $table): string
+    {
+        return ',
+            KEY ' . $this->quote($table . '_cat') . ' ((CAST(doc->\'$.categoryTree\' AS CHAR(64) ARRAY))),
+            KEY ' . $this->quote($table . '_prop') . ' ((CAST(doc->\'$.propertyIds\' AS CHAR(64) ARRAY))),
+            KEY ' . $this->quote($table . '_opt') . ' ((CAST(doc->\'$.optionIds\' AS CHAR(64) ARRAY)))';
     }
 
     /**

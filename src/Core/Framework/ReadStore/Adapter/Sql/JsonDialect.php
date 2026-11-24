@@ -50,7 +50,8 @@ interface JsonDialect
     public function createKeywordTable(string $table): array;
 
     /**
-     * Inserts or replaces a document, parameters `:id` and `:doc`. The insertion position stays when a document is replaced.
+     * Inserts or replaces a document, parameters `:id`, `:doc`, `:active`, `:manufacturer_id` and `:display_group`.
+     * The insertion position stays when a document is replaced.
      */
     public function upsertDocument(string $table): string;
 
@@ -114,6 +115,14 @@ interface JsonDialect
      * @param list<string> $path
      */
     public function arrayContains(string $doc, array $path, string $value, Binder $binder): string;
+
+    /**
+     * Index-friendly positive-context array containment predicate (only used outside NOT and when NULL is not a
+     * candidate; may return false instead of NULL for non-arrays). Returns null when no native array index exists.
+     *
+     * @param list<string> $path
+     */
+    public function indexedArrayContains(string $doc, array $path, string $value, Binder $binder): ?string;
 
     /**
      * A row source producing one row per array element, to be appended to a FROM clause that already has a table.

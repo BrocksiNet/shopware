@@ -44,7 +44,22 @@ final class PostgreSqlJsonDialect implements JsonDialect
 
     public function createDocumentTable(string $table): array
     {
-        return ['CREATE TABLE ' . $this->quote($table) . ' (seq BIGSERIAL NOT NULL, id TEXT COLLATE "C" NOT NULL PRIMARY KEY, doc JSONB NOT NULL)'];
+        return [
+            'CREATE TABLE ' . $this->quote($table) . ' (
+                seq BIGSERIAL NOT NULL,
+                id TEXT COLLATE "C" NOT NULL PRIMARY KEY,
+                active SMALLINT NULL,
+                manufacturer_id TEXT COLLATE "C" NULL,
+                display_group TEXT COLLATE "C" NULL,
+                doc JSONB NOT NULL
+            )',
+            'CREATE INDEX ' . $this->quote($table . '_active') . ' ON ' . $this->quote($table) . ' (active)',
+            'CREATE INDEX ' . $this->quote($table . '_manufacturer') . ' ON ' . $this->quote($table) . ' (manufacturer_id)',
+            'CREATE INDEX ' . $this->quote($table . '_display_group') . ' ON ' . $this->quote($table) . ' (display_group)',
+            'CREATE INDEX ' . $this->quote($table . '_cat') . ' ON ' . $this->quote($table) . ' USING GIN ((doc->\'categoryTree\'))',
+            'CREATE INDEX ' . $this->quote($table . '_prop') . ' ON ' . $this->quote($table) . ' USING GIN ((doc->\'propertyIds\'))',
+            'CREATE INDEX ' . $this->quote($table . '_opt') . ' ON ' . $this->quote($table) . ' USING GIN ((doc->\'optionIds\'))',
+        ];
     }
 
     public function createKeywordTable(string $table): array
@@ -63,7 +78,9 @@ final class PostgreSqlJsonDialect implements JsonDialect
 
     public function upsertDocument(string $table): string
     {
-        return 'INSERT INTO ' . $this->quote($table) . ' (id, doc) VALUES (:id, CAST(:doc AS JSONB)) ON CONFLICT (id) DO UPDATE SET doc = EXCLUDED.doc';
+        return 'INSERT INTO ' . $this->quote($table) . ' (id, active, manufacturer_id, display_group, doc)'
+            . ' VALUES (:id, :active, :manufacturer_id, :display_group, CAST(:doc AS JSONB))'
+            . ' ON CONFLICT (id) DO UPDATE SET active = EXCLUDED.active, manufacturer_id = EXCLUDED.manufacturer_id, display_group = EXCLUDED.display_group, doc = EXCLUDED.doc';
     }
 
     public function upsertMeta(string $table): string
@@ -121,6 +138,15 @@ final class PostgreSqlJsonDialect implements JsonDialect
     public function arrayContains(string $doc, array $path, string $value, Binder $binder): string
     {
         return 'CASE WHEN jsonb_typeof(' . $this->extract($doc, $path, $binder) . ') = \'array\' THEN ' . $this->extract($doc, $path, $binder) . ' @> to_jsonb(CAST(' . $binder->bind($value) . ' AS TEXT)) END';
+    }
+
+    public function indexedArrayContains(string $doc, array $path, string $value, Binder $binder): ?string
+    {
+        if (\count($path) !== 1 || !\in_array($path[0], ['categoryTree', 'propertyIds', 'optionIds'], true)) {
+            return null;
+        }
+
+        return '((' . $doc . '->\'' . $path[0] . '\') @> jsonb_build_array(CAST(' . $binder->bind($value) . ' AS TEXT)))';
     }
 
     public function unnest(string $doc, array $path, Binder $binder): array

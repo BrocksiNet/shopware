@@ -49,22 +49,23 @@ final class SqlQueryCompiler
         return array_map(fn (Filter $filter): string => $this->filter($filter, $context, $binder, $scope), $filters);
     }
 
-    public function filter(Filter $filter, StoreContext $context, Binder $binder, SqlScope $scope): string
+    public function filter(Filter $filter, StoreContext $context, Binder $binder, SqlScope $scope, bool $underNot = false): string
     {
         if ($filter instanceof Multi || $filter instanceof Not) {
+            $childUnderNot = $underNot || $filter instanceof Not;
             $glue = $filter->operator === Multi::AND ? ' AND ' : ' OR ';
-            $parts = array_map(fn (Filter $inner): string => $this->filter($inner, $context, $binder, $scope), array_values($filter->filters));
+            $parts = array_map(fn (Filter $inner): string => $this->filter($inner, $context, $binder, $scope, $childUnderNot), array_values($filter->filters));
             $joined = $parts === [] ? ($filter->operator === Multi::AND ? 'TRUE' : 'FALSE') : '(' . implode($glue, $parts) . ')';
 
             return $filter instanceof Not ? 'NOT ' . $joined : $joined;
         }
 
         if ($filter instanceof Equals) {
-            return $this->equalsAny($filter->field, [$filter->value], $context, $binder, $scope);
+            return $this->equalsAny($filter->field, [$filter->value], $context, $binder, $scope, $underNot);
         }
 
         if ($filter instanceof EqualsAny) {
-            return $this->equalsAny($filter->field, array_values($filter->values), $context, $binder, $scope);
+            return $this->equalsAny($filter->field, array_values($filter->values), $context, $binder, $scope, $underNot);
         }
 
         if ($filter instanceof Contains || $filter instanceof Prefix) {
@@ -83,6 +84,16 @@ final class SqlQueryCompiler
      */
     public function native(ResolvedField $field, Binder $binder, SqlScope $scope): string
     {
+        if ($field->type === FieldType::BOOL && $field->paths === [['active']]) {
+            return $scope->alias . '.active';
+        }
+        if ($field->type === FieldType::ID) {
+            $promoted = $this->promotedIdColumn($field, $scope);
+            if ($promoted !== null) {
+                return $promoted;
+            }
+        }
+
         $doc = $scope->alias . '.doc';
         $parts = [];
         foreach ($field->paths as $path) {
@@ -222,13 +233,18 @@ final class SqlQueryCompiler
             throw NotSupportedByEngine::field($field, 'collapse is only answered for id fields');
         }
 
+        $promoted = $this->promotedIdColumn($resolved, $scope);
+        if ($promoted !== null) {
+            return $promoted;
+        }
+
         return $this->dialect->binaryLower($this->native($resolved, $binder, $scope));
     }
 
     /**
      * @param list<string|int|float|bool|null> $candidates
      */
-    private function equalsAny(string $fieldName, array $candidates, StoreContext $context, Binder $binder, SqlScope $scope): string
+    private function equalsAny(string $fieldName, array $candidates, StoreContext $context, Binder $binder, SqlScope $scope, bool $underNot = false): string
     {
         $field = $this->resolver->resolve($fieldName, $context);
         $hasNull = \in_array(null, $candidates, true);
@@ -237,6 +253,25 @@ final class SqlQueryCompiler
 
         if ($field->isList()) {
             $path = $field->paths[0];
+            if (!$underNot && !$hasNull && $values !== []) {
+                $indexed = [];
+                $allIndexed = true;
+                foreach ($values as $value) {
+                    if (!\is_string($value)) {
+                        throw NotSupportedByEngine::field($fieldName, 'list fields are only compared with string candidates');
+                    }
+                    $predicate = $this->dialect->indexedArrayContains($doc, $path, strtolower($value), $binder);
+                    if ($predicate === null) {
+                        $allIndexed = false;
+                        break;
+                    }
+                    $indexed[] = $predicate;
+                }
+                if ($allIndexed) {
+                    return '(' . implode(' OR ', $indexed) . ')';
+                }
+            }
+
             $contains = [];
             foreach ($values as $value) {
                 if (!\is_string($value)) {
@@ -264,8 +299,8 @@ final class SqlQueryCompiler
                 }
             }
             $lowered = array_map(fn (string $value): string => $binder->bind(strtolower($value)), $values);
-            // the id column holds the lower case id, so it is compared directly and keeps its index
-            $expression = $field->paths === [['id']] ? $scope->alias . '.id' : $this->dialect->binaryLower($this->native($field, $binder, $scope));
+            // promoted id columns hold lower case ids directly and keep their index
+            $expression = $this->promotedIdColumn($field, $scope) ?? $this->dialect->binaryLower($this->native($field, $binder, $scope));
             $parts[] = $expression . ' IN (' . implode(', ', $lowered) . ')';
         } else {
             foreach ($values as $value) {
@@ -273,7 +308,23 @@ final class SqlQueryCompiler
             }
         }
 
-        return $parts === [] ? 'FALSE' : 'COALESCE((' . implode(' OR ', $parts) . '), FALSE)';
+        if ($parts === []) {
+            return 'FALSE';
+        }
+
+        $joined = '(' . implode(' OR ', $parts) . ')';
+
+        return $underNot ? 'COALESCE(' . $joined . ', FALSE)' : $joined;
+    }
+
+    private function promotedIdColumn(ResolvedField $field, SqlScope $scope): ?string
+    {
+        return match ($field->paths) {
+            [['id']] => $scope->alias . '.id',
+            [['manufacturerId']] => $scope->alias . '.manufacturer_id',
+            [['displayGroup']] => $scope->alias . '.display_group',
+            default => null,
+        };
     }
 
     private function equalsScalar(ResolvedField $field, mixed $candidate, Binder $binder, SqlScope $scope): string

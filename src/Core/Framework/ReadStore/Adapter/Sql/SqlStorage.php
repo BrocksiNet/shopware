@@ -603,8 +603,14 @@ final class SqlStorage implements Storage, FilterAware, SearchAware, Aggregation
         foreach ($documents as $document) {
             $id = strtolower((string) $document['id']);
             $ids[] = $id;
+            $active = $document['active'] ?? null;
+            $manufacturerId = $document['manufacturerId'] ?? null;
+            $displayGroup = $document['displayGroup'] ?? null;
             $this->connection->executeStatement($statement, [
                 'id' => $id,
+                'active' => \is_bool($active) ? ($active ? 1 : 0) : null,
+                'manufacturer_id' => \is_string($manufacturerId) ? strtolower($manufacturerId) : null,
+                'display_group' => \is_string($displayGroup) ? strtolower($displayGroup) : null,
                 'doc' => json_encode($document, \JSON_THROW_ON_ERROR | \JSON_PRESERVE_ZERO_FRACTION),
             ]);
 
