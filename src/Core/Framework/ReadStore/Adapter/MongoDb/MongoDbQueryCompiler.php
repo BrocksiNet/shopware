@@ -109,12 +109,11 @@ final class MongoDbQueryCompiler
     }
 
     /**
-     * The DAL score: summed over the keyword rows of all languages, `score * ranking` for every scored keyword that equals the keyword and
-     * `originalScore * ranking` if the keyword contains the original term.
+     * The DAL score, see {@see QueryEvaluator::score()}.
      *
      * @return array<string, mixed> expression
      */
-    public function score(SearchTerm $search): array
+    public function score(SearchTerm $search, StoreContext $context): array
     {
         $scored = array_map(
             static fn (array $keyword): array => ['k' => QueryEvaluator::fold($keyword['keyword']), 's' => (float) $keyword['score']],
@@ -134,6 +133,27 @@ final class MongoDbQueryCompiler
                 ['$multiply' => [$search->originalScore, '$$e.r']],
                 0,
             ]]]];
+        }
+
+        $filterKeywords = null;
+        if (!$search->andLogic) {
+            $filterKeywords = $search->anyKeywords();
+        } elseif (\count($search->tokenKeywords) === 1) {
+            $filterKeywords = $search->tokenKeywords[0];
+        }
+        if ($filterKeywords !== null) {
+            $path = '$s.' . self::segment($context->languageId);
+            $allowed = self::folded($filterKeywords);
+
+            return ['$sum' => ['$map' => [
+                'input' => ['$filter' => [
+                    'input' => ['$ifNull' => [$path, []]],
+                    'as' => 'e',
+                    'cond' => ['$in' => ['$$e.k', ['$literal' => $allowed]]],
+                ]],
+                'as' => 'e',
+                'in' => $perKeyword,
+            ]]];
         }
 
         return ['$sum' => ['$map' => [

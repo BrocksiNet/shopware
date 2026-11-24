@@ -228,7 +228,7 @@ class MongoDbStorage implements Storage, FilterAware, AggregationAware, SearchAw
         $keys = [];
 
         if ($search !== null) {
-            $addFields['_score'] = $this->compiler->score($search);
+            $addFields['_score'] = $this->compiler->score($search, $context);
         }
 
         foreach ($criteria->sortings as $index => $sorting) {
@@ -274,31 +274,65 @@ class MongoDbStorage implements Storage, FilterAware, AggregationAware, SearchAw
             $pipeline[] = ['$addFields' => $addFields];
         }
 
-        foreach ($keys as $key) {
-            $sort[$key['ref']] ??= $key['direction'] === Sorting::ASC ? 1 : -1;
-        }
-        if ($sort === [] && $criteria->ids !== [] && $search === null) {
-            $pipeline[] = ['$addFields' => ['_pos' => ['$indexOfArray' => [['$literal' => array_values(array_map(strtolower(...), $criteria->ids))], '$_id']]]];
-            $sort['_pos'] = 1;
-        }
-        $sort['_id'] = 1;
-        $pipeline[] = ['$sort' => $sort];
-
-        if ($group !== null) {
+        if ($group !== null && $search !== null) {
+            // DAL EntitySearcher::buildScoreRankedQuery(): highest scoring document is the representative, groups are ordered by its sort keys
+            $pipeline[] = ['$sort' => ['_score' => -1, '_id' => 1]];
             $project = ['d' => 1, '_score' => 1, '_g' => 1];
-            $accumulators = ['rep' => ['$first' => '$$ROOT']];
             $groupSort = [];
-            foreach ($keys as $position => $key) {
+            foreach ($keys as $key) {
                 $project[$key['ref']] = 1;
-                $accumulators['a' . $position] = [$key['min'] ? '$min' : '$max' => '$' . $key['ref']];
-                $groupSort['a' . $position] ??= $key['direction'] === Sorting::ASC ? 1 : -1;
+                $groupSort['rep.' . $key['ref']] ??= $key['direction'] === Sorting::ASC ? 1 : -1;
             }
             $groupSort['rep._id'] = 1;
 
             $pipeline[] = ['$project' => $project];
-            $pipeline[] = ['$group' => ['_id' => $group, ...$accumulators]];
+            $pipeline[] = ['$group' => ['_id' => $group, 'rep' => ['$first' => '$$ROOT']]];
             $pipeline[] = ['$sort' => $groupSort];
             $pipeline[] = ['$replaceRoot' => ['newRoot' => '$rep']];
+        } else {
+            foreach ($keys as $key) {
+                $sort[$key['ref']] ??= $key['direction'] === Sorting::ASC ? 1 : -1;
+            }
+            if ($sort === [] && $criteria->ids !== [] && $search === null) {
+                $pipeline[] = ['$addFields' => ['_pos' => ['$indexOfArray' => [['$literal' => array_values(array_map(strtolower(...), $criteria->ids))], '$_id']]]];
+                $sort['_pos'] = 1;
+            }
+            $sort['_id'] = 1;
+            $pipeline[] = ['$sort' => $sort];
+
+            if ($group !== null) {
+                $project = ['d' => 1, '_score' => 1, '_g' => 1];
+                $accumulators = ['rep' => ['$first' => '$$ROOT']];
+                $groupSort = [];
+                foreach ($keys as $position => $key) {
+                    $project[$key['ref']] = 1;
+                    $accumulators['a' . $position] = [$key['min'] ? '$min' : '$max' => '$' . $key['ref']];
+                    $groupSort['a' . $position] ??= $key['direction'] === Sorting::ASC ? 1 : -1;
+                }
+                $groupSort['rep._id'] = 1;
+
+                $pipeline[] = ['$project' => $project];
+                $pipeline[] = ['$group' => ['_id' => $group, ...$accumulators]];
+                $pipeline[] = ['$sort' => $groupSort];
+                $pipeline[] = ['$replaceRoot' => ['newRoot' => '$rep']];
+            }
+        }
+
+        $exact = $criteria->total === Total::EXACT;
+        if ($criteria->limit === 0) {
+            $total = null;
+            if ($exact) {
+                $pipeline[] = ['$count' => 'n'];
+                $rows = $this->collection($this->requireLive())->aggregate($pipeline, ['allowDiskUse' => true, 'typeMap' => self::TYPE_MAP])->toArray();
+                $total = (int) ($rows[0]['n'] ?? 0);
+            }
+
+            return new StoreResult(
+                [],
+                $total,
+                $aggregations === [] ? [] : $this->runAggregations($criteria, $context, $search, $aggregations),
+                [],
+            );
         }
 
         $page = [];
@@ -310,7 +344,6 @@ class MongoDbStorage implements Storage, FilterAware, AggregationAware, SearchAw
         }
         $page[] = ['$project' => ['d' => 1, '_score' => 1]];
 
-        $exact = $criteria->total === Total::EXACT;
         if ($exact) {
             $pipeline[] = ['$facet' => ['rows' => $page, 'total' => [['$count' => 'n']]]];
         } else {
@@ -485,7 +518,7 @@ class MongoDbStorage implements Storage, FilterAware, AggregationAware, SearchAw
             $buckets = array_map(static fn (array $bucket): array => ['key' => $bucket['_id'], 'count' => (int) $bucket['count']], $rows);
 
             if ($aggregation->limit !== null && $this->isString($type)) {
-                usort($buckets, fn (array $a, array $b): int => [$b['count'], 0] <=> [$a['count'], $this->compareKeys($a['key'], $b['key'], $type)]);
+                usort($buckets, fn (array $a, array $b): int => [$b['count'], $this->compareKeys($a['key'], $b['key'], $type)] <=> [$a['count'], 0]);
                 $buckets = \array_slice($buckets, 0, $aggregation->limit);
             }
             usort($buckets, fn (array $a, array $b): int => $this->compareKeys($a['key'], $b['key'], $type));
