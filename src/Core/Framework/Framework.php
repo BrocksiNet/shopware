@@ -115,6 +115,12 @@ class Framework extends Bundle
             $spikeLoader->load(basename($spikeFile));
         }
 
+        // wave 9 read store (research branch poc/read-store): one services file per handoff in ReadStore/DependencyInjection/
+        $readStoreLoader = new PhpFileLoader($container, new FileLocator(__DIR__ . '/ReadStore/DependencyInjection/'));
+        foreach (glob(__DIR__ . '/ReadStore/DependencyInjection/*.php') ?: [] as $readStoreFile) {
+            $readStoreLoader->load(basename($readStoreFile));
+        }
+
         if ($container->getParameter('kernel.environment') === 'test') {
             $phpLoader->load('services_test.php');
             $phpLoader->load('store_test.php');
