@@ -636,4 +636,17 @@ class ShippingMethodStateConnection extends FakeConnection
     {
         return $this->states;
     }
+
+    /**
+     * The locking read of the usable prices: one owner id per counted price
+     */
+    public function fetchFirstColumn(string $query, array $params = [], array $types = []): array
+    {
+        $owners = [];
+        foreach ($this->states as $state) {
+            array_push($owners, ...array_fill(0, $state['price_count'], $state['id']));
+        }
+
+        return $owners;
+    }
 }

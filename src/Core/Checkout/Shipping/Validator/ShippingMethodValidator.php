@@ -322,19 +322,6 @@ class ShippingMethodValidator implements EventSubscriberInterface
     }
 
     /**
-     * @param array<string, mixed> $parameters
-     * @param array<string, mixed> $types
-     */
-    private function lockShippingMethods(array $parameters, array $types): void
-    {
-        $this->connection->fetchFirstColumn(
-            'SELECT `id` FROM `shipping_method` WHERE `id` IN (:ids) ORDER BY `id` FOR UPDATE',
-            $parameters,
-            $types
-        );
-    }
-
-    /**
      * @param list<string> $shippingMethodIds
      *
      * @return array<string, array{active: bool, priceCount: int}>
@@ -345,28 +332,38 @@ class ShippingMethodValidator implements EventSubscriberInterface
         $parameters = ['ids' => IdBinding::values($shippingMethodIds)];
         $types = ['ids' => IdBinding::listType()];
 
-        $this->lockShippingMethods($parameters, $types);
+        // Two plain locking reads instead of one `GROUP BY ... FOR UPDATE`: PostgreSQL rejects `FOR UPDATE` together with `GROUP BY`.
+        // Both reads lock the same rows as before on MySQL (the shipping methods, and the usable prices through the `shipping_method_id` index range),
+        // and both see the latest committed rows, so the prices are counted here.
+        $methods = $this->connection->fetchAllAssociative(
+            'SELECT ' . IdBinding::text('`id`') . ' AS `id`, `active` FROM `shipping_method` WHERE `id` IN (:ids) ORDER BY `id` FOR UPDATE',
+            $parameters,
+            $types
+        );
 
-        $rows = $this->connection->fetchAllAssociative(
-            'SELECT ' . IdBinding::text('`shipping_method`.`id`') . ' AS `id`,
-                    `shipping_method`.`active` AS `active`,
-                    COUNT(`shipping_method_price`.`id`) AS `price_count`
-             FROM `shipping_method`
-             LEFT JOIN `shipping_method_price`
-                 ON `shipping_method_price`.`shipping_method_id` = `shipping_method`.`id`
-                 AND `shipping_method_price`.`currency_price` IS NOT NULL
-             WHERE `shipping_method`.`id` IN (:ids)
-             GROUP BY `shipping_method`.`id`, `shipping_method`.`active`
+        $priceOwners = $this->connection->fetchFirstColumn(
+            'SELECT ' . IdBinding::text('`shipping_method_id`') . '
+             FROM `shipping_method_price`
+             WHERE `shipping_method_id` IN (:ids)
+                AND `currency_price` IS NOT NULL
+             ORDER BY `id`
              FOR UPDATE',
             $parameters,
             $types
         );
 
+        $priceCounts = [];
+        foreach ($priceOwners as $owner) {
+            $owner = (string) $owner;
+            $priceCounts[$owner] = ($priceCounts[$owner] ?? 0) + 1;
+        }
+
         $states = [];
-        foreach ($rows as $row) {
-            $states[(string) $row['id']] = [
+        foreach ($methods as $row) {
+            $id = (string) $row['id'];
+            $states[$id] = [
                 'active' => (bool) $row['active'],
-                'priceCount' => (int) $row['price_count'],
+                'priceCount' => $priceCounts[$id] ?? 0,
             ];
         }
 
