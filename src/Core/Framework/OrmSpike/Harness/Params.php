@@ -16,6 +16,7 @@ final readonly class Params
     /**
      * @param list<string> $manufacturerIds
      * @param array<string, mixed> $criteriaJson
+     * @param list<string> $mgetIds R4 ids, in the order the result must have
      */
     public function __construct(
         public string $salesChannelId,
@@ -32,7 +33,19 @@ final readonly class Params
         public array $manufacturerIds,
         public string $variantId,
         public array $criteriaJson,
+        public string $searchWord = '',
+        public array $mgetIds = [],
     ) {
+    }
+
+    /**
+     * A copy with some parameters replaced (the load command varies ids and terms per request).
+     *
+     * @param array<string, mixed> $overrides constructor argument name => value
+     */
+    public function with(array $overrides): self
+    {
+        return new self(...array_merge(get_object_vars($this), $overrides));
     }
 
     /**

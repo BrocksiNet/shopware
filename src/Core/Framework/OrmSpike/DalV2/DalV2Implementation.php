@@ -5,6 +5,7 @@ namespace Shopware\Core\Framework\OrmSpike\DalV2;
 use Doctrine\DBAL\Connection;
 use Psr\Log\LoggerInterface;
 use Shopware\Core\Content\Product\ProductDefinition;
+use Shopware\Core\Content\Product\SearchKeyword\ProductSearchBuilderInterface;
 use Shopware\Core\Framework\Adapter\Database\Dialect\SqlDialect;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\CriteriaFieldsResolver;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\CriteriaQueryBuilder;
@@ -38,6 +39,7 @@ use Shopware\Core\Framework\OrmSpike\DalV2\Read\WindowCountSearcher;
 use Shopware\Core\Framework\OrmSpike\DalV2\Write\SwitchableWriteGateway;
 use Shopware\Core\Framework\OrmSpike\Harness\Implementation;
 use Shopware\Core\Framework\OrmSpike\Harness\Params;
+use Shopware\Core\Framework\OrmSpike\Harness\ReadStoreScenarios;
 use Shopware\Core\Framework\OrmSpike\Harness\WriteSet;
 use Shopware\Core\System\SalesChannel\Context\AbstractSalesChannelContextFactory;
 use Shopware\Core\System\SalesChannel\Entity\SalesChannelRepository;
@@ -52,7 +54,7 @@ use Symfony\Component\EventDispatcher\EventDispatcherInterface;
  * @internal
  */
 #[Package('framework')]
-final class DalV2Implementation implements Implementation
+final class DalV2Implementation implements Implementation, ReadStoreScenarios
 {
     /**
      * @var array<string, string>
@@ -89,6 +91,7 @@ final class DalV2Implementation implements Implementation
         private readonly EntityLoadedEventFactory $eventFactory,
         private readonly DalSearchInstrumentor $instrumentor,
         private readonly VersionManager $versionManager,
+        private readonly ProductSearchBuilderInterface $searchBuilder,
     ) {
     }
 
@@ -130,6 +133,30 @@ final class DalV2Implementation implements Implementation
         SqlLog::marker('S3');
         $start = $this->begin();
         $result = $this->proj() ? $this->scenarios()->s3Search($params) : $this->inner()->s3Search($params);
+        $this->end($start);
+
+        return $result;
+    }
+
+    /**
+     * R3b and R4 run through the DAL with the levers `count` and `agg` (they live in the rebuilt searcher and aggregator); the projection lever `proj` and
+     * the shape levers do not cover them (no projection of the search with variant grouping exists).
+     */
+    public function r3bStorefrontSearch(Params $params): array
+    {
+        SqlLog::marker('R3b');
+        $start = $this->begin();
+        $result = $this->inner()->r3bStorefrontSearch($params);
+        $this->end($start);
+
+        return $result;
+    }
+
+    public function r4Mget(Params $params): array
+    {
+        SqlLog::marker('R4');
+        $start = $this->begin();
+        $result = $this->inner()->r4Mget($params);
         $this->end($start);
 
         return $result;
@@ -284,6 +311,7 @@ final class DalV2Implementation implements Implementation
             $this->contextFactory,
             $this->requestCriteriaBuilder,
             $this->productDefinition,
+            $this->searchBuilder,
         );
     }
 

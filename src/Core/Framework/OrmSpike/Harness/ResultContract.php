@@ -47,6 +47,22 @@ final class ResultContract
      */
     public const S5 = 'total, items[id, productNumber, manufacturer]';
 
+    /**
+     * `['total' => int, 'items' => list<['displayGroup' => ?string]>, 'aggregations' => as S3]`
+     * Term {@see Params::$searchWord} through the storefront search (`ProductSearchBuilder`, keyword table), `ProductAvailableFilter` (search visibility), the
+     * variant grouping of `ProductListingLoader` (`FieldGrouping('displayGroup')` and `NotEqualsFilter('displayGroup', null)`), manufacturer list as post
+     * filter, sorted by name ASC, productNumber ASC (explicit, score ranking is not part of the contract), page 1 of 24.
+     * `total` is the number of groups after the post filter. The DAL picks the representative row of a group arbitrarily (`any_value()`, the group is ordered by
+     * `MIN(name)` for ASC), so id, name, price and manufacturer of the hit are NOT compared; per hit only its group key `displayGroup` is. Aggregations run
+     * without grouping and without post filters (min and max of `price.gross`, terms of `manufacturerId`).
+     */
+    public const R3B = 'total, items[id, productNumber, name, manufacturer, price], aggregations[minPrice, maxPrice, manufacturers]';
+
+    /**
+     * R4: `['items' => list<S2 shape>]` in the order of {@see Params::$mgetIds}.
+     */
+    public const R4 = 'items[S2 shape]';
+
     public static function price(float|int|string|null $value): ?string
     {
         return $value === null ? null : number_format((float) $value, 2, '.', '');

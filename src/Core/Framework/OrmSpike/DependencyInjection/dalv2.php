@@ -4,6 +4,7 @@ namespace Shopware\Core\Framework\OrmSpike\DependencyInjection;
 
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Content\Product\ProductDefinition;
+use Shopware\Core\Content\Product\SearchKeyword\ProductSearchBuilderInterface;
 use Shopware\Core\Framework\Adapter\Database\Dialect\SqlDialect;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\CriteriaFieldsResolver;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\CriteriaQueryBuilder;
@@ -57,6 +58,7 @@ return static function (ContainerConfigurator $containerConfigurator): void {
             service(EntityLoadedEventFactory::class),
             service(DalSearchInstrumentor::class),
             service(VersionManager::class),
+            service(ProductSearchBuilderInterface::class),
         ])
         ->tag('orm_spike.implementation');
 

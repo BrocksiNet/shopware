@@ -29,7 +29,7 @@ return static function (ContainerConfigurator $containerConfigurator): void {
     $services->set(Verifier::class);
 
     $services->set(ImplementationRegistry::class)
-        ->args([tagged_locator('orm_spike.implementation', null, 'key')]);
+        ->args([tagged_locator('orm_spike.implementation', 'key', 'key')]);
 
     $services->set(BenchCommand::class)
         ->args([
@@ -40,6 +40,7 @@ return static function (ContainerConfigurator $containerConfigurator): void {
             service(WriteSnapshot::class),
             service(Verifier::class),
             param('kernel.project_dir'),
+            service(Connection::class),
         ])
         ->tag('console.command');
 

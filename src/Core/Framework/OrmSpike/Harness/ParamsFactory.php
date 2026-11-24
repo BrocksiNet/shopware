@@ -44,6 +44,12 @@ final class ParamsFactory
                 'total-count-mode' => 1,
                 'associations' => ['manufacturer' => []],
             ],
+            searchWord: 'Hotel',
+            // R4: 12 simple products (visible and active) and the 4 variants of parents 1 to 3 (parents 1 to 9 are visible and active)
+            mgetIds: [
+                ...array_map(Fixtures::simpleId(...), [1, 2, 3, 4, 5, 7, 8, 9, 11, 12, 13, 14]),
+                ...array_map(static fn (int $n): string => Fixtures::variantId(intdiv($n, 4) + 1, $n % 4), range(0, 11)),
+            ],
         );
     }
 

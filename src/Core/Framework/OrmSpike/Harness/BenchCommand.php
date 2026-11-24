@@ -2,6 +2,7 @@
 
 namespace Shopware\Core\Framework\OrmSpike\Harness;
 
+use Doctrine\DBAL\Connection;
 use Shopware\Core\Framework\Adapter\Database\Dialect\SqlDialectFactory;
 use Shopware\Core\Framework\Log\Package;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -13,6 +14,7 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 
 /**
  * `bin/console orm-spike:bench --impl=dal --scenario=all --iterations=50 --warmup=5 [--verify] [--option key=value ...]`
+ * (wave 9: `--scenario` also takes `R3b` and `R4`, `--impl=store-*` for read stores, `--impl=dal-opensearch`, see docs/39-read-store-baseline.md)
  *
  * Per scenario: warm-up runs, then the measured iterations (wall time with hrtime, statements, peak memory), written to
  * `var/orm-spike/<engine>-<impl>.json` (scenarios already in the file stay, the ones of this run are replaced).
@@ -21,10 +23,12 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  * @internal
  */
 #[Package('framework')]
-#[AsCommand(name: 'orm-spike:bench', description: 'Measures one implementation of the ORM spike scenarios S1 to S5')]
+#[AsCommand(name: 'orm-spike:bench', description: 'Measures one implementation of the ORM spike scenarios S1 to S5 and the read store scenarios R3b and R4')]
 final class BenchCommand extends Command
 {
-    private const SCENARIOS = ['S1', 'S2', 'S3', 'S4', 'S5'];
+    private const SCENARIOS = ['S1', 'S2', 'S3', 'S4', 'S5', 'R3B', 'R4'];
+
+    private const LABELS = ['R3B' => 'R3b'];
 
     private int $lastNs = 0;
 
@@ -41,14 +45,15 @@ final class BenchCommand extends Command
         private readonly WriteSnapshot $snapshot,
         private readonly Verifier $verifier,
         private readonly string $projectDir,
+        private readonly Connection $connection,
     ) {
         parent::__construct();
     }
 
     protected function configure(): void
     {
-        $this->addOption('impl', null, InputOption::VALUE_REQUIRED, 'dal, dbal, doctrine, cycle or dalv2', 'dal');
-        $this->addOption('scenario', null, InputOption::VALUE_REQUIRED, 'S1 to S5 (comma separated) or all', 'all');
+        $this->addOption('impl', null, InputOption::VALUE_REQUIRED, 'dal, dbal, doctrine, cycle, dalv2, dal-opensearch or store-*', 'dal');
+        $this->addOption('scenario', null, InputOption::VALUE_REQUIRED, 'S1 to S5, R3b, R4 (comma separated) or all', 'all');
         $this->addOption('iterations', null, InputOption::VALUE_REQUIRED, 'Measured iterations per scenario', '50');
         $this->addOption('warmup', null, InputOption::VALUE_REQUIRED, 'Warm-up iterations per scenario', '5');
         $this->addOption('verify', null, InputOption::VALUE_NONE, 'Compare the result of the implementation with the DAL result and print the first difference (no timing)');
@@ -80,6 +85,17 @@ final class BenchCommand extends Command
         $params = $this->paramsFactory->create();
         $engine = SqlDialectFactory::getDefault()->getName();
 
+        if (isset($options['show'])) {
+            foreach ($scenarios as $scenario) {
+                if ($scenario === 'R3B' || $scenario === 'R4') {
+                    $result = $scenario === 'R3B' ? $this->readScenarios($implementation)->r3bStorefrontSearch($params) : $this->readScenarios($implementation)->r4Mget($params);
+                    $io->writeln(\sprintf('%s: total=%s items=%d', self::LABELS[$scenario] ?? $scenario, $result['total'] ?? 'n/a', \count($result['items'])));
+                }
+            }
+
+            return Command::SUCCESS;
+        }
+
         if ($input->getOption('verify')) {
             return $this->verify($io, $key, $scenarios, $params, $options);
         }
@@ -92,9 +108,10 @@ final class BenchCommand extends Command
         foreach ($scenarios as $scenario) {
             $results[$scenario] = $this->measure($implementation, $scenario, $params, $warmup, $iterations);
             $r = $results[$scenario];
+            $label = self::LABELS[$scenario] ?? $scenario;
             $rows[] = $r['status'] === 'ok'
-                ? [$scenario, 'ok', \sprintf('%.2f', $r['medianMs']), \sprintf('%.2f', $r['p95Ms']), $r['statementsMedian'], \sprintf('%.1f', $r['peakMemoryMb'])]
-                : [$scenario, $r['status'], '-', '-', '-', mb_substr((string) $r['message'], 0, 60)];
+                ? [$label, 'ok', \sprintf('%.2f', $r['medianMs']), \sprintf('%.2f', $r['p95Ms']), $r['statementsMedian'], \sprintf('%.1f', $r['peakMemoryMb'])]
+                : [$label, $r['status'], '-', '-', '-', mb_substr((string) $r['message'], 0, 60)];
         }
 
         $io->table(['scenario', 'status', 'median ms', 'p95 ms', 'statements', 'peak MB'], $rows);
@@ -133,6 +150,8 @@ final class BenchCommand extends Command
                 'S2' => $implementation->s2Detail($params),
                 'S3' => $implementation->s3Search($params),
                 'S5' => $implementation->s5CriteriaFromJson($params),
+                'R3B' => $this->readScenarios($implementation)->r3bStorefrontSearch($params),
+                default => $this->readScenarios($implementation)->r4Mget($params),
             };
             $this->lastNs = hrtime(true) - $t;
             $this->lastStatements = $this->counter->reset();
@@ -181,6 +200,15 @@ final class BenchCommand extends Command
         ];
     }
 
+    private function readScenarios(Implementation $implementation): ReadStoreScenarios
+    {
+        if (!$implementation instanceof ReadStoreScenarios) {
+            throw new ScenarioNotSupported($implementation::class . ' does not implement ReadStoreScenarios');
+        }
+
+        return $implementation;
+    }
+
     /**
      * @param list<float> $sorted
      */
@@ -207,26 +235,35 @@ final class BenchCommand extends Command
                 if ($scenario === 'S4') {
                     $diff = $this->verifyWrite($reference, $implementation, $params);
                 } else {
-                    $method = ['S1' => 's1Listing', 'S2' => 's2Detail', 'S3' => 's3Search', 'S5' => 's5CriteriaFromJson'][$scenario];
-                    $expected = $reference->$method($params);
-                    $actual = $implementation->$method($params);
+                    $call = static fn (Implementation $impl, Params $p, callable $readStore): array => match ($scenario) {
+                        'S1' => $impl->s1Listing($p),
+                        'S2' => $impl->s2Detail($p),
+                        'S3' => $impl->s3Search($p),
+                        'S5' => $impl->s5CriteriaFromJson($p),
+                        default => $readStore($impl, $scenario, $p),
+                    };
+                    $readStore = fn (Implementation $impl, string $name, Params $p): array => $name === 'R3B'
+                        ? $this->readScenarios($impl)->r3bStorefrontSearch($p)
+                        : $this->readScenarios($impl)->r4Mget($p);
+                    $expected = $call($reference, $params, $readStore);
+                    $actual = $call($implementation, $params, $readStore);
                     $diff = $this->verifier->diff($expected, $actual);
                     if ($diff === null && ($expected['items'] ?? [1]) === [] && $scenario !== 'S2') {
                         $diff = 'reference result is empty, the scenario would verify nothing';
                     }
                 }
             } catch (ScenarioNotSupported $e) {
-                $io->writeln(\sprintf('%s: unsupported (%s)', $scenario, $e->getMessage()));
+                $io->writeln(\sprintf('%s: unsupported (%s)', self::LABELS[$scenario] ?? $scenario, $e->getMessage()));
                 continue;
             } catch (\Throwable $e) {
                 $diff = 'error ' . $e::class . ': ' . $e->getMessage();
             }
 
             if ($diff === null) {
-                $io->writeln(\sprintf('%s: OK (%s equals dal)', $scenario, $key));
+                $io->writeln(\sprintf('%s: OK (%s equals dal)', self::LABELS[$scenario] ?? $scenario, $key));
             } else {
                 $failed = true;
-                $io->writeln(\sprintf('%s: DIFFERENT, first difference: %s', $scenario, $diff));
+                $io->writeln(\sprintf('%s: DIFFERENT, first difference: %s', self::LABELS[$scenario] ?? $scenario, $diff));
             }
         }
 
@@ -271,6 +308,7 @@ final class BenchCommand extends Command
         $load = sys_getloadavg() ?: [];
         file_put_contents($file, json_encode([
             'engine' => $engine,
+            'database' => $this->connection->getDatabase(),
             'impl' => $key,
             'options' => $options,
             'iterations' => $iterations,

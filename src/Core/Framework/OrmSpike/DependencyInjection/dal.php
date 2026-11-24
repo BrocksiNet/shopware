@@ -3,6 +3,7 @@
 namespace Shopware\Core\Framework\OrmSpike\DependencyInjection;
 
 use Shopware\Core\Content\Product\ProductDefinition;
+use Shopware\Core\Content\Product\SearchKeyword\ProductSearchBuilderInterface;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\RequestCriteriaBuilder;
 use Shopware\Core\Framework\OrmSpike\Dal\DalImplementation;
 use Shopware\Core\System\SalesChannel\Context\CachedSalesChannelContextFactory;
@@ -21,6 +22,7 @@ return static function (ContainerConfigurator $containerConfigurator): void {
             service(CachedSalesChannelContextFactory::class),
             service(RequestCriteriaBuilder::class),
             service(ProductDefinition::class),
+            service(ProductSearchBuilderInterface::class),
         ])
         ->tag('orm_spike.implementation');
 };

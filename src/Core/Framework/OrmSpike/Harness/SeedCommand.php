@@ -72,6 +72,8 @@ final class SeedCommand extends Command
         $this->addOption('simple', null, InputOption::VALUE_REQUIRED, 'Number of simple products', (string) Fixtures::SIMPLE);
         $this->addOption('parents', null, InputOption::VALUE_REQUIRED, 'Number of parent products, each gets 4 variants', (string) Fixtures::PARENTS);
         $this->addOption('skip-index', null, InputOption::VALUE_NONE, 'Do not run the product indexer after seeding');
+        $this->addOption('keywords', null, InputOption::VALUE_NONE, 'Also run the search keyword updater (product_search_keyword, product_keyword_dictionary), wave 9 R3b needs it');
+        $this->addOption('keywords-only', null, InputOption::VALUE_NONE, 'Seed nothing, only run the search keyword updater on the existing products');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -79,6 +81,28 @@ final class SeedCommand extends Command
         $io = new SymfonyStyle($input, $output);
         $simple = (int) $input->getOption('simple');
         $parents = (int) $input->getOption('parents');
+
+        if ($input->getOption('keywords-only')) {
+            $t = microtime(true);
+            $this->indexerRegistry->index(false, [
+                ProductIndexer::INHERITANCE_UPDATER,
+                ProductIndexer::STOCK_UPDATER,
+                ProductIndexer::VARIANT_LISTING_UPDATER,
+                ProductIndexer::CHILD_COUNT_UPDATER,
+                ProductIndexer::MANY_TO_MANY_ID_FIELD_UPDATER,
+                ProductIndexer::CATEGORY_DENORMALIZER_UPDATER,
+                ProductIndexer::CHEAPEST_PRICE_UPDATER,
+                ProductIndexer::RATING_AVERAGE_UPDATER,
+                ProductIndexer::STREAM_UPDATER,
+                ProductIndexer::STATES_UPDATER,
+            ], ['product.indexer']);
+            $io->writeln(\sprintf('search keyword updater: %.1fs', microtime(true) - $t));
+            foreach (['product_search_keyword', 'product_keyword_dictionary'] as $table) {
+                $io->writeln(\sprintf('  %s=%d', $table, (int) $this->connection->fetchOne('SELECT COUNT(*) FROM ' . $table)));
+            }
+
+            return Command::SUCCESS;
+        }
 
         if ((int) $this->connection->fetchOne('SELECT COUNT(*) FROM product') > 0) {
             $io->error('The database already has products, install a fresh one first (scripts/orm-spike-install.sh).');
@@ -116,11 +140,11 @@ final class SeedCommand extends Command
         if (!$input->getOption('skip-index')) {
             $t = microtime(true);
             // variant listing, child count, many-to-many id fields, category denormalizer, inheritance, stock and cheapest price; no search keywords, streams or ratings
-            $this->indexerRegistry->index(false, [
-                ProductIndexer::SEARCH_KEYWORD_UPDATER,
+            $this->indexerRegistry->index(false, array_values(array_filter([
+                $input->getOption('keywords') ? null : ProductIndexer::SEARCH_KEYWORD_UPDATER,
                 ProductIndexer::STREAM_UPDATER,
                 ProductIndexer::RATING_AVERAGE_UPDATER,
-            ], ['product.indexer']);
+            ])), ['product.indexer']);
             $io->writeln(\sprintf('product indexer: %.1fs', microtime(true) - $t));
         }
 
