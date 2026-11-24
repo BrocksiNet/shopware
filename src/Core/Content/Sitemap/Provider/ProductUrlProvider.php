@@ -14,6 +14,7 @@ use Shopware\Core\Content\Sitemap\Struct\UrlResult;
 use Shopware\Core\Defaults;
 use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\Common\IteratorFactory;
+use Shopware\Core\Framework\DataAbstractionLayer\Dbal\EntityDefinitionQueryHelper;
 use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\FetchModeHelper;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Plugin\Exception\DecorationPatternException;
@@ -128,8 +129,10 @@ class ProductUrlProvider extends AbstractUrlProvider
             '`product`.updated_at as updated_at',
         );
 
-        $query->leftJoin('`product`', '`product`', 'parent', '`product`.parent_id = parent.id');
-        $query->innerJoin('`product`', 'product_visibility', 'visibilities', 'product.visibilities = visibilities.product_id');
+        // the iterator registers the FROM alias in the dialect's quoting ("product" on PostgreSQL), a literal `product` is unknown there
+        $fromAlias = EntityDefinitionQueryHelper::escape(ProductDefinition::ENTITY_NAME);
+        $query->leftJoin($fromAlias, '`product`', 'parent', '`product`.parent_id = parent.id');
+        $query->innerJoin($fromAlias, 'product_visibility', 'visibilities', 'product.visibilities = visibilities.product_id');
 
         $query->andWhere('`product`.version_id = :versionId');
 
