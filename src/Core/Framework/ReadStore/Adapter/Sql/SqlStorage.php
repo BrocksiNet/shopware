@@ -216,7 +216,7 @@ final class SqlStorage implements Storage, FilterAware, SearchAware, Aggregation
 
         $binder = new Binder();
         $where = $this->where($criteria, $context, $binder, $scope, true);
-        $score = $criteria->search !== null ? $this->compiler->score($criteria->search, $binder, $scope) : '0';
+        $score = $criteria->search !== null ? $this->compiler->score($criteria->search, $context, $binder, $scope) : '0';
         $keys = $this->compiler->sortKeys($criteria->sortings, $context, $binder, $scope, 'sc');
         $base = $this->baseOrder($criteria, $scope, $binder);
 
@@ -265,6 +265,24 @@ final class SqlStorage implements Storage, FilterAware, SearchAware, Aggregation
             $columns[] = $key->expression . ' AS k' . $index;
         }
         $hits = 'SELECT ' . implode(', ', $columns) . ' FROM ' . $this->dialect->quote($scope->documents) . ' ' . $scope->alias . ' WHERE ' . $where;
+
+        if ($criteria->search !== null) {
+            // DAL EntitySearcher::buildScoreRankedQuery(): highest scoring document is the representative, groups are ordered by its sort keys
+            $outer = [];
+            foreach ($keys as $index => $key) {
+                $outer[] = $this->compiler->orderTerm($key, $names[$index]);
+            }
+            $select = ['id', 'sc'];
+            foreach ($names as $name) {
+                if ($name !== 'sc') {
+                    $select[] = $name;
+                }
+            }
+
+            return 'WITH hits AS (' . $hits . '), ranked AS (SELECT ' . implode(', ', $select)
+                . ', ROW_NUMBER() OVER (PARTITION BY g ORDER BY sc DESC, id ASC) AS rn FROM hits) SELECT id, sc FROM ranked WHERE rn = 1 ORDER BY '
+                . implode(', ', [...$outer, 'id']) . $this->dialect->limit($criteria->limit, $criteria->offset);
+        }
 
         $windowOrder = [];
         $aggregates = [];
@@ -525,7 +543,7 @@ final class SqlStorage implements Storage, FilterAware, SearchAware, Aggregation
 
     /**
      * Same ordering and limit rules as the reference: with a limit the buckets with the highest count are kept
-     * (equal counts: the larger key first), the result is sorted by key, null first.
+     * (equal counts: the ascending key first), the result is sorted by key, null first.
      *
      * @param list<array{key: string|int|float|bool|null, count: int}> $buckets
      *
@@ -534,7 +552,7 @@ final class SqlStorage implements Storage, FilterAware, SearchAware, Aggregation
     private function orderBuckets(array $buckets, ?int $limit, ResolvedField $field): array
     {
         if ($limit !== null) {
-            usort($buckets, fn (array $a, array $b): int => [$b['count'], 0] <=> [$a['count'], $this->compareKeys($a['key'], $b['key'], $field->type)]);
+            usort($buckets, fn (array $a, array $b): int => [$b['count'], $this->compareKeys($a['key'], $b['key'], $field->type)] <=> [$a['count'], 0]);
             $buckets = \array_slice($buckets, 0, $limit);
         }
         usort($buckets, fn (array $a, array $b): int => $this->compareKeys($a['key'], $b['key'], $field->type));

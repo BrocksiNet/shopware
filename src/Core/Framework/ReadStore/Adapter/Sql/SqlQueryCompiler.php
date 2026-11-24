@@ -120,9 +120,9 @@ final class SqlQueryCompiler
     }
 
     /**
-     * Sum of `score * ranking` over the keyword rows of all languages, see {@see QueryEvaluator::score()}.
+     * Sum of `score * ranking` over the keyword rows the DAL joins, see {@see QueryEvaluator::score()}.
      */
-    public function score(SearchTerm $search, Binder $binder, SqlScope $scope): string
+    public function score(SearchTerm $search, StoreContext $context, Binder $binder, SqlScope $scope): string
     {
         $terms = [];
         foreach ($search->scoredKeywords as $scored) {
@@ -138,7 +138,23 @@ final class SqlQueryCompiler
             return '0';
         }
 
-        return 'COALESCE((SELECT SUM(kw.ranking * (' . implode(' + ', $terms) . ')) FROM ' . $this->dialect->quote($scope->keywords) . ' kw WHERE kw.product_id = ' . $scope->alias . '.id), 0)';
+        $filter = '';
+        $filterKeywords = null;
+        if (!$search->andLogic) {
+            $filterKeywords = $search->anyKeywords();
+        } elseif (\count($search->tokenKeywords) === 1) {
+            $filterKeywords = $search->tokenKeywords[0];
+        }
+        if ($filterKeywords !== null) {
+            $lang = $binder->bind($context->languageId);
+            if ($filterKeywords === []) {
+                return '0';
+            }
+            $in = implode(', ', array_map(fn (string $keyword): string => $binder->bind(QueryEvaluator::fold($keyword)), array_values($filterKeywords)));
+            $filter = ' AND kw.language_id = ' . $lang . ' AND kw.keyword_fold IN (' . $in . ')';
+        }
+
+        return 'COALESCE((SELECT SUM(kw.ranking * (' . implode(' + ', $terms) . ')) FROM ' . $this->dialect->quote($scope->keywords) . ' kw WHERE kw.product_id = ' . $scope->alias . '.id' . $filter . '), 0)';
     }
 
     /**
