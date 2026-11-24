@@ -1,5 +1,6 @@
 <?php declare(strict_types=1);
 
+use Doctrine\DBAL\Connection;
 use Psr\Clock\ClockInterface;
 use Shopware\Core\Content\Product\ProductDefinition;
 use Shopware\Core\Content\Product\SearchKeyword\ProductSearchBuilderInterface;
@@ -92,7 +93,10 @@ return static function (ContainerConfigurator $containerConfigurator): void {
         ]);
 
     $services->set(ReadStoreProjectorSubscriber::class)
-        ->args([service(ReadStoreProjector::class)])
+        ->args([
+            service(ReadStoreProjector::class),
+            service(Connection::class),
+        ])
         ->tag('kernel.event_subscriber');
 
     $services->set(ProjectProductsHandler::class)
