@@ -113,6 +113,14 @@ trait FilterContract
         $this->storageFilter(new StoreCriteria(filters: [new Range('cheapestPrice', lte: 38)]), $context);
     }
 
+    public function testPriceIsNotAnsweredWhenTheContextRoundsDifferently(): void
+    {
+        $context = new StoreContext(F::DE, F::SC1, F::EUR, roundingDecimals: 3);
+
+        $this->expectException(NotSupportedByEngine::class);
+        $this->storageFilter(new StoreCriteria(sortings: [new Sorting('price')]), $context);
+    }
+
     public function testEqualsNullAndNotEqualsAreNullSafe(): void
     {
         static::assertSame([F::S3], $this->ids(new StoreCriteria(filters: [new Equals('manufacturerId', null)])));

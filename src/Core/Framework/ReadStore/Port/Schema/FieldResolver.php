@@ -13,7 +13,8 @@ use Shopware\Core\Framework\ReadStore\Port\StoreContext;
  * - plain fields (`productNumber`, `categoryTree`, ...) map to themselves;
  * - {@see FieldScope::LANGUAGE}: `name` -> `name.<languageId>`, {@see FieldScope::SALES_CHANNEL}: `visibilities` -> `visibilities.<salesChannelId>`,
  *   {@see FieldScope::CURRENCY}: `priceGross` -> `priceGross.<currencyId>`;
- * - `price`, `price.gross`, `price.net` -> `priceGross`/`priceNet` of the context currency (`price` by the tax state);
+ * - `price`, `price.gross`, `price.net` -> `priceGross`/`priceNet` of the context currency (`price` by the tax state), rounded at build time like
+ *   `cheapestPrice`, so both need a context that rounds like its currency;
  * - `cheapestPrice[.listPrice|.percentage][.gross|.net]` -> one path per context rule id, then `default` (`COALESCE`, like the DAL accessor);
  * - `customFields.<name>` -> `customFields.<languageId>.<name>`, `extensions.<name>...` -> itself, both {@see FieldType::ANY}.
  *
@@ -82,6 +83,10 @@ final class FieldResolver
      */
     private function price(string $field, array $parts, StoreContext $context): ResolvedField
     {
+        if (!$context->roundsLikeCurrency()) {
+            throw NotSupportedByEngine::field($field, 'the context rounds prices differently than the currency the document was built with');
+        }
+
         $state = $parts[1] ?? ($context->gross ? 'gross' : 'net');
         if (\count($parts) > 2 || !\in_array($state, ['gross', 'net'], true)) {
             throw NotSupportedByEngine::field($field, 'only price, price.gross and price.net are queryable');

@@ -18,10 +18,12 @@ use Shopware\Core\Framework\ReadStore\Port\Schema\FieldType;
  *   a variant without own `prices`, `categoryIds`, `properties` gets the parent's);
  * - a {@see FieldScope::LANGUAGE} map has an entry for every language of the shop, already resolved with that language's fallback chain
  *   and parent inheritance: `COALESCE(own language, parent language, own parent-language, ..., own system, parent system)`;
- * - `priceGross`/`priceNet` per currency: the own price of the currency or the default currency price times the currency factor, not rounded
- *   (DAL `price.gross`, {@see \Shopware\Core\Framework\DataAbstractionLayer\FieldSerializer\PriceFieldSerializer});
- * - `cheapestPrice` per rule key (`default` or rule id) and currency, from `cheapest_price_accessor` (the parent's for variants), with the
- *   default currency times the factor for missing currencies, rounded with the item rounding of each currency like the DAL accessor builder;
+ * - `priceGross`/`priceNet` per currency: `IFNULL(COALESCE(own currency, own default currency * factor), COALESCE(parent ..., ...))`,
+ *   rounded with the item rounding of that currency, like {@see \Shopware\Core\Framework\DataAbstractionLayer\Dbal\FieldAccessorBuilder\PriceFieldAccessorBuilder};
+ * - `cheapestPrice` per rule key (`default` or rule id) and currency, from the own `cheapest_price_accessor`, the parent's when the own is
+ *   empty (the field is inherited), with the default currency times the factor for missing currencies, rounded with the item rounding of each
+ *   currency like {@see \Shopware\Core\Content\Product\DataAbstractionLayer\CheapestPrice\CheapestPriceAccessorBuilder};
+ *   `percentage` is stored inverted (`100 - percentage`), as the accessor builder returns it;
  * - `visibilities` per sales channel id: the visibility value (10, 20, 30), the parent's when the variant has none;
  * - `searchKeywords` per language: `{keyword: ranking}` from `product_search_keyword`;
  * - `extensions`: plugin data added by `DocumentExtender`s, keyed by the extender's name.
