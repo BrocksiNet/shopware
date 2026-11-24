@@ -13,12 +13,14 @@ use Shopware\Core\Framework\DataAbstractionLayer\EntityDefinition;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\Feature;
 use Shopware\Core\Framework\Log\Package;
+use Shopware\Core\Framework\ReadStore\Builder\DocumentBuilder;
 use Shopware\Core\System\Language\LanguageLoaderInterface;
 use Shopware\Core\System\Language\SalesChannelLanguageLoader;
 use Shopware\Elasticsearch\Framework\AbstractElasticsearchDefinition;
 use Shopware\Elasticsearch\Framework\ElasticsearchFieldBuilder;
 use Shopware\Elasticsearch\Framework\ElasticsearchFieldMapper;
 use Shopware\Elasticsearch\Framework\ElasticsearchIndexingUtils;
+use Shopware\Elasticsearch\Product\SourceDocument\SourceDocument;
 
 /**
  * @internal
@@ -38,8 +40,18 @@ class ElasticsearchProductDefinition extends AbstractElasticsearchDefinition
         private readonly SalesChannelLanguageLoader $salesChannelLanguageLoader,
         private readonly bool $excludeSource,
         private readonly string $environment,
-        private readonly LanguageLoaderInterface $languageLoader
+        private readonly LanguageLoaderInterface $languageLoader,
+        private readonly ?DocumentBuilder $sourceDocumentBuilder = null,
+        private readonly bool $sourceDocument = false,
     ) {
+    }
+
+    /**
+     * O1a (wave 10): the full read store product document is written into `_source` under {@see SourceDocument::FIELD}.
+     */
+    public function hasSourceDocument(): bool
+    {
+        return $this->sourceDocument && $this->sourceDocumentBuilder !== null;
     }
 
     public function getEntityDefinition(): EntityDefinition
@@ -147,6 +159,11 @@ class ElasticsearchProductDefinition extends AbstractElasticsearchDefinition
             unset($properties['states']);
         }
 
+        if ($this->hasSourceDocument()) {
+            // stored in `_source` only: no index structures, no field count, never queried
+            $properties[SourceDocument::FIELD] = ['type' => 'object', 'enabled' => false];
+        }
+
         $mapping = [
             'dynamic_templates' => [
                 [
@@ -179,7 +196,7 @@ class ElasticsearchProductDefinition extends AbstractElasticsearchDefinition
         ];
 
         if (!$this->excludeSource && !$debug) {
-            $mapping['_source'] = ['includes' => ['id', 'autoIncrement']];
+            $mapping['_source'] = ['includes' => $this->hasSourceDocument() ? ['id', 'autoIncrement', SourceDocument::FIELD] : ['id', 'autoIncrement']];
         }
 
         return $mapping;
@@ -351,6 +368,15 @@ class ElasticsearchProductDefinition extends AbstractElasticsearchDefinition
             // @deprecated tag:v6.8.0 - `product.states` is removed in v6.8, so it is not indexed
             if (Feature::isActive('v6.8.0.0')) {
                 unset($documents[$id]['states']);
+            }
+        }
+
+        if ($documents !== [] && $this->hasSourceDocument()) {
+            \assert($this->sourceDocumentBuilder !== null);
+            // same builder and extenders as every other read store, so the document equals the one of the projector
+            $built = $this->sourceDocumentBuilder->build(array_map(strval(...), array_keys($documents)));
+            foreach ($documents as $id => $document) {
+                $documents[$id][SourceDocument::FIELD] = $built[strtolower((string) $id)] ?? null;
             }
         }
 

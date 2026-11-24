@@ -19,6 +19,7 @@ use Shopware\Core\Framework\ReadStore\Integration\IntegrationBenchCommand;
 use Shopware\Core\Framework\ReadStore\Integration\ReadStoreConfig;
 use Shopware\Core\Framework\ReadStore\Integration\ReadStoreGateway;
 use Shopware\Core\Framework\ReadStore\Integration\RouteExtensionSubscriber;
+use Shopware\Core\Framework\ReadStore\Integration\SourceDocumentReaderSwitch;
 use Shopware\Core\Framework\ReadStore\Projector\StorageRegistry;
 use Shopware\Core\System\SalesChannel\Context\CachedSalesChannelContextFactory;
 use Shopware\Core\System\SystemConfig\SystemConfigService;
@@ -78,6 +79,7 @@ return static function (ContainerConfigurator $containerConfigurator): void {
             service(StatementCounter::class),
             service(Connection::class),
             service('clock'),
+            service(SourceDocumentReaderSwitch::class)->nullOnInvalid(),
         ])
         ->tag('console.command');
 };

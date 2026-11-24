@@ -8,10 +8,19 @@ use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\IdSearchResult;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Plugin\Exception\DecorationPatternException;
+use Shopware\Elasticsearch\Product\SourceDocument\SourceDocument;
+use Shopware\Elasticsearch\Product\SourceDocument\SourceDocumentBuffer;
 
 #[Package('framework')]
 class ElasticsearchEntitySearchHydrator extends AbstractElasticsearchSearchHydrator
 {
+    /**
+     * @internal
+     */
+    public function __construct(private readonly ?SourceDocumentBuffer $sourceDocuments = null)
+    {
+    }
+
     public function getDecorated(): AbstractElasticsearchSearchHydrator
     {
         throw new DecorationPatternException(self::class);
@@ -43,6 +52,14 @@ class ElasticsearchEntitySearchHydrator extends AbstractElasticsearchSearchHydra
         $data = [];
         foreach ($hits as $hit) {
             $id = $hit['_id'];
+
+            // O1a: the full document leaves the searcher through the buffer, not through the `search` extension of the entities
+            if (isset($hit['_source'][SourceDocument::FIELD])) {
+                if ($this->sourceDocuments !== null && \is_array($hit['_source'][SourceDocument::FIELD])) {
+                    $this->sourceDocuments->add((string) $id, $hit['_source'][SourceDocument::FIELD]);
+                }
+                unset($hit['_source'][SourceDocument::FIELD]);
+            }
 
             $data[$id] = [
                 'primaryKey' => $id,

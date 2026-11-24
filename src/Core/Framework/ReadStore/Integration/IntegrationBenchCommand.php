@@ -49,13 +49,14 @@ final class IntegrationBenchCommand extends Command
         private readonly StatementCounter $counter,
         private readonly Connection $connection,
         private readonly ClockInterface $clock,
+        private readonly ?SourceDocumentReaderSwitch $sourceReader = null,
     ) {
         parent::__construct();
     }
 
     protected function configure(): void
     {
-        $this->addOption('store', null, InputOption::VALUE_REQUIRED, 'Read store key (array, sql-mysql, opensearch, opensearch-valkey, mongodb)', 'opensearch')
+        $this->addOption('store', null, InputOption::VALUE_REQUIRED, 'Read store key (array, sql-mysql, opensearch, opensearch-valkey, mongodb), or o1a: O1 (ES search, SQL read) against O1a (ES search, `_source` read)', 'opensearch')
             ->addOption('mode', null, InputOption::VALUE_REQUIRED, 'sql-accounting|live-parts|equality|all', 'all')
             ->addOption('iterations', null, InputOption::VALUE_REQUIRED, 'Timing iterations per variant', '20')
             ->addOption('warmup', null, InputOption::VALUE_REQUIRED, 'Warmup iterations per variant', '3');
@@ -84,6 +85,7 @@ final class IntegrationBenchCommand extends Command
         }
 
         $this->config->reset();
+        $this->sourceReader?->setRuntimeEnabled(true);
 
         return self::SUCCESS;
     }
@@ -104,6 +106,13 @@ final class IntegrationBenchCommand extends Command
             "store-$store shape(a) entity" => [true, $store, ReadStoreConfig::SHAPE_ENTITY],
             "store-$store shape(b) dto" => [true, $store, ReadStoreConfig::SHAPE_DTO],
         ];
+        if ($this->isO1a($store)) {
+            // wave 10 A: the gateway stays off, the document reader is switched per mode (needs SHOPWARE_ES_ENABLED=1, SHOPWARE_ES_SOURCE_DOCUMENT=1)
+            $modes = [
+                'O1 (ES search + SQL read)' => [false, null, ReadStoreConfig::SHAPE_ENTITY, false],
+                'O1a (ES search + _source read)' => [false, null, ReadStoreConfig::SHAPE_ENTITY, true],
+            ];
+        }
 
         $routes = [
             'Detail (full)' => fn (): mixed => $this->detailRoute->load($productId, new Request(), $context, new Criteria()),
@@ -114,8 +123,11 @@ final class IntegrationBenchCommand extends Command
 
         foreach ($routes as $routeName => $call) {
             $output->writeln(\sprintf('-- %s --', $routeName));
-            foreach ($modes as $label => [$enabled, $key, $shape]) {
+            foreach ($modes as $label => $mode) {
+                [$enabled, $key, $shape] = $mode;
                 $this->config->override($enabled, $key, $shape);
+                $this->sourceReader?->setRuntimeEnabled($mode[3] ?? true);
+                $this->sourceReader?->resetStats();
                 $this->gateway->resetMetrics();
 
                 for ($i = 0; $i < $warmup; ++$i) {
@@ -147,8 +159,16 @@ final class IntegrationBenchCommand extends Command
                 foreach ($this->gateway->fallbackReasons() as $reason => $cnt) {
                     $output->writeln(\sprintf('    fallback (%dx): %s', $cnt, $reason));
                 }
+                if ($this->isO1a($store) && $this->sourceReader !== null) {
+                    $output->writeln('    source reader: ' . json_encode($this->sourceReader->stats(), \JSON_THROW_ON_ERROR));
+                }
             }
         }
+    }
+
+    private function isO1a(string $store): bool
+    {
+        return $store === 'o1a' && $this->sourceReader !== null;
     }
 
     private function runLiveParts(
@@ -300,14 +320,25 @@ final class IntegrationBenchCommand extends Command
         $fallbackCount = 0;
         $diffs = [];
 
+        $o1a = $this->isO1a($store);
         foreach ($cases as $case) {
             $this->config->override(false);
+            $this->sourceReader?->setRuntimeEnabled(!$o1a);
             $expected = $case['call']();
 
-            $this->config->override(true, $store, ReadStoreConfig::SHAPE_ENTITY, true, true);
-            $this->gateway->resetMetrics();
-            $actual = $case['call']();
-            $wasFallback = $this->gateway->fallbacks() > 0 && $this->gateway->hits() === 0;
+            if ($o1a) {
+                \assert($this->sourceReader !== null);
+                $this->sourceReader->setRuntimeEnabled(true);
+                $this->sourceReader->resetStats();
+                $actual = $case['call']();
+                $stats = $this->sourceReader->stats();
+                $wasFallback = ($stats['document'] ?? 0) === 0;
+            } else {
+                $this->config->override(true, $store, ReadStoreConfig::SHAPE_ENTITY, true, true);
+                $this->gateway->resetMetrics();
+                $actual = $case['call']();
+                $wasFallback = $this->gateway->fallbacks() > 0 && $this->gateway->hits() === 0;
+            }
             if ($wasFallback) {
                 ++$fallbackCount;
             }

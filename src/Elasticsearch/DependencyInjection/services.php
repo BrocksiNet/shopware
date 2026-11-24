@@ -13,9 +13,13 @@ use Shopware\Core\Framework\Api\Serializer\JsonEntityEncoder;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\Common\IteratorFactory;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\EntityDefinitionQueryHelper;
 use Shopware\Core\Framework\DataAbstractionLayer\DefinitionInstanceRegistry;
+use Shopware\Core\Framework\DataAbstractionLayer\Read\EntityReaderInterface;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\EntityAggregatorInterface;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\EntitySearcherInterface;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\SearchConfigLoader;
+use Shopware\Core\Framework\ReadStore\Builder\SqlDocumentBuilder;
+use Shopware\Core\Framework\ReadStore\Integration\DocumentHydrator;
+use Shopware\Core\Framework\ReadStore\Integration\SourceDocumentReaderSwitch;
 use Shopware\Core\System\CustomField\CustomFieldService;
 use Shopware\Core\System\Language\LanguageLoader;
 use Shopware\Core\System\Language\SalesChannelLanguageLoader;
@@ -98,6 +102,8 @@ use Shopware\Elasticsearch\Product\ProductSearchBuilder;
 use Shopware\Elasticsearch\Product\ProductSearchQueryBuilder;
 use Shopware\Elasticsearch\Product\ProductUpdater;
 use Shopware\Elasticsearch\Product\SearchKeywordReplacement;
+use Shopware\Elasticsearch\Product\SourceDocument\SourceDocumentBuffer;
+use Shopware\Elasticsearch\Product\SourceDocument\SourceDocumentEntityReader;
 use Shopware\Elasticsearch\Product\StopwordTokenFilter;
 use Shopware\Elasticsearch\Profiler\DataCollector;
 use Shopware\Elasticsearch\TokenQueryBuilder;
@@ -111,6 +117,7 @@ use function Symfony\Component\DependencyInjection\Loader\Configurator\tagged_it
 
 return static function (ContainerConfigurator $containerConfigurator): void {
     $containerConfigurator->parameters()
+        ->set('env(SHOPWARE_ES_SOURCE_DOCUMENT)', '0')
         ->set('elasticsearch.index.config', [
             'settings' => [
                 'index' => '%elasticsearch.index_settings%',
@@ -284,7 +291,8 @@ return static function (ContainerConfigurator $containerConfigurator): void {
         ])
         ->tag('kernel.event_subscriber');
 
-    $services->set(AbstractElasticsearchSearchHydrator::class, ElasticsearchEntitySearchHydrator::class);
+    $services->set(AbstractElasticsearchSearchHydrator::class, ElasticsearchEntitySearchHydrator::class)
+        ->args([service(SourceDocumentBuffer::class)]);
 
     $services->set(AbstractElasticsearchAggregationHydrator::class, ElasticsearchEntityAggregatorHydrator::class)
         ->args([
@@ -375,8 +383,28 @@ return static function (ContainerConfigurator $containerConfigurator): void {
             param('elasticsearch.product.exclude_source'),
             param('kernel.environment'),
             service(LanguageLoader::class),
+            service(SqlDocumentBuilder::class)->nullOnInvalid(),
+            env('SHOPWARE_ES_SOURCE_DOCUMENT')->bool(),
         ])
         ->tag('shopware.es.definition');
+
+    $services->set(SourceDocumentBuffer::class)
+        ->tag('kernel.reset', ['method' => 'reset']);
+
+    $services->set(SourceDocumentEntityReader::class)
+        ->public()
+        ->decorate(EntityReaderInterface::class)
+        ->args([
+            service('.inner'),
+            service(SourceDocumentBuffer::class),
+            service(Client::class),
+            service(ElasticsearchHelper::class),
+            service(ProductDefinition::class),
+            service(DocumentHydrator::class)->nullOnInvalid(),
+            env('SHOPWARE_ES_SOURCE_DOCUMENT')->bool(),
+        ]);
+
+    $services->alias(SourceDocumentReaderSwitch::class, SourceDocumentEntityReader::class)->public();
 
     $services->set(StopwordTokenFilter::class)
         ->args([

@@ -80,6 +80,25 @@ final class DocumentHydrator
     }
 
     /**
+     * Shape (a) without loaded events, for a caller that dispatches them itself.
+     * Wave 10 O1a: the `SourceDocumentEntityReader` in `src/Elasticsearch` returns these entities to
+     * `SalesChannelRepository::read()`, which then dispatches the sales channel loaded events (live prices, purchase limits).
+     *
+     * @param list<array<string, mixed>> $documents
+     *
+     * @return list<SalesChannelProductEntity>
+     */
+    public function hydrateEntitiesWithoutEvents(array $documents, string $languageId, ?Criteria $criteria = null): array
+    {
+        $entities = [];
+        foreach ($documents as $doc) {
+            $entities[] = $this->hydrateEntity($doc, $languageId, true, true, $criteria);
+        }
+
+        return $entities;
+    }
+
+    /**
      * Shape (a): full {@see SalesChannelProductEntity} hydration + loaded events.
      *
      * @param list<array<string, mixed>> $documents
