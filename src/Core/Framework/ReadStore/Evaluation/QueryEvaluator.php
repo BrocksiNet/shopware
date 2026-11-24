@@ -74,7 +74,7 @@ final class QueryEvaluator
                 if (!$this->matchesSearch($search, $document, $context)) {
                     continue;
                 }
-                $scores[(string) $document['id']] = $this->score($search, $document);
+                $scores[(string) $document['id']] = $this->score($search, $document, $context);
             }
 
             $matching[] = $document;
@@ -243,17 +243,35 @@ final class QueryEvaluator
     }
 
     /**
-     * Score of the DAL score queries: summed over the keyword rows of all languages (the score join of the DAL is not restricted by language).
+     * Score of the DAL score queries, summed over the keyword rows the DAL joins for them (verified on rs_k_corpus, docs/40-read-store-port-and-document.md):
+     * - one keyword filter (or-logic, or and-logic with one token): the DAL scores only the rows that pass it,
+     *   rows of the context language whose keyword is one of the filter keywords;
+     * - and-logic with two or more tokens (one filter per token): the DAL scores every keyword row of the product, of all languages.
      *
      * @param array<string, mixed> $document
      */
-    public function score(SearchTerm $search, array $document): float
+    public function score(SearchTerm $search, array $document, StoreContext $context): float
     {
+        $rows = $document['searchKeywords'] ?? [];
+        $filterKeywords = null;
+        if (!$search->andLogic) {
+            $filterKeywords = $search->anyKeywords();
+        } elseif (\count($search->tokenKeywords) === 1) {
+            $filterKeywords = $search->tokenKeywords[0];
+        }
+        if ($filterKeywords !== null) {
+            $rows = [$rows[$context->languageId] ?? []];
+            $allowed = array_flip(array_map(self::fold(...), $filterKeywords));
+        }
+
         $score = 0.0;
         $original = self::fold($search->original);
-        foreach ($document['searchKeywords'] ?? [] as $keywords) {
+        foreach ($rows as $keywords) {
             foreach ($keywords as $keyword => $ranking) {
                 $folded = self::fold((string) $keyword);
+                if (isset($allowed) && !isset($allowed[$folded])) {
+                    continue;
+                }
                 foreach ($search->scoredKeywords as $scored) {
                     if (self::fold($scored['keyword']) === $folded) {
                         $score += $scored['score'] * (float) $ranking;
@@ -316,7 +334,7 @@ final class QueryEvaluator
     }
 
     /**
-     * One document per group value. Groups are ordered like the DAL orders a grouped query: by `MIN(field)` for ascending and `MAX(field)`
+     * One document per group value. With a search term see the scored branch below. Without one, groups are ordered like the DAL orders a grouped query: by `MIN(field)` for ascending and `MAX(field)`
      * for descending sortings (`cheapestPrice` always `MIN`), see `CriteriaQueryBuilder::addSortings()`; the representative is the first
      * document of the group in the sorted hits (the DAL picks an arbitrary row, `any_value()`), ties by the representative id.
      *
@@ -329,6 +347,29 @@ final class QueryEvaluator
     {
         \assert($criteria->groupField !== null);
         $groupField = $this->resolver->resolve($criteria->groupField, $context);
+
+        if ($criteria->search !== null) {
+            // DAL `EntitySearcher::buildScoreRankedQuery()`: the representative is the highest scoring document of the group (ties by the
+            // lowest id) and the groups are ordered by the sortings of their representative, not by `MIN()`/`MAX()` over the group
+            $representatives = [];
+            foreach ($sorted as $document) {
+                $value = $this->value($groupField, $document);
+                $groupKey = $value === null ? "\0null" : 'v' . self::fold((string) self::scalar($value));
+                $current = $representatives[$groupKey] ?? null;
+                if ($current === null) {
+                    $representatives[$groupKey] = $document;
+                    continue;
+                }
+
+                $comparison = ($scores[(string) $document['id']] ?? 0.0) <=> ($scores[(string) $current['id']] ?? 0.0);
+                if ($comparison > 0 || ($comparison === 0 && strcmp((string) $document['id'], (string) $current['id']) < 0)) {
+                    $representatives[$groupKey] = $document;
+                }
+            }
+
+            return $this->sort(array_values($representatives), $criteria, $context, $scores);
+        }
+
         $keys = $this->sortKeys($criteria->sortings, $context);
 
         /** @var array<string, array{representative: array<string, mixed>, aggregates: list<mixed>}> $groups */
@@ -474,7 +515,8 @@ final class QueryEvaluator
     {
         $buckets = array_values($buckets);
         if ($terms->limit !== null) {
-            usort($buckets, fn (array $a, array $b): int => [$b['count'], 0] <=> [$a['count'], $this->compareNullable($a['key'], $b['key'], $field->type)]);
+            // highest count first, ties by the ascending key (the DAL has no order without a sorting, `LIMIT` returns arbitrary groups)
+            usort($buckets, fn (array $a, array $b): int => [$b['count'], $this->compareNullable($a['key'], $b['key'], $field->type)] <=> [$a['count'], 0]);
             $buckets = \array_slice($buckets, 0, $terms->limit);
         }
         usort($buckets, fn (array $a, array $b): int => $this->compareNullable($a['key'], $b['key'], $field->type));

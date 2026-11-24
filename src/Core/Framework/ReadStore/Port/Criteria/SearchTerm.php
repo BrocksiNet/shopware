@@ -14,7 +14,9 @@ use Shopware\Core\Framework\Log\Package;
  *   otherwise one keyword equal to the original term or to any scored keyword (`getAllTerms()`).
  *
  * DAL score (`ProductSearchBuilder`): per keyword row of the product, `score * ranking` for every equal keyword and
- * `originalScore * ranking` when the keyword contains the original term, summed over the rows.
+ * `originalScore * ranking` when the keyword contains the original term, summed over the rows the DAL joins for the score:
+ * with one keyword filter (or-logic, or and-logic with one token) only the rows passing it (context language, keyword in the filter),
+ * with two or more token filters every row of all languages, see {@see \Shopware\Core\Framework\ReadStore\Evaluation\QueryEvaluator::score()}.
  *
  * @internal
  */
