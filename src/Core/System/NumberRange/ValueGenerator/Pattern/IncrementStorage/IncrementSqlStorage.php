@@ -10,6 +10,7 @@ use Doctrine\DBAL\Platforms\SQLitePlatform;
 use Psr\Clock\ClockInterface;
 use Shopware\Core\Defaults;
 use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
+use Shopware\Core\Framework\Adapter\Database\Dialect\SqlDialectFactory;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Plugin\Exception\DecorationPatternException;
 use Shopware\Core\Framework\Uuid\Uuid;
@@ -60,7 +61,7 @@ class IncrementSqlStorage extends AbstractIncrementStorage
         }
 
         $this->connection->executeStatement(
-            'INSERT `number_range_state` (`id`, `last_value`, `number_range_id`, `created_at`) VALUES (:stateId, :value, :id, :createdAt)
+            'INSERT INTO `number_range_state` (`id`, `last_value`, `number_range_id`, `created_at`) VALUES (:stateId, :value, :id, :createdAt)
                 ON DUPLICATE KEY UPDATE
                 `last_value` = @nr' . $varname . ' := IF(`last_value`+1 > :value, `last_value`+1, :value)',
             [
@@ -118,9 +119,13 @@ class IncrementSqlStorage extends AbstractIncrementStorage
     {
         $stateId = Uuid::randomBytes();
         $this->connection->executeStatement(
-            'INSERT `number_range_state` (`id`, `last_value`, `number_range_id`, `created_at`) VALUES (:stateId, :value, :id, :createdAt)
-                ON DUPLICATE KEY UPDATE
-                `last_value` = :value',
+            SqlDialectFactory::forConnection($this->connection)->upsert(
+                'number_range_state',
+                ['id', 'last_value', 'number_range_id', 'created_at'],
+                '(:stateId, :value, :id, :createdAt)',
+                ['number_range_id'],
+                ['last_value']
+            ),
             [
                 'value' => $value,
                 'id' => IdBinding::value($configurationId),
@@ -133,10 +138,18 @@ class IncrementSqlStorage extends AbstractIncrementStorage
     public function increaseToAtLeast(string $configurationId, int $value): void
     {
         $stateId = Uuid::randomBytes();
-        $this->connection->executeStatement(
-            'INSERT `number_range_state` (`id`, `last_value`, `number_range_id`, `created_at`) VALUES (:stateId, :value, :id, :createdAt)
+        $platform = $this->connection->getDatabasePlatform();
+        // PostgreSQL and SQLite have no ON DUPLICATE KEY UPDATE; the conflict target is the unique number range id
+        $sql = $platform instanceof PostgreSQLPlatform || $platform instanceof SQLitePlatform
+            ? 'INSERT INTO number_range_state (id, last_value, number_range_id, created_at) VALUES (:stateId, :value, :id, :createdAt)
+                ON CONFLICT (number_range_id) DO UPDATE
+                SET last_value = GREATEST(number_range_state.last_value, :value)'
+            : 'INSERT INTO `number_range_state` (`id`, `last_value`, `number_range_id`, `created_at`) VALUES (:stateId, :value, :id, :createdAt)
                 ON DUPLICATE KEY UPDATE
-                `last_value` = GREATEST(`last_value`, :value)',
+                `last_value` = GREATEST(`last_value`, :value)';
+
+        $this->connection->executeStatement(
+            $sql,
             [
                 'value' => $value,
                 'id' => IdBinding::value($configurationId),
