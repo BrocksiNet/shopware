@@ -56,7 +56,7 @@ final class ResultContract
      * `MIN(name)` for ASC), so id, name, price and manufacturer of the hit are NOT compared; per hit only its group key `displayGroup` is. Aggregations run
      * without grouping and without post filters (min and max of `price.gross`, terms of `manufacturerId`).
      */
-    public const R3B = 'total, items[id, productNumber, name, manufacturer, price], aggregations[minPrice, maxPrice, manufacturers]';
+    public const R3B = 'total, items[displayGroup], aggregations[minPrice, maxPrice, manufacturers]';
 
     /**
      * R4: `['items' => list<S2 shape>]` in the order of {@see Params::$mgetIds}.
