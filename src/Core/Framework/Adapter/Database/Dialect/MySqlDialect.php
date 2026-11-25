@@ -65,6 +65,16 @@ class MySqlDialect implements SqlDialect
         return \sprintf('JSON_SET(IFNULL(%s, "{}"), %s, %s)', $jsonColumnSql, $this->stringLiteral($path), $valueSql);
     }
 
+    public function jsonArrayRemoveString(string $jsonColumnSql, string $valueSql): string
+    {
+        return \sprintf('JSON_REMOVE(%1$s, JSON_UNQUOTE(JSON_SEARCH(%1$s, \'one\', %2$s)))', $jsonColumnSql, $valueSql);
+    }
+
+    public function jsonArrayContainsString(string $jsonColumnSql, string $valueSql): string
+    {
+        return \sprintf('JSON_CONTAINS(%s, JSON_QUOTE(%s))', $jsonColumnSql, $valueSql);
+    }
+
     public function jsonValue(string $jsonColumnSql, string $path, string $type = self::JSON_TYPE_STRING): string
     {
         $extract = $this->jsonExtract($jsonColumnSql, $path);

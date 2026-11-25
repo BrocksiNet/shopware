@@ -92,6 +92,16 @@ interface SqlDialect
     public function jsonSet(string $jsonColumnSql, string $path, string $valueSql): string;
 
     /**
+     * Removes the first element equal to the string `$valueSql` from the JSON array `$jsonColumnSql`.
+     */
+    public function jsonArrayRemoveString(string $jsonColumnSql, string $valueSql): string;
+
+    /**
+     * Condition: the JSON array `$jsonColumnSql` contains the string `$valueSql`.
+     */
+    public function jsonArrayContainsString(string $jsonColumnSql, string $valueSql): string;
+
+    /**
      * Expression that selects the id column as lower case 32 character hex text.
      */
     public function idToText(string $columnSql): string;

@@ -38,6 +38,13 @@ class ShowRewriterTest extends TestCase
         static::assertStringContainsString('WHEN \'true\' THEN \'1\' WHEN \'false\' THEN \'0\'', $sql);
     }
 
+    public function testShowColumnsReportsIdentityColumnsAsAutoIncrement(): void
+    {
+        $sql = ShowRewriter::rewrite('SHOW COLUMNS FROM "customer"');
+
+        static::assertStringContainsString('WHEN c.is_identity = \'YES\' OR c.column_default LIKE \'nextval(%\' THEN \'auto_increment\'', $sql);
+    }
+
     public function testShowIndexesStripsTablePrefixAndMapsPrimary(): void
     {
         $sql = ShowRewriter::rewrite('SHOW INDEXES FROM "t" WHERE "key_name" = \'idx\'');

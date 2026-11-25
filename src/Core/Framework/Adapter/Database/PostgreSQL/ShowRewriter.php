@@ -42,7 +42,8 @@ class ShowRewriter
 
         if (preg_match('/^SHOW\s+(?:FULL\s+)?(?:COLUMNS|FIELDS)\s+(?:FROM|IN)\s+(' . self::IDENT . ')(?:\s+(?:FROM|IN)\s+' . self::IDENT . ')?(.*)$/isD', $sql, $m) === 1) {
             return 'SELECT * FROM (SELECT column_name::text AS "Field", ' . self::MYSQL_TYPE . ' AS "Type",'
-                . ' is_nullable::text AS "Null", \'\'::text AS "Key", (CASE WHEN a.atttypid = \'boolean\'::regtype THEN (CASE c.column_default WHEN \'true\' THEN \'1\' WHEN \'false\' THEN \'0\' ELSE c.column_default END) ELSE c.column_default END)::text AS "Default", \'\'::text AS "Extra"'
+                . ' is_nullable::text AS "Null", \'\'::text AS "Key", (CASE WHEN a.atttypid = \'boolean\'::regtype THEN (CASE c.column_default WHEN \'true\' THEN \'1\' WHEN \'false\' THEN \'0\' ELSE c.column_default END) ELSE c.column_default END)::text AS "Default",'
+                . ' (CASE WHEN c.is_identity = \'YES\' OR c.column_default LIKE \'nextval(%\' THEN \'auto_increment\' ELSE \'\' END)::text AS "Extra"'
                 . ' FROM information_schema.columns c JOIN pg_attribute a ON a.attrelid = to_regclass(quote_ident(c.table_name)) AND a.attname = c.column_name'
                 . ' WHERE c.table_schema = current_schema() AND c.table_name = ' . self::literal($m[1])
                 . ' ORDER BY c.ordinal_position) s' . self::where($m[2]);

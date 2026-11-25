@@ -107,6 +107,18 @@ class PostgreSqlDialect implements SqlDialect
         );
     }
 
+    public function jsonArrayRemoveString(string $jsonColumnSql, string $valueSql): string
+    {
+        // `-` removes every equal string element; the callers keep lists of unique ids
+        return \sprintf('(%s - CAST(%s AS text))', $jsonColumnSql, $valueSql);
+    }
+
+    public function jsonArrayContainsString(string $jsonColumnSql, string $valueSql): string
+    {
+        // containment instead of the `?` operator, which PDO would take for a placeholder
+        return \sprintf('(%s @> jsonb_build_array(CAST(%s AS text)))', $jsonColumnSql, $valueSql);
+    }
+
     public function jsonValue(string $jsonColumnSql, string $path, string $type = self::JSON_TYPE_STRING): string
     {
         $text = $this->jsonExtractText($jsonColumnSql, $path);

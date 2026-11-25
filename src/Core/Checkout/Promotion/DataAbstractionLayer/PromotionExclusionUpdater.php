@@ -5,6 +5,7 @@ namespace Shopware\Core\Checkout\Promotion\DataAbstractionLayer;
 use Doctrine\DBAL\Connection;
 use Shopware\Core\Checkout\Promotion\PromotionDefinition;
 use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
+use Shopware\Core\Framework\Adapter\Database\Dialect\SqlDialectFactory;
 use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\RetryableQuery;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Uuid\Uuid;
@@ -130,7 +131,7 @@ class PromotionExclusionUpdater
         RetryableQuery::retryable($this->connection, function () use ($affectedIds, $deleteId): void {
             $sqlStatement = '
                 UPDATE promotion
-                SET promotion.exclusion_ids = JSON_REMOVE(promotion.exclusion_ids, JSON_UNQUOTE(JSON_SEARCH(promotion.exclusion_ids,\'one\', :value)))
+                SET promotion.exclusion_ids = ' . SqlDialectFactory::forConnection($this->connection)->jsonArrayRemoveString('promotion.exclusion_ids', ':value') . '
                 WHERE id IN(:affectedIds)
             ';
 

@@ -86,6 +86,8 @@ class SqliteDialectTest extends TestCase
         static::assertSame('date((c ->> \'$.a\'))', $dialect->jsonValue('c', '$.a', SqlDialect::JSON_TYPE_DATE));
         static::assertSame('json(?)', $dialect->jsonBind('?', SqlDialect::JSON_BIND_OBJECT));
         static::assertSame('json_set(COALESCE(c, \'{}\'), \'$.a\', ?)', $dialect->jsonSet('c', '$.a', '?'));
+        static::assertSame('(SELECT json_group_array(value) FROM json_each(c) WHERE value <> ?)', $dialect->jsonArrayRemoveString('c', '?'));
+        static::assertSame('EXISTS (SELECT 1 FROM json_each(c) WHERE value = ?)', $dialect->jsonArrayContainsString('c', '?'));
     }
 
     public function testIdsAreBytes(): void

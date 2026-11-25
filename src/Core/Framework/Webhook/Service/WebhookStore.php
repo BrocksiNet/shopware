@@ -3,6 +3,7 @@
 namespace Shopware\Core\Framework\Webhook\Service;
 
 use Doctrine\DBAL\Connection;
+use Shopware\Core\Framework\Adapter\Database\Dialect\SqlDialectFactory;
 use Shopware\Core\Framework\Log\Package;
 
 /**
@@ -32,11 +33,12 @@ class WebhookStore
      */
     public function removeDeletedRoles(array $roleIds): void
     {
+        $dialect = SqlDialectFactory::forConnection($this->connection);
         foreach ($roleIds as $roleId) {
             $this->connection->executeStatement(
                 'UPDATE `webhook`
-                 SET `acl_role_ids` = JSON_REMOVE(`acl_role_ids`, JSON_UNQUOTE(JSON_SEARCH(`acl_role_ids`, \'one\', :roleId)))
-                 WHERE JSON_CONTAINS(`acl_role_ids`, JSON_QUOTE(:roleId))',
+                 SET `acl_role_ids` = ' . $dialect->jsonArrayRemoveString('`acl_role_ids`', ':roleId') . '
+                 WHERE ' . $dialect->jsonArrayContainsString('`acl_role_ids`', ':roleId'),
                 ['roleId' => $roleId],
             );
         }

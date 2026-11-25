@@ -84,6 +84,16 @@ class SqliteDialect implements SqlDialect
         return \sprintf('json_set(COALESCE(%s, \'{}\'), %s, %s)', $jsonColumnSql, $this->stringLiteral($path), $valueSql);
     }
 
+    public function jsonArrayRemoveString(string $jsonColumnSql, string $valueSql): string
+    {
+        return \sprintf('(SELECT json_group_array(value) FROM json_each(%s) WHERE value <> %s)', $jsonColumnSql, $valueSql);
+    }
+
+    public function jsonArrayContainsString(string $jsonColumnSql, string $valueSql): string
+    {
+        return \sprintf('EXISTS (SELECT 1 FROM json_each(%s) WHERE value = %s)', $jsonColumnSql, $valueSql);
+    }
+
     public function jsonValue(string $jsonColumnSql, string $path, string $type = self::JSON_TYPE_STRING): string
     {
         $text = $this->jsonExtractText($jsonColumnSql, $path);

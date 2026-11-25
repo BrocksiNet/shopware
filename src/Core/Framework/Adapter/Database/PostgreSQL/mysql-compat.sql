@@ -279,6 +279,10 @@ END $$;
 CREATE OR REPLACE FUNCTION json_array_append(jsonb, text, text) RETURNS jsonb LANGUAGE sql IMMUTABLE PARALLEL SAFE
     AS $$
         SELECT CASE
+            WHEN $1 IS NULL THEN NULL
+            -- root path '$': jsonb_set() with an empty path returns the document unchanged
+            WHEN cardinality(mysql_compat_json_path($2)) = 0 AND jsonb_typeof($1) = 'array' THEN $1 || jsonb_build_array($3)
+            WHEN cardinality(mysql_compat_json_path($2)) = 0 THEN jsonb_build_array($1, $3)
             WHEN $1 #> mysql_compat_json_path($2) IS NULL THEN $1
             WHEN jsonb_typeof($1 #> mysql_compat_json_path($2)) = 'array'
                 THEN jsonb_set($1, mysql_compat_json_path($2), ($1 #> mysql_compat_json_path($2)) || jsonb_build_array($3))
