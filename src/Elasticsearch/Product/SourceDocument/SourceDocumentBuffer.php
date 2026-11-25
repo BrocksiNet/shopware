@@ -38,7 +38,7 @@ final class SourceDocumentBuffer implements ResetInterface
     /**
      * @param list<string> $ids
      *
-     * @return array<string, array<string, mixed>> keyed by lower case id, ids without a buffered document are left out
+     * @return array<string, array<string, mixed>> keyed by lower case id, ids without a buffered document are left out; returned documents leave the buffer
      */
     public function take(array $ids): array
     {
@@ -46,7 +46,9 @@ final class SourceDocumentBuffer implements ResetInterface
         foreach ($ids as $id) {
             $key = strtolower($id);
             if (isset($this->documents[$key])) {
+                // consumed: a later read of the same id (another request in a worker, a second read) goes to OpenSearch again
                 $found[$key] = $this->documents[$key];
+                unset($this->documents[$key]);
             }
         }
 

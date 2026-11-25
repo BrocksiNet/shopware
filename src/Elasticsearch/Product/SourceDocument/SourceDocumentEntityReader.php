@@ -10,6 +10,7 @@ use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\Entity;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityCollection;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityDefinition;
+use Shopware\Core\Framework\DataAbstractionLayer\Field\AssociationField;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\ManyToManyAssociationField;
 use Shopware\Core\Framework\DataAbstractionLayer\Read\EntityReaderInterface;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
@@ -41,6 +42,7 @@ final class SourceDocumentEntityReader implements EntityReaderInterface, SourceD
     private const DOCUMENT_ASSOCIATIONS = [
         'manufacturer' => [],
         'tax' => [],
+        'prices' => [],
         'unit' => [],
         'deliveryTime' => [],
         'cover' => ['media' => []],
@@ -133,6 +135,10 @@ final class SourceDocumentEntityReader implements EntityReaderInterface, SourceD
             }
         }
 
+        foreach ($entities as $entity) {
+            $this->stamp($entity, $definition);
+        }
+
         $collection = $definition->getCollectionClass();
         /** @var EntityCollection<Entity> $result */
         $result = new $collection($entities);
@@ -218,7 +224,6 @@ final class SourceDocumentEntityReader implements EntityReaderInterface, SourceD
             $document = $doc['_source'][SourceDocument::FIELD] ?? null;
             if (($doc['found'] ?? false) === true && \is_array($document)) {
                 $documents[strtolower((string) $doc['_id'])] = $document;
-                $this->buffer->add((string) $doc['_id'], $document);
             }
         }
 
@@ -268,6 +273,38 @@ final class SourceDocumentEntityReader implements EntityReaderInterface, SourceD
                 }
             }
             $entity->assign([$association => $collection]);
+        }
+    }
+
+    /**
+     * Sets entity name and field visibility on the hydrated tree, as the DAL hydrator does:
+     * `EntityLoadedEventFactory` groups the nested entities by that name for the loaded events,
+     * and the Store API serializer hides fields by that visibility.
+     */
+    private function stamp(Entity $entity, EntityDefinition $definition): void
+    {
+        if ($entity->getInternalEntityName() !== null) {
+            return;
+        }
+        $entity->internalSetEntityData($definition->getEntityName(), $definition->getFieldVisibility());
+
+        $vars = $entity->getVars();
+        foreach ($definition->getFields() as $field) {
+            if (!$field instanceof AssociationField) {
+                continue;
+            }
+            $value = $vars[$field->getPropertyName()] ?? null;
+            if ($value === null) {
+                continue;
+            }
+            $reference = $field instanceof ManyToManyAssociationField ? $field->getToManyReferenceDefinition() : $field->getReferenceDefinition();
+            if ($value instanceof Entity) {
+                $this->stamp($value, $reference);
+            } elseif ($value instanceof EntityCollection) {
+                foreach ($value as $item) {
+                    $this->stamp($item, $reference);
+                }
+            }
         }
     }
 
