@@ -104,6 +104,7 @@ use Shopware\Elasticsearch\Product\ProductUpdater;
 use Shopware\Elasticsearch\Product\SearchKeywordReplacement;
 use Shopware\Elasticsearch\Product\SourceDocument\SourceDocumentBuffer;
 use Shopware\Elasticsearch\Product\SourceDocument\SourceDocumentEntityReader;
+use Shopware\Elasticsearch\Product\SourceDocument\SourceDocumentStorage;
 use Shopware\Elasticsearch\Product\StopwordTokenFilter;
 use Shopware\Elasticsearch\Profiler\DataCollector;
 use Shopware\Elasticsearch\TokenQueryBuilder;
@@ -390,6 +391,15 @@ return static function (ContainerConfigurator $containerConfigurator): void {
 
     $services->set(SourceDocumentBuffer::class)
         ->tag('kernel.reset', ['method' => 'reset']);
+
+    // Wave 10 O1a: projector target that rewrites only the `_source` document of the product index
+    $services->set(SourceDocumentStorage::class)
+        ->args([
+            service(Client::class),
+            service(ElasticsearchHelper::class),
+            service(ProductDefinition::class),
+        ])
+        ->tag('read_store.storage', ['key' => 'opensearch-source']);
 
     $services->set(SourceDocumentEntityReader::class)
         ->public()

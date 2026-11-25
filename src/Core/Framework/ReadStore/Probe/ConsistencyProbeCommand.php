@@ -204,6 +204,13 @@ final class ConsistencyProbeCommand extends Command
 
         $run = substr(bin2hex(random_bytes(3)), 0, 6);
 
+        // the probes restore the original values they read from the store: a store without the documents would blank fixture rows
+        if ($storage->get($simpleId) === null || $storage->get($variantId) === null) {
+            $output->writeln('<error>The store holds no document for the probe products, aborting before any write</error>');
+
+            return;
+        }
+
         // 1. DAL product update (name)
         $origName = (string) ($storage->get($simpleId)['name'][Defaults::LANGUAGE_SYSTEM] ?? '');
         $newName = 'ProbeName-' . $run;
@@ -213,7 +220,12 @@ final class ConsistencyProbeCommand extends Command
         $this->productRepository->update([['id' => $simpleId, 'name' => $origName]], $sysCtx);
 
         // 2. Parent product update -> child variant document freshness (inherited description)
-        $origParentDesc = $storage->get($parentId)['description'][Defaults::LANGUAGE_SYSTEM] ?? null;
+        // original values come from the write model: a store without the parent document (O1a) must not blank them on restore
+        $origParentDesc = $this->connection->fetchOne(
+            'SELECT description FROM product_translation WHERE product_id = UNHEX(:id) AND language_id = UNHEX(:l) AND product_version_id = UNHEX(:v)',
+            ['id' => $parentId, 'l' => Defaults::LANGUAGE_SYSTEM, 'v' => Defaults::LIVE_VERSION],
+        );
+        $origParentDesc = \is_string($origParentDesc) ? $origParentDesc : null;
         $probeDesc = 'ParentDesc-' . $run;
         $this->productRepository->update([['id' => $parentId, 'description' => $probeDesc]], $sysCtx);
         $childDoc = $storage->get($variantId);
@@ -278,7 +290,7 @@ final class ConsistencyProbeCommand extends Command
         $createdSeen = $storage->get($tmpId) !== null;
         $this->productRepository->delete([['id' => $tmpId]], $sysCtx);
         $deletedGone = $storage->get($tmpId) === null;
-        $this->report($output, '6. DAL product create + delete', $createdSeen && $deletedGone, 'ProductIndexerEvent + product.deleted');
+        $this->report($output, '6. DAL product create + delete', $createdSeen && $deletedGone, \sprintf('ProductIndexerEvent + product.deleted, created=%s deleted=%s', $createdSeen ? 'seen' : 'missed', $deletedGone ? 'gone' : 'still there'));
 
         // 7. Non-default language (de-DE) translation update
         $origDeName = (string) ($storage->get($simpleId)['name'][$params->languageId] ?? '');
@@ -327,14 +339,20 @@ final class ConsistencyProbeCommand extends Command
         $this->productRepository->update([['id' => $mergeProdId, 'name' => $mergeName]], $draftCtx);
         $this->productRepository->merge($versionId, $sysCtx);
         $docAfterMerge = $storage->get($mergeProdId);
-        $this->report($output, '11. Version merge (draft -> live)', ($docAfterMerge['name'][Defaults::LANGUAGE_SYSTEM] ?? null) === $mergeName, 'ProductIndexerEvent on merge');
+        $this->report($output, '11. Version merge (draft -> live)', ($docAfterMerge['name'][Defaults::LANGUAGE_SYSTEM] ?? null) === $mergeName, \sprintf('ProductIndexerEvent on merge, document %s', $docAfterMerge === null ? 'missing' : 'stale'));
         $this->productRepository->delete([['id' => $mergeProdId]], $sysCtx);
 
         // 12. Referenced entity: manufacturer name rename
-        $origMfrName = (string) ($storage->get($parentId)['manufacturer']['name'][Defaults::LANGUAGE_SYSTEM] ?? '');
+        // stores that follow the Shopware product index (O1a) hold no parent without `displayParent`, the variant inherits the manufacturer
+        $mfrProductId = $storage->get($parentId) !== null ? $parentId : $variantId;
+        // the original name comes from the write model, so a store that misses the product cannot blank it on restore
+        $origMfrName = (string) $this->connection->fetchOne(
+            'SELECT name FROM product_manufacturer_translation WHERE product_manufacturer_id = UNHEX(:id) AND language_id = UNHEX(:l)',
+            ['id' => $manufacturerId, 'l' => Defaults::LANGUAGE_SYSTEM],
+        );
         $probeMfrName = 'MfrProbe-' . $run;
         $this->manufacturerRepository->update([['id' => $manufacturerId, 'name' => $probeMfrName]], $sysCtx);
-        $docAfterMfr = $storage->get($parentId);
+        $docAfterMfr = $storage->get($mfrProductId);
         $this->report($output, '12. Referenced entity: manufacturer rename', ($docAfterMfr['manufacturer']['name'][Defaults::LANGUAGE_SYSTEM] ?? null) === $probeMfrName, 'product_manufacturer.written (not subscribed)');
         $this->manufacturerRepository->update([['id' => $manufacturerId, 'name' => $origMfrName]], $sysCtx);
 
@@ -402,9 +420,9 @@ final class ConsistencyProbeCommand extends Command
         }
 
         // 16. Referenced entity: tax rate change
-        $origTaxRate = (float) ($storage->get($parentId)['tax']['taxRate'] ?? 19.0);
+        $origTaxRate = (float) $this->connection->fetchOne('SELECT tax_rate FROM tax WHERE id = UNHEX(:id)', ['id' => $taxId]);
         $this->taxRepository->update([['id' => $taxId, 'taxRate' => $origTaxRate + 1.0]], $sysCtx);
-        $docAfterTax = $storage->get($parentId);
+        $docAfterTax = $storage->get($mfrProductId);
         $this->report($output, '16. Referenced entity: tax rate update', abs((float) ($docAfterTax['tax']['taxRate'] ?? 0) - ($origTaxRate + 1.0)) < 0.01, 'tax.written (not subscribed)');
         $this->taxRepository->update([['id' => $taxId, 'taxRate' => $origTaxRate]], $sysCtx);
 
