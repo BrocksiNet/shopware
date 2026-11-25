@@ -2,6 +2,7 @@
 
 namespace Shopware\Core\System\Currency;
 
+use Shopware\Core\Framework\DataAbstractionLayer\Dbal\DuplicateKeyViolation;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\ExceptionHandlerInterface;
 use Shopware\Core\Framework\Log\Package;
 
@@ -15,8 +16,9 @@ class CurrencyExceptionHandler implements ExceptionHandlerInterface
 
     public function matchException(\Throwable $e): ?\Throwable
     {
-        if (\preg_match('/SQLSTATE\\[23000\\]:.*1062 Duplicate entry \'(?<isoCode>.*)\' for key \'(?:currency\\.)?uniq\\.currency\\.iso_code\'/', $e->getMessage(), $matches)) {
-            return CurrencyException::isoCodeNotUnique($matches['isoCode'], $e);
+        $violation = DuplicateKeyViolation::matching($e, 'currency', 'uniq.currency.iso_code');
+        if ($violation !== null) {
+            return CurrencyException::isoCodeNotUnique($violation->entry, $e);
         }
 
         return null;

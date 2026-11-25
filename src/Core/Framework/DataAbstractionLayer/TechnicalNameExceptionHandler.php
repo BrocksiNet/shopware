@@ -5,6 +5,7 @@ namespace Shopware\Core\Framework\DataAbstractionLayer;
 use Shopware\Core\Checkout\Payment\PaymentException;
 use Shopware\Core\Checkout\Shipping\ShippingException;
 use Shopware\Core\Content\ImportExport\ImportExportException;
+use Shopware\Core\Framework\DataAbstractionLayer\Dbal\DuplicateKeyViolation;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\ExceptionHandlerInterface;
 use Shopware\Core\Framework\Log\Package;
 
@@ -18,28 +19,21 @@ class TechnicalNameExceptionHandler implements ExceptionHandlerInterface
 
     public function matchException(\Throwable $e): ?\Throwable
     {
-        if (\preg_match(
-            '/SQLSTATE\[23000]: Integrity constraint violation: 1062 Duplicate entry \'(?<technicalName>.*)\' for key \'payment_method.uniq\.technical_name\'/',
-            $e->getMessage(),
-            $matches
-        )) {
-            return PaymentException::duplicateTechnicalName($matches['technicalName']);
+        $violation = DuplicateKeyViolation::fromThrowable($e);
+        if ($violation === null) {
+            return null;
         }
 
-        if (\preg_match(
-            '/SQLSTATE\[23000]: Integrity constraint violation: 1062 Duplicate entry \'(?<technicalName>.*)\' for key \'shipping_method.uniq\.technical_name\'/',
-            $e->getMessage(),
-            $matches
-        )) {
-            return ShippingException::duplicateTechnicalName($matches['technicalName']);
+        if ($violation->isKey('payment_method', 'uniq.technical_name')) {
+            return PaymentException::duplicateTechnicalName($violation->entry);
         }
 
-        if (\preg_match(
-            '/SQLSTATE\[23000]: Integrity constraint violation: 1062 Duplicate entry \'(?<technicalName>.*)\' for key \'import_export_profile\.uniq\.import_export_profile\.technical_name\'/',
-            $e->getMessage(),
-            $matches
-        )) {
-            return ImportExportException::duplicateTechnicalName($matches['technicalName']);
+        if ($violation->isKey('shipping_method', 'uniq.technical_name')) {
+            return ShippingException::duplicateTechnicalName($violation->entry);
+        }
+
+        if ($violation->isKey('import_export_profile', 'uniq.import_export_profile.technical_name')) {
+            return ImportExportException::duplicateTechnicalName($violation->entry);
         }
 
         return null;

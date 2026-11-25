@@ -3,6 +3,7 @@
 namespace Shopware\Core\Content\Product\SalesChannel\Sorting;
 
 use Shopware\Core\Content\Product\Exception\DuplicateProductSortingKeyException;
+use Shopware\Core\Framework\DataAbstractionLayer\Dbal\DuplicateKeyViolation;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\ExceptionHandlerInterface;
 use Shopware\Core\Framework\Log\Package;
 
@@ -16,12 +17,9 @@ class ProductSortingExceptionHandler implements ExceptionHandlerInterface
 
     public function matchException(\Throwable $e): ?\Throwable
     {
-        if (preg_match('/SQLSTATE\[23000\]:.*1062 Duplicate.*uniq.product_sorting.url_key\'/', $e->getMessage())) {
-            $key = [];
-            preg_match('/Duplicate entry \'(.*)\' for key/', $e->getMessage(), $key);
-            $key = $key[1] ?? '';
-
-            return new DuplicateProductSortingKeyException($key, $e);
+        $violation = DuplicateKeyViolation::matching($e, 'product_sorting', 'uniq.product_sorting.url_key');
+        if ($violation !== null) {
+            return new DuplicateProductSortingKeyException($violation->entry, $e);
         }
 
         return null;
