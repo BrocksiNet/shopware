@@ -549,7 +549,8 @@ class DdlRewriter
      */
     private function parseColumn(string $definition, string $table, array $jsonColumns, string $tableCollation): array
     {
-        if (preg_match('/^(' . self::IDENT . ')\s+([A-Za-z]+)\s*(?:\(([^)]*)\))?((?:\s+(?:UNSIGNED|SIGNED|ZEROFILL))*)\s*(.*)$/isD', $definition, $m) !== 1) {
+        // `DOUBLE PRECISION` (the DBAL MySQL platform writes it for float columns) is the type `double`
+        if (preg_match('/^(' . self::IDENT . ')\s+([A-Za-z]+)(?:\s+PRECISION\b)?\s*(?:\(([^)]*)\))?((?:\s+(?:UNSIGNED|SIGNED|ZEROFILL))*)\s*(.*)$/isD', $definition, $m) !== 1) {
             throw AdapterException::unparsableColumnDefinition($definition);
         }
 
@@ -695,7 +696,9 @@ class DdlRewriter
         if (\in_array($dataType, ['varchar', 'char'], true)) {
             $column['textLike'] = true;
 
-            return $dataType . '(' . ($compact !== '' ? $compact : '1') . ')';
+            // CHAR(n) becomes varchar(n): MySQL removes the trailing pad spaces of a CHAR value on read, PostgreSQL's character(n) returns them
+            // (`currency.iso_code` 'FO' came back as 'FO ')
+            return 'varchar(' . ($compact !== '' ? $compact : '1') . ')';
         }
         if (\in_array($table . '.' . $name, self::SERIALIZED_TEXT_COLUMNS, true)) {
             return 'bytea';
