@@ -84,7 +84,10 @@ class ConfirmPageTest extends TestCase
 
         /** @var EntityRepository<PaymentMethodCollection> $paymentMethodRepository */
         $paymentMethodRepository = static::getContainer()->get('payment_method.repository');
-        $criteria = (new Criteria())->addFilter(new EqualsFilter('active', true));
+        // the method the page offers, not any active one: without a sorting the first active method depends on the database
+        $criteria = (new Criteria())
+            ->addFilter(new EqualsFilter('active', true))
+            ->addFilter(new EqualsFilter('salesChannels.id', $context->getSalesChannelId()));
         $paymentMethod = $paymentMethodRepository->search($criteria, $context->getContext())->getEntities()->first();
         static::assertNotNull($paymentMethod);
 

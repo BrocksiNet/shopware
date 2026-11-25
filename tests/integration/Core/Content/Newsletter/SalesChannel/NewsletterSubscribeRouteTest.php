@@ -178,7 +178,8 @@ class NewsletterSubscribeRouteTest extends TestCase
         $row = $connection->fetchAssociative('SELECT * FROM newsletter_recipient WHERE email = \'test@example.com\'');
         static::assertIsArray($row);
         static::assertSame('optIn', $row['status']);
-        static::assertSame($firstConfirmedAt, $row['confirmed_at']);
+        // compared as dates: the text form of a raw SQL datetime(3) differs per database ('.000' on MySQL, none on PostgreSQL)
+        static::assertEquals(new \DateTimeImmutable($firstConfirmedAt), new \DateTimeImmutable($row['confirmed_at']));
 
         // 3: unsubscribe
         $this->browser

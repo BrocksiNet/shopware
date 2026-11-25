@@ -102,7 +102,7 @@ class RulePayloadIndexerTest extends TestCase
 
         $this->ruleRepository->create([$data], $this->context);
 
-        $this->connection->update('rule', ['payload' => null, 'invalid' => '1'], ['HEX(1)' => '1']);
+        $this->connection->update('rule', ['payload' => null, 'invalid' => '1']);
         $rule = $this->ruleRepository->search(new Criteria([$id]), $this->context)->getEntities()->get($id);
         static::assertInstanceOf(RuleEntity::class, $rule);
         static::assertNull($rule->get('payload'));
@@ -211,7 +211,7 @@ class RulePayloadIndexerTest extends TestCase
 
         $this->ruleRepository->create($data, $this->context);
 
-        $this->connection->update('rule', ['payload' => null, 'invalid' => '1'], ['HEX(1)' => '1']);
+        $this->connection->update('rule', ['payload' => null, 'invalid' => '1']);
         $rule = $this->ruleRepository->search(new Criteria([$id]), $this->context)->getEntities()->get($id);
         static::assertInstanceOf(RuleEntity::class, $rule);
         static::assertNull($rule->get('payload'));
@@ -342,7 +342,7 @@ class RulePayloadIndexerTest extends TestCase
 
         $this->ruleRepository->create([$data], $this->context);
 
-        $this->connection->update('rule', ['payload' => null, 'invalid' => '1'], ['HEX(1)' => '1']);
+        $this->connection->update('rule', ['payload' => null, 'invalid' => '1']);
         $rule = $this->ruleRepository->search(new Criteria([$id]), $this->context)->getEntities()->get($id);
         static::assertInstanceOf(RuleEntity::class, $rule);
         static::assertNull($rule->get('payload'));
@@ -382,7 +382,7 @@ class RulePayloadIndexerTest extends TestCase
 
         $this->ruleRepository->create([$data], $this->context);
 
-        $this->connection->update('rule', ['payload' => null, 'invalid' => '1'], ['HEX(1)' => '1']);
+        $this->connection->update('rule', ['payload' => null, 'invalid' => '1']);
         $rule = $this->ruleRepository->search(new Criteria([$id]), $this->context)->getEntities()->get($id);
         static::assertInstanceOf(RuleEntity::class, $rule);
         static::assertNull($rule->get('payload'));
@@ -458,8 +458,8 @@ class RulePayloadIndexerTest extends TestCase
         $this->ruleRepository->create([$data], $this->context);
 
         $this->connection->executeStatement(
-            'UPDATE `rule` SET updated_at = DATE_SUB(NOW(), INTERVAL 1 HOUR) WHERE id = :id',
-            ['id' => Uuid::fromHexToBytes($ruleId)]
+            'UPDATE `rule` SET updated_at = :updatedAt WHERE id = :id',
+            ['id' => Uuid::fromHexToBytes($ruleId), 'updatedAt' => (new \DateTime('-1 hour'))->format(Defaults::STORAGE_DATE_TIME_FORMAT)]
         );
 
         $updatedAtBefore = $this->connection->fetchOne(
