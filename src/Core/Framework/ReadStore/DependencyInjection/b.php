@@ -6,6 +6,7 @@ use Shopware\Core\Framework\ReadStore\Builder\SqlDocumentBuilder;
 use Shopware\Core\Framework\ReadStore\Probe\SourceLimitsProbeCommand;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
 
+use function Symfony\Component\DependencyInjection\Loader\Configurator\param;
 use function Symfony\Component\DependencyInjection\Loader\Configurator\service;
 
 // Wave 10 handoff B: document size, mapped fields and Valkey cost per custom field and language count (docs/48).
@@ -18,6 +19,9 @@ return static function (ContainerConfigurator $containerConfigurator): void {
             service(SqlDocumentBuilder::class),
             service(ProductIds::class),
             service('Shopware\Elasticsearch\Product\ElasticsearchProductDefinition')->nullOnInvalid(),
+            service('OpenSearch\Client')->nullOnInvalid(),
+            service('Shopware\Elasticsearch\Framework\Indexing\IndexMappingProvider')->nullOnInvalid(),
+            param('elasticsearch.index.config'),
         ])
         ->tag('console.command');
 };
