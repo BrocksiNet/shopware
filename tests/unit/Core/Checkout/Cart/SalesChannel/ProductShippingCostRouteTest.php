@@ -30,6 +30,7 @@ use Shopware\Core\Content\Product\ProductEntity;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\EntitySearchResult;
+use Shopware\Core\Framework\DataAbstractionLayer\Search\Sorting\FieldSorting;
 use Shopware\Core\Framework\Extensions\ExtensionDispatcher;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Plugin\Exception\DecorationPatternException;
@@ -166,6 +167,40 @@ class ProductShippingCostRouteTest extends TestCase
         static::assertCount(2, $response->getShippingCosts());
         static::assertNotNull($response->getShippingCost($shippingMethod1->getId()));
         static::assertNotNull($response->getShippingCost($shippingMethod2->getId()));
+    }
+
+    public function testShippingCostsByProductSortsByPositionAndNameUnlessTheCriteriaSorts(): void
+    {
+        $shippingMethod = $this->createShippingMethod('shipping-1');
+        $context = Generator::generateSalesChannelContext(shippingMethod: $shippingMethod);
+        $product = $this->createProduct('product-1');
+
+        $route = new ProductShippingCostRoute(
+            $this->createProductGatewayMock($product, $context),
+            $this->createShippingMethodRepositoryMock(new ShippingMethodCollection([$shippingMethod]), $context),
+            $this->createProcessorMock(1),
+            new ExtensionDispatcher(new EventDispatcher()),
+        );
+
+        $criteria = new Criteria();
+        $route->shippingCostsByProduct($product->getId(), $criteria, $context);
+
+        static::assertEquals(
+            [new FieldSorting('position'), new FieldSorting('name', FieldSorting::ASCENDING)],
+            $criteria->getSorting()
+        );
+
+        $route = new ProductShippingCostRoute(
+            $this->createProductGatewayMock($product, $context),
+            $this->createShippingMethodRepositoryMock(new ShippingMethodCollection([$shippingMethod]), $context),
+            $this->createProcessorMock(1),
+            new ExtensionDispatcher(new EventDispatcher()),
+        );
+
+        $criteria = (new Criteria())->addSorting(new FieldSorting('name', FieldSorting::DESCENDING));
+        $route->shippingCostsByProduct($product->getId(), $criteria, $context);
+
+        static::assertEquals([new FieldSorting('name', FieldSorting::DESCENDING)], $criteria->getSorting());
     }
 
     public function testShippingCostsByProductSkipsShippingMethodsWithoutDelivery(): void

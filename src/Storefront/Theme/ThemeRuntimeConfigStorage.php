@@ -4,6 +4,7 @@ namespace Shopware\Storefront\Theme;
 
 use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
+use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use Shopware\Core\Defaults;
 use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
 use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\RetryableQuery;
@@ -93,6 +94,15 @@ class ThemeRuntimeConfigStorage
         ];
 
         RetryableQuery::retryable($this->connection, function () use ($parameters): void {
+            if ($this->connection->getDatabasePlatform() instanceof PostgreSQLPlatform) {
+                // MySQL's REPLACE also removes the row of another theme with the same technical name (second unique key);
+                // on PostgreSQL REPLACE only resolves the primary key, so that row is removed first
+                $this->connection->executeStatement(
+                    'DELETE FROM `theme_runtime_config` WHERE `technical_name` = :technicalName AND `theme_id` <> :themeId',
+                    ['technicalName' => $parameters['technicalName'], 'themeId' => $parameters['themeId']]
+                );
+            }
+
             $this->connection->executeStatement(<<<'SQL'
                 REPLACE INTO `theme_runtime_config` (theme_id, technical_name, resolved_config, view_inheritance, script_files, icon_sets, import_map, updated_at)
                 VALUES (:themeId, :technicalName, :resolvedConfig, :viewInheritance, :scriptFiles, :iconSets, :importMap, :updatedAt)

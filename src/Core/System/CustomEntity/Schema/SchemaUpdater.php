@@ -350,7 +350,8 @@ class SchemaUpdater
 
         $name = self::kebabCaseToCamelCase($entity . '_' . $field['name']);
 
-        $reference->addColumn($name, Types::BINARY, ['notnull' => false, 'default' => null, 'length' => 16, 'fixed' => true, 'comment' => self::COMMENT]);
+        // quoted, so databases that fold unquoted names to lower case keep the camel case name the DAL queries with
+        $reference->addColumn('`' . $name . '`', Types::BINARY, ['notnull' => false, 'default' => null, 'length' => 16, 'fixed' => true, 'comment' => self::COMMENT]);
     }
 
     private static function kebabCaseToCamelCase(string $string): string

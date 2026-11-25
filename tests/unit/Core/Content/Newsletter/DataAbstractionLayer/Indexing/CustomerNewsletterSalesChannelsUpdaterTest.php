@@ -43,6 +43,23 @@ class CustomerNewsletterSalesChannelsUpdaterTest extends TestCase
         $indexing->updateCustomersRecipient([Uuid::randomHex()]);
     }
 
+    public function testUpdateWritesNullInsteadOfAnEmptyObjectWithoutRecipients(): void
+    {
+        $statements = [];
+        $this->connection->expects($this->exactly(2))->method('executeStatement')->willReturnCallback(static function (string $sql) use (&$statements): int {
+            $statements[] = $sql;
+
+            return 1;
+        });
+
+        $indexing = new CustomerNewsletterSalesChannelsUpdater($this->connection);
+        $indexing->update([Uuid::randomHex()]);
+
+        static::assertCount(2, $statements);
+        static::assertStringContainsString('SELECT NULLIF(CONCAT(', $statements[1]);
+        static::assertStringContainsString('), \'{}\')', $statements[1]);
+    }
+
     public function testUpdateCustomersRecipientWithRegisteredEmailNewsletterRecipient(): void
     {
         $newsletterIds = json_encode([Uuid::randomHex() => Uuid::randomHex()], \JSON_THROW_ON_ERROR);

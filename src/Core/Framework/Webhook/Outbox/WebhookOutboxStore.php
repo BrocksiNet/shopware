@@ -5,10 +5,12 @@ namespace Shopware\Core\Framework\Webhook\Outbox;
 use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
+use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use Doctrine\DBAL\Types\Types;
 use Psr\Clock\ClockInterface;
 use Shopware\Core\Defaults;
 use Shopware\Core\Framework\Adapter\Database\Dialect\IdBinding;
+use Shopware\Core\Framework\Adapter\Database\Dialect\SqlDialectFactory;
 use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\RetryableTransaction;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Uuid\Uuid;
@@ -431,6 +433,45 @@ class WebhookOutboxStore
         // under InnoDB depending on the optimizer plan. Wrap in RetryableTransaction so
         // InnoDB aborts are retried in-place instead of bubbling into the receiver's
         // consecutive-deadlock fuse.
+        $parameters = [
+            'old' => WebhookEventLogDefinition::STATUS_RUNNING,
+            'new' => WebhookEventLogDefinition::STATUS_PENDING_RETRY,
+            'now' => $nowFormatted,
+            'ts' => $now->getTimestamp(),
+            'pk' => $partitionKey,
+            'cutoff' => $cutoff,
+            'successStatus' => WebhookEventLogDefinition::STATUS_SUCCESS,
+            'failedStatus' => WebhookEventLogDefinition::STATUS_FAILED,
+        ];
+
+        if ($this->connection->getDatabasePlatform() instanceof PostgreSQLPlatform) {
+            // PostgreSQL updates one table per statement: the event log first (selected by the delivery
+            // conditions), then the delivery rows whose event log is still open, both in one transaction
+            return RetryableTransaction::retryable($this->connection, function () use ($parameters): int {
+                $eventLogs = (int) $this->connection->executeStatement(
+                    'UPDATE webhook_event_log
+                     SET delivery_status = :new, timestamp = :ts
+                     WHERE delivery_status NOT IN (:successStatus, :failedStatus)
+                       AND id IN (
+                           SELECT d.webhook_event_log_id FROM webhook_delivery d
+                           WHERE d.partition_key = :pk AND d.delivery_status = :old AND d.last_attempt_at <= :cutoff
+                       )',
+                    $parameters
+                );
+
+                return $eventLogs + (int) $this->connection->executeStatement(
+                    'UPDATE webhook_delivery
+                     SET delivery_status = :new, next_retry_at = :now, updated_at = :now
+                     WHERE partition_key = :pk AND delivery_status = :old AND last_attempt_at <= :cutoff
+                       AND webhook_event_log_id IN (
+                           SELECT el.id FROM webhook_event_log el
+                           WHERE el.delivery_status NOT IN (:successStatus, :failedStatus)
+                       )',
+                    $parameters
+                );
+            });
+        }
+
         return RetryableTransaction::retryable(
             $this->connection,
             fn (): int => (int) $this->connection->executeStatement(
@@ -445,16 +486,7 @@ class WebhookOutboxStore
 	                   AND d.delivery_status = :old
 	                   AND d.last_attempt_at <= :cutoff
 	                   AND el.delivery_status NOT IN (:successStatus, :failedStatus)',
-                [
-                    'old' => WebhookEventLogDefinition::STATUS_RUNNING,
-                    'new' => WebhookEventLogDefinition::STATUS_PENDING_RETRY,
-                    'now' => $nowFormatted,
-                    'ts' => $now->getTimestamp(),
-                    'pk' => $partitionKey,
-                    'cutoff' => $cutoff,
-                    'successStatus' => WebhookEventLogDefinition::STATUS_SUCCESS,
-                    'failedStatus' => WebhookEventLogDefinition::STATUS_FAILED,
-                ]
+                $parameters
             )
         );
     }
@@ -513,9 +545,9 @@ class WebhookOutboxStore
         );
 
         // Restart the stream's cleanup grace window on every delivery write.
+        // the stream row collides on its partition key, not on the primary key
         $this->connection->executeStatement(
-            'INSERT INTO webhook_stream (id, partition_key, created_at) VALUES (:id, :pk, :now)
-             ON DUPLICATE KEY UPDATE created_at = :now',
+            SqlDialectFactory::forConnection($this->connection)->upsert('webhook_stream', ['id', 'partition_key', 'created_at'], '(:id, :pk, :now)', ['partition_key'], ['created_at']),
             [
                 'id' => Uuid::randomBytes(),
                 'pk' => $insert->partitionKey,

@@ -63,7 +63,7 @@ class CleanPersonalDataCommandTest extends TestCase
         $connection = $this->createMock(Connection::class);
         $connection->expects($this->once())
             ->method('executeStatement')
-            ->with(static::stringContains('DELETE FROM cart'), ['days' => 7])
+            ->with(static::stringContains('DELETE FROM cart WHERE created_at < :before'), ['before' => '2024-01-09 00:00:00.000'])
             ->willReturn(1);
 
         $this->getCommandTester($this->createRepository([]), $connection)->execute(['type' => 'carts', '--days' => 7]);
@@ -75,7 +75,7 @@ class CleanPersonalDataCommandTest extends TestCase
         $connection = $this->createMock(Connection::class);
         $connection->expects($this->once())->method('executeStatement')->with(
             static::stringContains('DELETE FROM cart'),
-            ['days' => 0]
+            ['before' => '2024-01-16 00:00:00.000']
         );
 
         $tester = $this->getCommandTester($repository, $connection);

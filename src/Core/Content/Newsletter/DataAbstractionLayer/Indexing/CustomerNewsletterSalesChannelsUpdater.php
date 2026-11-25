@@ -30,8 +30,9 @@ class CustomerNewsletterSalesChannelsUpdater
 
         $ids = array_unique($ids);
 
+        // NULLIF: without a recipient, MySQL's CONCAT() is NULL, PostgreSQL's CONCAT() skips the NULL and returns '{}'
         $tableTemplate = 'UPDATE `customer`, `newsletter_recipient` SET `customer`.`newsletter_sales_channel_ids` = (
-    SELECT CONCAT(
+    SELECT NULLIF(CONCAT(
         \'{\',
         GROUP_CONCAT(
             CONCAT(
@@ -41,7 +42,7 @@ class CustomerNewsletterSalesChannelsUpdater
             )
         ),
         \'}\'
-    )
+    ), \'{}\')
     FROM `newsletter_recipient`
     WHERE `newsletter_recipient`.`email` = `customer`.`email`
     AND `newsletter_recipient`.`status` IN (:states)

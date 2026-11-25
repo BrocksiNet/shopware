@@ -61,7 +61,8 @@ class MySQLStatsRepository extends AbstractStatsRepository
             ->from('messenger_stats')
             ->where('created_at >= :newerThan')
             ->groupBy('message_type')
-            ->orderBy('created_at', 'DESC')
+            // most recently seen types first; a bare created_at is not functionally dependent on message_type
+            ->orderBy('MAX(created_at)', 'DESC')
             ->setMaxResults(self::MESSAGE_TYPES_LIMIT)
             ->setParameter('newerThan', $newerThan->format(Defaults::STORAGE_DATE_TIME_FORMAT));
 

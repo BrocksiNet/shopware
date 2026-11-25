@@ -6,6 +6,7 @@ use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Driver\PDO\Exception as PdoException;
 use Doctrine\DBAL\Exception\DeadlockException;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
+use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Shopware\Core\Framework\Log\Package;
@@ -72,6 +73,27 @@ class ThemeRuntimeConfigStorageTest extends TestCase
 
         $this->expectException(UniqueConstraintViolationException::class);
         $storage->save($this->createConfig());
+    }
+
+    public function testSaveRemovesTheRowWithTheSameTechnicalNameFirstOnPostgreSql(): void
+    {
+        $statements = [];
+
+        $connection = $this->createMock(Connection::class);
+        $connection->method('getTransactionNestingLevel')->willReturn(0);
+        $connection->method('getDatabasePlatform')->willReturn(new PostgreSQLPlatform());
+        $connection->expects($this->exactly(2))
+            ->method('executeStatement')
+            ->willReturnCallback(static function (string $sql) use (&$statements): int {
+                $statements[] = $sql;
+
+                return 1;
+            });
+
+        (new ThemeRuntimeConfigStorage($connection))->save($this->createConfig());
+
+        static::assertStringStartsWith('DELETE FROM `theme_runtime_config` WHERE `technical_name` = :technicalName AND `theme_id` <> :themeId', $statements[0]);
+        static::assertStringContainsString('REPLACE INTO `theme_runtime_config`', $statements[1]);
     }
 
     private function createConfig(): ThemeRuntimeConfig

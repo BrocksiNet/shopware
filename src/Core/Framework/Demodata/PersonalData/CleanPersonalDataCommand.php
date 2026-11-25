@@ -86,10 +86,11 @@ class CleanPersonalDataCommand extends Command
         }
 
         if (\in_array(self::TYPE_CARTS, $types, true)) {
+            // carts created on or before the day `$days` days ago; the boundary is computed in PHP so the SQL stays portable
+            $before = $this->clock->now()->setTime(0, 0)->modify((1 - abs($days)) . ' Day');
             $this->connection->executeStatement(
-                'DELETE FROM cart
-                WHERE DATE(created_at) <= (DATE_SUB(CURDATE(), INTERVAL :days DAY))',
-                ['days' => $days]
+                'DELETE FROM cart WHERE created_at < :before',
+                ['before' => $before->format(Defaults::STORAGE_DATE_TIME_FORMAT)]
             );
 
             $io->success('Personal data for carts successfully cleaned!');

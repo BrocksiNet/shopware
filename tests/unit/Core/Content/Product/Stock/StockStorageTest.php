@@ -102,6 +102,21 @@ class StockStorageTest extends TestCase
         static::assertSame(2, $attempts);
     }
 
+    public function testAlterComputesAvailableStockFromTheDeltaNotFromTheAssignedStock(): void
+    {
+        $connection = $this->createMock(Connection::class);
+        $connection->expects($this->once())
+            ->method('prepare')
+            ->with(static::stringContains('SET available_stock = stock + :quantity, stock = stock + :quantity'))
+            ->willReturn(static::createStub(Statement::class));
+        $connection->method('fetchAllKeyValue')->willReturn([]);
+
+        $stockStorage = new StockStorage($connection, static::createStub(EventDispatcherInterface::class));
+        $stockStorage->alter([
+            new StockAlteration(Uuid::randomHex(), Uuid::randomHex(), 1, 0),
+        ], Context::createDefaultContext());
+    }
+
     public function testIndexDispatchesEventsByAvailabilityDirection(): void
     {
         $ids = new IdsCollection();

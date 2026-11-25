@@ -51,9 +51,11 @@ class StockStorage extends AbstractStockStorage
             return;
         }
 
+        // available_stock comes first and repeats the expression: MySQL assigns left to right and would read the new stock
+        // in later assignments, PostgreSQL reads the old row in every assignment; this order means the same on both
         $sql = <<<'SQL'
             UPDATE product
-            SET stock = stock + :quantity, sales = sales - :quantity, available_stock = stock, updated_at = NOW()
+            SET available_stock = stock + :quantity, stock = stock + :quantity, sales = sales - :quantity, updated_at = NOW()
             WHERE id = :id AND version_id = :version
         SQL;
 

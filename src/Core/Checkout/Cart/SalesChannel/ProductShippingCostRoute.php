@@ -20,6 +20,7 @@ use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsAnyFilter;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsFilter;
+use Shopware\Core\Framework\DataAbstractionLayer\Search\Sorting\FieldSorting;
 use Shopware\Core\Framework\Extensions\ExtensionDispatcher;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Plugin\Exception\DecorationPatternException;
@@ -140,6 +141,11 @@ class ProductShippingCostRoute extends AbstractProductShippingCostRoute
 
         $criteria->getAssociation('prices')
             ->addFilter(new EqualsAnyFilter('ruleId', [null, ...$context->getRuleIds()]));
+
+        // same default order as the shipping method route; without it the order is whatever the database returns
+        if ($criteria->getSorting() === []) {
+            $criteria->addSorting(new FieldSorting('position'), new FieldSorting('name', FieldSorting::ASCENDING));
+        }
 
         return $this->shippingMethodRepository->search($criteria, $context->getContext())->getEntities();
     }

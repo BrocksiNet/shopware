@@ -2,6 +2,7 @@
 
 namespace Shopware\Tests\Unit\Core\System\CustomEntity\Schema;
 
+use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use Doctrine\DBAL\Schema\Column;
 use Doctrine\DBAL\Schema\Schema;
 use Doctrine\DBAL\Schema\Table;
@@ -83,6 +84,9 @@ class SchemaUpdaterTest extends TestCase
 
         $columnComment = $schema->getTable('product')->getColumn('customentityextensionproduct')->getComment();
         static::assertSame('custom-entity-element', $columnComment);
+
+        $column = $schema->getTable('product')->getColumn('customentityextensionproduct');
+        static::assertSame('"customEntityExtensionProduct"', $column->getObjectName()->toSQL(new PostgreSQLPlatform()));
     }
 
     public function testBlogExample(): void
