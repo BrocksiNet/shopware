@@ -3,6 +3,7 @@
 namespace Shopware\Core\Content\Product\Aggregate\ProductSearchConfig;
 
 use Shopware\Core\Content\Product\Exception\DuplicateProductSearchConfigLanguageException;
+use Shopware\Core\Framework\DataAbstractionLayer\Dbal\DuplicateKeyViolation;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\ExceptionHandlerInterface;
 use Shopware\Core\Framework\Log\Package;
 
@@ -16,7 +17,7 @@ class ProductSearchConfigExceptionHandler implements ExceptionHandlerInterface
 
     public function matchException(\Throwable $e): ?\Throwable
     {
-        if (preg_match('/SQLSTATE\[23000\]:.*1062 Duplicate.*uniq.product_search_config.language_id\'/', $e->getMessage())) {
+        if (DuplicateKeyViolation::matching($e, 'product_search_config', 'uniq.product_search_config.language_id') !== null) {
             return new DuplicateProductSearchConfigLanguageException('', $e);
         }
 

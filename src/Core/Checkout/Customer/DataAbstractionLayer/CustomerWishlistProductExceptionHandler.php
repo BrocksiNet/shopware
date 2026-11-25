@@ -3,6 +3,7 @@
 namespace Shopware\Core\Checkout\Customer\DataAbstractionLayer;
 
 use Shopware\Core\Checkout\Customer\CustomerException;
+use Shopware\Core\Framework\DataAbstractionLayer\Dbal\DuplicateKeyViolation;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\ExceptionHandlerInterface;
 use Shopware\Core\Framework\Log\Package;
 
@@ -16,7 +17,7 @@ class CustomerWishlistProductExceptionHandler implements ExceptionHandlerInterfa
 
     public function matchException(\Throwable $e): ?\Throwable
     {
-        if (preg_match('/SQLSTATE\[23000\]:.*1062 Duplicate.*uniq.customer_wishlist.sales_channel_id__customer_id\'/', $e->getMessage())) {
+        if (DuplicateKeyViolation::matching($e, 'customer_wishlist_product', 'uniq.customer_wishlist.sales_channel_id__customer_id') !== null) {
             return CustomerException::duplicateWishlistProduct();
         }
 

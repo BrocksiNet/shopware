@@ -3,6 +3,7 @@
 namespace Shopware\Core\Content\Product\Aggregate\ProductConfiguratorSetting;
 
 use Shopware\Core\Content\Product\ProductException;
+use Shopware\Core\Framework\DataAbstractionLayer\Dbal\DuplicateKeyViolation;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\ExceptionHandlerInterface;
 use Shopware\Core\Framework\Log\Package;
 
@@ -16,7 +17,7 @@ class ProductConfiguratorSettingExceptionHandler implements ExceptionHandlerInte
 
     public function matchException(\Throwable $e): ?\Throwable
     {
-        if (preg_match('/SQLSTATE\[23000]:.*1062 Duplicate.*product_configurator_setting\.uniq\.product_configurator_setting\.prod_id\.vers_id\.prop_group_id\'/', $e->getMessage())) {
+        if (DuplicateKeyViolation::matching($e, 'product_configurator_setting', 'uniq.product_configurator_setting.prod_id.vers_id.prop_group_id') !== null) {
             return ProductException::configurationOptionAlreadyExists();
         }
 

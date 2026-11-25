@@ -35,6 +35,15 @@ class ShippingMethodPriceExceptionHandlerTest extends TestCase
         static::assertSame('Shipping method price quantity already exists.', $result->getMessage());
     }
 
+    public function testPostgreSqlExceptionHandled(): void
+    {
+        $e = new \Exception("An exception occurred while executing a query: SQLSTATE[23505]: Unique violation: 7 ERROR:  duplicate key value violates unique constraint \"shipping_method_price.uniq.shipping_method_quantity_start\"\nDETAIL:  Key (shipping_method_id, rule_id, quantity_start)=(a, b, 1) already exists.");
+
+        $result = (new ShippingMethodPriceExceptionHandler())->matchException($e);
+
+        static::assertInstanceOf(ShippingException::class, $result);
+    }
+
     public function testNonAlignedSqlExceptionNotHandled(): void
     {
         $message = 'An exception occurred while executing a query: SQLSTATE[23000]: Integrity constraint violation: 1062 Duplicate entry \'foo-bar\' for key \'product.uniq.product.product_number__version_id\'';
