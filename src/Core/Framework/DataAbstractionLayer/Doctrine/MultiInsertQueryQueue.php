@@ -137,6 +137,10 @@ class MultiInsertQueryQueue
                 $rows = $this->mergeCollidingRows($rows, $this->dialect()->upsertCollisionColumns($table, $conflictColumns), $updateColumns);
             }
 
+            if ($deleteBeforeInsert) {
+                $rows = $this->replaceCollidingRows($table, $rows);
+            }
+
             $rowsChunks = array_chunk($rows, $this->chunkSize);
             foreach ($rowsChunks as $rowsChunk) {
                 if ($deleteBeforeInsert) {
@@ -166,6 +170,48 @@ class MultiInsertQueryQueue
         }
 
         return $queries;
+    }
+
+    /**
+     * REPLACE applies its rows one after the other, so a later row replaces an earlier one with the same value in any unique key.
+     * The delete before the plain insert only removes stored rows, two such rows in one insert would violate the key: keep the later one.
+     *
+     * @param list<DataRow> $rows
+     *
+     * @return list<DataRow>
+     */
+    private function replaceCollidingRows(string $table, array $rows): array
+    {
+        $keys = $this->getUniqueKeys($table);
+
+        /** @var array<int, DataRow> $kept */
+        $kept = [];
+        /** @var array<string, int> $positionByKey */
+        $positionByKey = [];
+        foreach ($rows as $position => $row) {
+            $rowKeys = [];
+            foreach ($keys as $index => $key) {
+                $values = [];
+                foreach ($key as $column) {
+                    if (!isset($row['data'][$column])) {
+                        // DEFAULT or NULL never collides
+                        continue 2;
+                    }
+                    $values[] = $row['data'][$column];
+                }
+                $rowKeys[] = $index . ':' . serialize($values);
+            }
+
+            foreach ($rowKeys as $rowKey) {
+                if (isset($positionByKey[$rowKey])) {
+                    unset($kept[$positionByKey[$rowKey]]);
+                }
+                $positionByKey[$rowKey] = $position;
+            }
+            $kept[$position] = $row;
+        }
+
+        return array_values($kept);
     }
 
     /**

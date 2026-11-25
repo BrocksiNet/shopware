@@ -4,8 +4,10 @@ namespace Shopware\Tests\Unit\Core\Framework\DataAbstractionLayer\Doctrine;
 
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\ParameterType;
+use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\MockObject\Stub;
 use PHPUnit\Framework\TestCase;
 use Shopware\Core\Framework\Adapter\Database\Dialect\PostgreSqlDialect;
 use Shopware\Core\Framework\DataAbstractionLayer\DataAbstractionLayerException;
@@ -319,6 +321,29 @@ class MultiInsertQueryQueueTest extends TestCase
         static::assertSame([1, 'first', 1, 'last'], $executed[0]['values']);
     }
 
+    public function testReplaceKeepsTheLastOfCollidingRowsForPostgreSql(): void
+    {
+        $executed = [];
+        $connection = $this->createRecordingConnection($executed);
+        $connection->method('getDatabasePlatform')->willReturn(new PostgreSQLPlatform());
+        $connection->method('fetchAllAssociative')->willReturn([
+            ['index_id' => 1, 'column_name' => 'sales_channel_id'],
+            ['index_id' => 1, 'column_name' => 'country_id'],
+        ]);
+
+        $queue = new MultiInsertQueryQueue($connection, 250, false, true, new PostgreSqlDialect());
+        $queue->addInsert('sales_channel_country', ['sales_channel_id' => 'a', 'country_id' => 'de']);
+        $queue->addInsert('sales_channel_country', ['sales_channel_id' => 'a', 'country_id' => 'at']);
+        $queue->addInsert('sales_channel_country', ['sales_channel_id' => 'a', 'country_id' => 'de']);
+
+        $queue->execute();
+
+        static::assertCount(2, $executed);
+        static::assertSame('DELETE FROM "sales_channel_country" WHERE ("sales_channel_id", "country_id") IN ((?,?), (?,?));', $executed[0]['query']);
+        // a plain insert of the same key twice violates it, REPLACE would keep the later row
+        static::assertSame(['a', 'at', 'a', 'de'], $executed[1]['values']);
+    }
+
     public function testIgnoreErrorsBecomesInsertIgnoreOrOnConflictDoNothing(): void
     {
         $executed = [];
@@ -369,7 +394,7 @@ class MultiInsertQueryQueueTest extends TestCase
      *
      * @param list<array{query: string, values: array<mixed>, types: array<mixed>}> $executed
      */
-    private function createRecordingConnection(array &$executed): Connection
+    private function createRecordingConnection(array &$executed): Connection&Stub
     {
         $connection = static::createStub(Connection::class);
         $connection->method('transactional')->willReturnCallback(

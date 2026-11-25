@@ -17,6 +17,7 @@ use Shopware\Core\Framework\DataAbstractionLayer\EntityDefinition;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityTranslationDefinition;
 use Shopware\Core\Framework\DataAbstractionLayer\Event\EntityDeleteEvent;
 use Shopware\Core\Framework\DataAbstractionLayer\Event\EntityWriteEvent;
+use Shopware\Core\Framework\DataAbstractionLayer\Field\BlobField;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\FkField;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\IdField;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\ManyToOneAssociationField;
@@ -223,11 +224,12 @@ class EntityWriteGateway implements EntityWriteGatewayInterface
                     if ($command instanceof UpdateCommand) {
                         $executeInserts();
 
-                        RetryableQuery::retryable($this->connection, function () use ($command, $table): void {
+                        RetryableQuery::retryable($this->connection, function () use ($command, $table, $definition): void {
                             $this->connection->update(
                                 EntityDefinitionQueryHelper::escape($table),
                                 $this->escapeColumnKeys($command->getPayload()),
-                                $command->getPrimaryKey()
+                                $command->getPrimaryKey(),
+                                $this->escapeColumnKeys($this->blobTypes($definition, $command->getPayload()))
                             );
                         });
 
@@ -235,7 +237,7 @@ class EntityWriteGateway implements EntityWriteGatewayInterface
                     }
 
                     if ($command instanceof InsertCommand) {
-                        $inserts->addInsert($definition->getEntityName(), $command->getPayload());
+                        $inserts->addInsert($definition->getEntityName(), $command->getPayload(), $this->blobTypes($definition, $command->getPayload()));
 
                         continue;
                     }
@@ -489,9 +491,31 @@ class EntityWriteGateway implements EntityWriteGatewayInterface
     }
 
     /**
+     * Blob columns are bound as binary: PostgreSQL parses a text parameter for a bytea column as escape format,
+     * so a PHP serialize() string with a backslash (any class name) fails or is stored altered.
+     *
      * @param array<string, mixed> $payload
      *
-     * @return array<string, mixed>
+     * @return array<string, ParameterType>
+     */
+    private function blobTypes(EntityDefinition $definition, array $payload): array
+    {
+        $types = [];
+        foreach ($definition->getFields() as $field) {
+            if ($field instanceof BlobField && isset($payload[$field->getStorageName()])) {
+                $types[$field->getStorageName()] = ParameterType::BINARY;
+            }
+        }
+
+        return $types;
+    }
+
+    /**
+     * @template TValue
+     *
+     * @param array<string, TValue> $payload
+     *
+     * @return array<string, TValue>
      */
     private function escapeColumnKeys(array $payload): array
     {

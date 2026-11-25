@@ -6,11 +6,14 @@ use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Driver\PDO\Exception as PdoException;
 use Doctrine\DBAL\Exception\DeadlockException;
 use Doctrine\DBAL\Exception\DriverException;
+use Doctrine\DBAL\ParameterType;
+use Doctrine\DBAL\Platforms\MariaDBPlatform;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\MockObject\Stub;
 use PHPUnit\Framework\TestCase;
 use Shopware\Core\Framework\Context;
+use Shopware\Core\Framework\DataAbstractionLayer\Dbal\EntityDefinitionQueryHelper;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\EntityWriteGateway;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\ExceptionHandlerRegistry;
 use Shopware\Core\Framework\DataAbstractionLayer\Dbal\RowLoader;
@@ -19,6 +22,7 @@ use Shopware\Core\Framework\DataAbstractionLayer\Doctrine\RetryableWriteTransact
 use Shopware\Core\Framework\DataAbstractionLayer\EntityDefinition;
 use Shopware\Core\Framework\DataAbstractionLayer\Event\EntityDeleteEvent;
 use Shopware\Core\Framework\DataAbstractionLayer\Event\EntityWriteEvent;
+use Shopware\Core\Framework\DataAbstractionLayer\Field\BlobField;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\Flag\Immutable;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\Flag\PrimaryKey;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\Flag\Required;
@@ -27,6 +31,7 @@ use Shopware\Core\Framework\DataAbstractionLayer\Field\StringField;
 use Shopware\Core\Framework\DataAbstractionLayer\FieldCollection;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\ChangeSet;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\DeleteCommand;
+use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\InsertCommand;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Command\UpdateCommand;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\EntityExistence;
 use Shopware\Core\Framework\DataAbstractionLayer\Write\Validation\PostWriteValidationEvent;
@@ -134,6 +139,67 @@ class EntityWriteGatewayTest extends TestCase
         yield 'null' => [null];
     }
 
+    public function testBlobColumnsAreBoundAsBinary(): void
+    {
+        $definition = new class extends EntityDefinition {
+            public function getEntityName(): string
+            {
+                return 'blob_test';
+            }
+
+            protected function defineFields(): FieldCollection
+            {
+                return new FieldCollection([
+                    (new IdField('id', 'id'))->addFlags(new PrimaryKey(), new Required()),
+                    new StringField('name', 'name'),
+                    new BlobField('payload', 'payload'),
+                ]);
+            }
+        };
+        $definition->compile(static::createStub(DefinitionInstanceRegistry::class));
+        $definitionRegistry = static::createStub(DefinitionInstanceRegistry::class);
+        $definitionRegistry->method('getByEntityName')->willReturn($definition);
+
+        $connection = $this->createTransactionConnection();
+        $connection->method('getDatabasePlatform')->willReturn(new MariaDBPlatform());
+        $insertTypes = [];
+        $connection->method('executeStatement')->willReturnCallback(static function (string $sql, array $params, array $types) use (&$insertTypes): int {
+            $insertTypes = $types;
+
+            return 1;
+        });
+        $updateTypes = null;
+        $connection->method('update')->willReturnCallback(static function (string $table, array $data, array $criteria, array $types) use (&$updateTypes): int {
+            $updateTypes = $types;
+
+            return 1;
+        });
+
+        $gateway = new EntityWriteGateway(
+            100,
+            $connection,
+            $this->dispatcher,
+            static::createStub(ExceptionHandlerRegistry::class),
+            $definitionRegistry,
+            new RowLoader($connection),
+        );
+
+        // a serialize() string with a backslash: as text, PostgreSQL parses it as bytea escape format and fails
+        $serialized = serialize([new \ArrayObject()]);
+        $id = Uuid::randomBytes();
+        $gateway->execute([
+            new InsertCommand($definition, ['id' => $id, 'name' => 'a', 'payload' => $serialized], ['id' => $id], new EntityExistence('blob_test', ['id' => $id], false, false, false, []), '/0'),
+        ], WriteContext::createFromContext(Context::createDefaultContext()));
+
+        static::assertSame([ParameterType::STRING, ParameterType::STRING, ParameterType::BINARY], $insertTypes);
+
+        $gateway->execute([
+            new UpdateCommand($definition, ['name' => 'b', 'payload' => $serialized], ['id' => $id], new EntityExistence('blob_test', ['id' => $id], true, false, false, []), '/0'),
+        ], WriteContext::createFromContext(Context::createDefaultContext()));
+
+        static::assertSame([EntityDefinitionQueryHelper::escape('payload') => ParameterType::BINARY], $updateTypes);
+    }
+
     public function testRetryClearsExceptionsFromFailedAttempt(): void
     {
         $recordChangedException = new DriverException(
@@ -173,10 +239,8 @@ class EntityWriteGatewayTest extends TestCase
                 return 1;
             });
 
-        $definition = static::createStub(EntityDefinition::class);
-        $definition->method('getEntityName')->willReturn('immutable_test');
         $definitionRegistry = static::createStub(DefinitionInstanceRegistry::class);
-        $definitionRegistry->method('getByEntityName')->willReturn($definition);
+        $definitionRegistry->method('getByEntityName')->willReturn($this->createCompiledImmutableDefinition());
 
         $successCallbacks = 0;
         $errorCallbacks = 0;
@@ -499,15 +563,40 @@ class EntityWriteGatewayTest extends TestCase
     private function createGateway(?Connection $connection = null): EntityWriteGateway
     {
         $connection ??= new FakeConnection([]);
+        // the gateway reads the fields of the definition (blob columns), so it needs a compiled one
+        $definitionRegistry = static::createStub(DefinitionInstanceRegistry::class);
+        $definitionRegistry->method('getByEntityName')->willReturn($this->createCompiledImmutableDefinition());
 
         return new EntityWriteGateway(
             100,
             $connection,
             $this->dispatcher,
             static::createStub(ExceptionHandlerRegistry::class),
-            static::createStub(DefinitionInstanceRegistry::class),
+            $definitionRegistry,
             new RowLoader($connection),
         );
+    }
+
+    private function createCompiledImmutableDefinition(): EntityDefinition
+    {
+        $definition = new class extends EntityDefinition {
+            public function getEntityName(): string
+            {
+                return 'immutable_test';
+            }
+
+            protected function defineFields(): FieldCollection
+            {
+                return new FieldCollection([
+                    (new IdField('id', 'id'))->addFlags(new PrimaryKey(), new Required()),
+                    (new StringField('name', 'name'))->addFlags(new Required()),
+                    (new StringField('immutable_field', 'immutableField'))->addFlags(new Immutable()),
+                ]);
+            }
+        };
+        $definition->compile(static::createStub(DefinitionInstanceRegistry::class));
+
+        return $definition;
     }
 
     private function createUpdateCommand(string|int|bool|null $newValue, string|int|bool|null $oldValue): UpdateCommand
