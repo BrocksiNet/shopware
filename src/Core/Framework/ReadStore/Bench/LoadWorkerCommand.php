@@ -44,13 +44,19 @@ class LoadWorkerCommand extends Command
         $this->addOption('impl', null, InputOption::VALUE_REQUIRED, 'Implementation id')
             ->addOption('duration', null, InputOption::VALUE_REQUIRED, 'Seconds to send requests after go', '60')
             ->addOption('go-file', null, InputOption::VALUE_REQUIRED, 'Path the parent creates to start all workers at once')
-            ->addOption('seed', null, InputOption::VALUE_REQUIRED, 'Offset into the request cycle so workers do not run in lockstep', '0');
+            ->addOption('seed', null, InputOption::VALUE_REQUIRED, 'Offset into the request cycle so workers do not run in lockstep', '0')
+            ->addOption('option', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, 'key=value passed to the implementation, repeatable');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
+        $options = [];
+        foreach ((array) $input->getOption('option') as $pair) {
+            [$k, $v] = array_pad(explode('=', (string) $pair, 2), 2, '1');
+            $options[$k] = $v;
+        }
         $implementation = $this->registry->get((string) $input->getOption('impl'));
-        $implementation->configure([]);
+        $implementation->configure($options);
         if (!$implementation instanceof ReadStoreScenarios) {
             $output->writeln('ERROR ' . $implementation::class . ' does not implement ReadStoreScenarios');
 

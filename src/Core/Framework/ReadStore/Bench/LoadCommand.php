@@ -35,6 +35,7 @@ class LoadCommand extends Command
         $this->addOption('impl', null, InputOption::VALUE_REQUIRED, 'Implementation id')
             ->addOption('concurrency', null, InputOption::VALUE_REQUIRED, 'Comma separated worker counts', '1,8,32')
             ->addOption('duration', null, InputOption::VALUE_REQUIRED, 'Duration of one level, for example 60s', '60s')
+            ->addOption('option', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, 'key=value passed to the implementation, repeatable')
             ->addOption('markers', null, InputOption::VALUE_NONE, 'Print MARK lines for the host side CPU sampler');
     }
 
@@ -43,6 +44,10 @@ class LoadCommand extends Command
         $impl = (string) $input->getOption('impl');
         $seconds = (int) rtrim((string) $input->getOption('duration'), 's');
         $markers = (bool) $input->getOption('markers');
+        $optionArgs = [];
+        foreach ((array) $input->getOption('option') as $pair) {
+            $optionArgs[] = '--option=' . (string) $pair;
+        }
         $failed = false;
 
         foreach (array_map('intval', explode(',', (string) $input->getOption('concurrency'))) as $concurrency) {
@@ -51,7 +56,7 @@ class LoadCommand extends Command
             @unlink($goFile);
             for ($w = 0; $w < $concurrency; ++$w) {
                 $process = new Process(
-                    [\PHP_BINARY, '-d', 'memory_limit=-1', $this->projectDir . '/bin/console', 'read-store:load-worker', '--impl=' . $impl, '--duration=' . $seconds, '--seed=' . $w, '--go-file=' . $goFile, '--no-interaction'],
+                    [\PHP_BINARY, '-d', 'memory_limit=-1', $this->projectDir . '/bin/console', 'read-store:load-worker', '--impl=' . $impl, '--duration=' . $seconds, '--seed=' . $w, '--go-file=' . $goFile, '--no-interaction', ...$optionArgs],
                     $this->projectDir,
                     null,
                     null,
