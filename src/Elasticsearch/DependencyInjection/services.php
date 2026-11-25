@@ -392,12 +392,13 @@ return static function (ContainerConfigurator $containerConfigurator): void {
     $services->set(SourceDocumentBuffer::class)
         ->tag('kernel.reset', ['method' => 'reset']);
 
-    // Wave 10 O1a: projector target that rewrites only the `_source` document of the product index
+    // Wave 10 O1a: projector target that re-indexes the products whose `_source` document changed
     $services->set(SourceDocumentStorage::class)
         ->args([
             service(Client::class),
             service(ElasticsearchHelper::class),
             service(ProductDefinition::class),
+            service(ElasticsearchIndexer::class),
         ])
         ->tag('read_store.storage', ['key' => 'opensearch-source']);
 

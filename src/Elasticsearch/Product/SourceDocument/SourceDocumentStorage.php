@@ -8,15 +8,21 @@ use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\ReadStore\Port\Storage;
 use Shopware\Core\Framework\ReadStore\ReadStoreException;
 use Shopware\Elasticsearch\Framework\ElasticsearchHelper;
+use Shopware\Elasticsearch\Framework\Indexing\ElasticsearchIndexer;
 
 /**
  * Wave 10 O1a: lets the read store projector keep the `_source` document ({@see SourceDocument::FIELD}) of the
- * Shopware product index current, with a partial `update` of that one field per product.
+ * Shopware product index current.
+ *
+ * `store` re-indexes the changed products through the Shopware indexer, which writes the search fields and the
+ * document in one request.
+ * A partial `update` of only the document field is not possible: the index keeps only `id`, `autoIncrement` and the
+ * document in `_source`, and OpenSearch rebuilds an updated document from `_source`, so every search field of the
+ * product would be lost (seen in wave 10: 516 of 4140 products dropped out of every listing after the miss probes).
+ * The projector's own document is therefore only the trigger, the indexer builds the stored one.
  *
  * The index itself belongs to `es:index` (generations, alias swap, the search fields), so `setup`, `swap`,
  * `clear` and `destroy` do nothing here.
- * A product the index does not hold yet (`document_missing`) is skipped: the search fields would be missing, the
- * Shopware indexer adds it with its document.
  * `get` and `mget` are realtime in OpenSearch (they read the translog), so the projector's write is visible to the
  * detail page at once; search hits see it after the next refresh.
  *
@@ -29,6 +35,7 @@ final readonly class SourceDocumentStorage implements Storage
         private Client $client,
         private ElasticsearchHelper $helper,
         private ProductDefinition $productDefinition,
+        private ElasticsearchIndexer $indexer,
     ) {
     }
 
@@ -47,14 +54,10 @@ final readonly class SourceDocumentStorage implements Storage
 
     public function store(array $documents, ?string $generation = null): void
     {
-        $index = $this->index();
-        $lines = [];
-        foreach ($documents as $document) {
-            $lines[] = json_encode(['update' => ['_index' => $index, '_id' => strtolower((string) $document['id'])]], \JSON_THROW_ON_ERROR);
-            $lines[] = json_encode(['doc' => [SourceDocument::FIELD => $document]], \JSON_THROW_ON_ERROR | \JSON_PRESERVE_ZERO_FRACTION);
+        $ids = array_values(array_map(static fn (array $document): string => strtolower((string) $document['id']), $documents));
+        if ($ids !== []) {
+            $this->indexer->updateIds($this->productDefinition, $ids);
         }
-
-        $this->bulk($lines);
     }
 
     public function remove(array $ids): void
@@ -129,8 +132,8 @@ final readonly class SourceDocumentStorage implements Storage
                 continue;
             }
             $type = (string) ($result['error']['type'] ?? 'error');
-            // not in the index yet (the Shopware indexer adds it) or already deleted
-            if ($type === 'document_missing_exception' || (int) ($result['status'] ?? 0) === 404) {
+            // already deleted
+            if ((int) ($result['status'] ?? 0) === 404) {
                 continue;
             }
 
