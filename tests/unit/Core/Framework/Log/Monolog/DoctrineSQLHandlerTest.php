@@ -24,6 +24,7 @@ class DoctrineSQLHandlerTest extends TestCase
     protected function setUp(): void
     {
         $this->connection = $this->createMock(Connection::class);
+        $this->connection->method('transactional')->willReturnCallback(fn (\Closure $func) => $func($this->connection));
     }
 
     public function testWrite(): void

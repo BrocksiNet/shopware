@@ -40,7 +40,9 @@ class DoctrineSQLHandler extends AbstractProcessingHandler
         ];
 
         try {
-            $this->connection->insert('log_entry', $envelope);
+            // in its own transaction (a savepoint when one is open): PostgreSQL aborts the whole open transaction after a failed statement,
+            // so the retry below and the caller's next statements would fail, too
+            $this->connection->transactional(fn () => $this->connection->insert('log_entry', $envelope));
         } catch (\Throwable) {
             $envelope['context'] = json_encode([]);
             $envelope['extra'] = json_encode([]);

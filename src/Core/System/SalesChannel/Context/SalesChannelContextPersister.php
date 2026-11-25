@@ -79,7 +79,9 @@ class SalesChannelContextPersister
         );
 
         try {
-            $query->execute($data);
+            // in its own transaction (a savepoint when one is open): PostgreSQL aborts the whole open transaction after a failed statement,
+            // so the DELETE and INSERT below would fail, too
+            $this->connection->transactional(static fn () => $query->execute($data));
         } catch (UniqueConstraintViolationException) {
             // The other unique key (sales channel and customer) conflicts, or both do: remove the conflicting rows and insert,
             // the same result as REPLACE. REPLACE itself is not an option, PostgreSQL can only resolve a conflict on one key.
