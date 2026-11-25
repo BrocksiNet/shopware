@@ -79,6 +79,8 @@ class EntityDeleteSubscriberTest extends TestCase
         static::assertIsString($result['entity_ids']);
 
         $result['entity_ids'] = \json_decode($result['entity_ids'], true, flags: \JSON_THROW_ON_ERROR);
+        // PostgreSQL prints a timestamp(3) without the fraction when it is zero, MySQL always with 3 digits
+        $result['deleted_at'] = (new \DateTimeImmutable((string) $result['deleted_at']))->format(Defaults::STORAGE_DATE_TIME_FORMAT);
 
         static::assertSame([
             'entity_name' => 'product',
@@ -204,6 +206,8 @@ class EntityDeleteSubscriberTest extends TestCase
         static::assertIsString($result['entity_ids']);
 
         $result['entity_ids'] = \json_decode($result['entity_ids'], true, flags: \JSON_THROW_ON_ERROR);
+        // PostgreSQL prints a timestamp(3) without the fraction when it is zero, MySQL always with 3 digits
+        $result['deleted_at'] = (new \DateTimeImmutable((string) $result['deleted_at']))->format(Defaults::STORAGE_DATE_TIME_FORMAT);
 
         static::assertSame([
             'entity_name' => 'acl_user_role',
