@@ -109,8 +109,9 @@ class FilterTagIdsService
             ->groupBy('name')
             ->having('COUNT(`name`) > 1');
 
+        // the alias is registered with the quote of the database (`tag` / "tag"), a literal backtick alias is unknown on PostgreSQL
         $query->innerJoin(
-            '`tag`',
+            EntityDefinitionQueryHelper::escape('tag'),
             \sprintf('(%s)', $subQuery->getSQL()),
             'duplicate',
             'duplicate.`name` = `tag`.`name`'
